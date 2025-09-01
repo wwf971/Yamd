@@ -1,0 +1,147 @@
+/* Import shared base styles */
+@import '@/base.css';
+
+.asset-viewer {
+  padding: 20px;
+  max-width: 1000px;
+  margin: 0 auto;
+}
+
+.asset-viewer h1 {
+  margin-bottom: 20px;
+  color: #333;
+}
+
+.request-info {
+  background-color: #e3f2fd;
+  padding: 15px;
+  border-radius: 8px;
+  border: 1px solid #90caf9;
+  margin-bottom: 20px;
+}
+
+.request-info h3 {
+  margin-top: 0;
+  margin-bottom: 10px;
+  color: #1976d2;
+}
+
+.request-info p {
+  margin: 5px 0;
+  font-size: 14px;
+}
+
+.request-info code {
+  background-color: rgba(0, 0, 0, 0.1);
+  padding: 2px 4px;
+  border-radius: 3px;
+  font-family: monospace;
+}
+
+/* Content containers and error states are now in base.css */
+
+.image-content {
+  margin-top: 15px;
+  text-align: center;
+}
+
+.image-content img {
+  max-width: 100%;
+  max-height: 500px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+}
+
+.image-error {
+  display: none;
+  color: #666;
+  margin-top: 10px;
+}
+
+.video-content {
+  margin-top: 15px;
+}
+
+.video-content video {
+  width: 100%;
+  max-height: 400px;
+  background-color: #000;
+}
+
+.json-content {
+  background-color: #2d3748;
+  color: #e2e8f0;
+  padding: 15px;
+  border-radius: 4px;
+  overflow: auto;
+  max-height: 400px;
+  font-size: 14px;
+  line-height: 1.4;
+  margin: 0;
+}
+
+.text-content {
+  background-color: #ffffff;
+  border: 1px solid #e9ecef;
+  padding: 15px;
+  border-radius: 4px;
+  max-height: 400px;
+  overflow: auto;
+  white-space: pre-wrap;
+  font-family: monospace;
+  font-size: 14px;
+}
+
+.html-content {
+  margin-top: 15px;
+}
+
+.html-iframe {
+  width: 100%;
+  height: 500px;
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+  background-color: #ffffff;
+}
+
+.html-options {
+  margin-bottom: 10px;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  font-size: 14px;
+}
+
+.html-option-button {
+  background-color: #6c757d;
+  color: white;
+  border: none;
+  padding: 4px 8px;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: background-color 0.2s;
+}
+
+.html-option-button:hover {
+  background-color: #545b62;
+}
+
+.html-option-button.active {
+  background-color: #007acc;
+}
+
+.html-source-view {
+  background-color: #f8f9fa;
+  border: 1px solid #dee2e6;
+  padding: 15px;
+  border-radius: 4px;
+  max-height: 500px;
+  overflow: auto;
+  white-space: pre-wrap;
+  font-family: monospace;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+/* Button styles are now in base.css */

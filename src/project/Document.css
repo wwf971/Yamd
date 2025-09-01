@@ -1,0 +1,431 @@
+/* Document CSS styles - copied from Vue.js implementation */
+
+.doc-content {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  line-height: 1.6;
+  color: #111;
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 0px 20px;
+  margin-bottom: 2px;
+}
+
+img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 4px;
+}
+
+.main-title {
+  font-family: 'Times New Roman', serif;
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: #2c3e50;
+  text-align: center;
+  margin: 12px 0;
+  margin-top: 6px;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+  border-top: 1px solid #eaecef;
+  border-bottom: 1px solid #eaecef;
+}
+
+.section-title {
+  font-family: 'Times New Roman', serif;
+  font-size: 1.3rem;
+  font-weight: 600;
+  color: #2c3e50;
+  text-align: left;
+  margin: 12px 0px;
+  line-height: 1.2;
+  border-left: 4px solid #3498db;
+  padding-left: 12px;
+}
+
+h1 {
+  border-bottom: 1px solid #eaecef;
+  padding-bottom: 0.3em;
+}
+
+h2 {
+  margin-top: 4px;
+  margin-bottom: 4px;
+  padding: 8px;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+h2:last-of-type {
+  /* border-top: 1px solid #eaecef; */
+}
+
+p {
+  margin-top: 0;
+  margin-bottom: 4px;
+  white-space: pre-line;
+}
+
+ol, ul {
+  margin-top: 0;
+  margin-bottom: 12px;
+  margin-left: 4px;
+  padding-left: 20px;
+}
+
+/* Apply left offset only to bulleted lists, not plain lists */
+ul:not(.node-plain-list) li > span {
+  position: relative;
+  left: -2px;
+}
+
+/* Prevent margin on nested lists */
+li ol, li ul {
+  margin-bottom: 0;
+  margin-top: 0px;
+}
+
+li {
+  margin-bottom: 2px;
+  list-style-position: outside;
+}
+
+ul.plain-list {
+  padding-left: 0px;
+}
+
+.plain-list > li {
+  list-style: none;
+  margin-bottom: 2px;
+}
+
+.section {
+  margin-bottom: 0px;
+}
+
+.reference {
+  margin-bottom: 8px;
+  line-height: 1.5;
+  text-align: justify;
+}
+
+.code-block {
+  background-color: #f5f5f5;
+  border-radius: 8px;
+  padding: 4px 8px;
+  overflow-x: auto;
+  white-space: pre;
+  box-sizing: content-box;
+  max-width: 100%;
+  color: #383a42;
+  font-family: 'Consolas', Courier, monospace;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+/* Citation and reference styling */
+.reference.highlighted {
+  background-color: #fef3c7;
+  transition: background-color 0.3s ease;
+  border-radius: 4px;
+  box-shadow: 0 0 0 2px #f59e0b;
+}
+
+.element-highlighted {
+  background-color: #fef3c7;
+  transition: background-color 0.3s ease;
+  border-radius: 4px;
+  box-shadow: 0 0 0 2px #f59e0b;
+}
+
+.citation-link {
+  cursor: pointer;
+  text-decoration: none;
+  color: #2563eb;
+  transition: color 0.2s ease;
+}
+
+.citation-link .author {
+  font-weight: 500;
+}
+
+.citation-link .year {
+  font-weight: normal;
+}
+
+.citation-link:hover {
+  text-decoration: underline;
+}
+
+.citation {
+  font-size: 0.95em;
+  color: #374151;
+  text-decoration: none;
+  color: #0366d6;
+  font-weight: 500;
+}
+
+.reference-link {
+  cursor: pointer;
+  text-decoration: none;
+  color: #2563eb;
+  transition: color 0.2s ease;
+  font-weight: 500;
+}
+
+.reference-link:hover {
+  text-decoration: underline;
+  color: #1d4ed8;
+}
+
+/* LaTeX styling */
+.latex-container {
+  margin: 4px 0px;
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+}
+
+/* Image styling */
+.image-container {
+  margin: 15px 0;
+}
+
+.image-caption {
+  color: #666;
+  font-size: 0.9em;
+  text-align: center;
+  margin-top: 8px;
+}
+
+.dual-image-container {
+  display: flex;
+  gap: 15px;
+  justify-content: center;
+  align-items: center;
+  flex-wrap: wrap;
+  width: 100%;
+}
+
+.dual-image-item {
+  flex: 1;
+  height: inherit;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.dual-image-item img {
+  margin: 0;
+  object-fit: contain;
+  max-height: 100%;
+  max-width: 100%;
+}
+
+/* Video styling */
+.video-container {
+  margin: 15px 0;
+  text-align: center;
+}
+
+.video-container video {
+  max-width: 100%;
+  height: auto;
+  border-radius: 4px;
+}
+
+.video-caption {
+  color: #666;
+  font-size: 0.9em;
+  text-align: center;
+  margin-top: 8px;
+}
+
+.dual-video-container {
+  display: flex;
+  gap: 15px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.dual-video-item {
+  flex: 1;
+  min-width: 250px;
+  max-width: 50%;
+}
+
+.dual-video-item video {
+  width: 100%;
+  height: auto;
+}
+
+/* PDF styling */
+.pdf-container {
+  margin: 15px 0;
+  text-align: center;
+}
+
+.pdf-container iframe {
+  max-width: 100%;
+  border-radius: 4px;
+  border: 1px solid #ddd;
+}
+
+.pdf-caption {
+  color: #666;
+  font-size: 0.9em;
+  text-align: center;
+  margin-top: 8px;
+}
+
+.dual-pdf-container {
+  display: flex;
+  gap: 15px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.dual-pdf-item {
+  flex: 1;
+  min-width: 250px;
+  max-width: 50%;
+}
+
+.dual-pdf-item iframe {
+  width: 100%;
+  border: 1px solid #ddd;
+}
+
+.pdf-error {
+  background-color: #fee;
+  border: 1px solid #fcc;
+  border-radius: 4px;
+  padding: 10px;
+  margin: 10px 0;
+  color: #c33;
+  text-align: center;
+}
+
+/* Tooltip styling */
+.reference.tooltip-container {
+  position: relative;
+}
+
+.selectable-tooltip {
+  visibility: hidden;
+  opacity: 0;
+  position: absolute;
+  /* top: 50%;
+  left: 100%;
+  transform: translateY(-50%); */
+  right: 0%;
+  bottom: calc(100% - 5px);
+  margin-left: 10px;
+  background-color: #333;
+  color: white;
+  padding: 8px 12px;
+  border-radius: 4px;
+  white-space: nowrap;
+  z-index: 1000;
+  transition: opacity 0.3s;
+  user-select: text;
+  cursor: text;
+  pointer-events: auto;
+}
+
+.selectable-tooltip-outer {
+  position: absolute;
+  top: -10px; 
+  bottom: -10px; 
+  left: -10px; 
+  right: -10px;
+  z-index: -10;
+}
+
+.selectable-tooltip::before {
+  display: none;
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: -20px;
+  transform: translateY(-50%);
+  border-width: 10px;
+  border-style: solid;
+  border-color: transparent #333 transparent transparent;
+}
+
+.reference.tooltip-container:hover .selectable-tooltip {
+  visibility: visible;
+  opacity: 1;
+}
+
+/* Loading and error states */
+.loading-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  color: #666;
+}
+
+.loading-spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid #f3f3f3;
+  border-top: 2px solid #3498db;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 10px;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.error-container {
+  text-align: center;
+  padding: 40px;
+  color: #dc3545;
+}
+
+.retry-button {
+  background-color: #dc3545;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-top: 10px;
+}
+
+.retry-button:hover {
+  background-color: #c82333;
+}
+
+/* Responsive behavior */
+@media (max-width: 600px) {
+  .dual-image-container {
+    flex-direction: column;
+  }
+  
+  .dual-image-item {
+    max-width: 100%;
+  }
+  
+  .dual-video-container {
+    flex-direction: column;
+  }
+  
+  .dual-video-item {
+    max-width: 100%;
+  }
+  
+  .dual-pdf-container {
+    flex-direction: column;
+  }
+  
+  .dual-pdf-item {
+    max-width: 100%;
+  }
+}

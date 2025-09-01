@@ -1,0 +1,31 @@
+/* Footer Component Styles */
+
+.footer {
+  display: flex;
+  gap: 8px;
+  margin-top: auto; /* Push footer to bottom if used in flex container */
+}
+
+.footer-text {
+  color: #888;
+  font-size: 0.85em;
+}
+
+.footer-links {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+/* Mobile responsiveness */
+@media (max-width: 768px) {
+  .footer {
+    flex-direction: column;
+    gap: 4px;
+    text-align: center;
+  }
+  
+  .footer-text {
+    font-size: 0.8em;
+  }
+}

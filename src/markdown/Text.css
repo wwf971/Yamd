@@ -1,0 +1,22 @@
+.text-base {
+  display: inline;
+  /* padding: 2px 4px; */
+  /* min-width: 1ch; */
+  box-sizing: border-box;
+  border-radius: 2px;
+  cursor: text;
+  outline: none;
+  border-top: 2px solid transparent;
+  border-bottom: 2px solid transparent;
+  border-left: 2px solid transparent;
+  border-right: 2px solid transparent;
+  
+  /* Enable text selection across components */
+  user-select: text;
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  -ms-user-select: text;
+  
+
+}
+

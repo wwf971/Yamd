@@ -1,0 +1,142 @@
+/* Base CSS - Shared styles across components */
+
+/* Global reset for mobile responsiveness */
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  overflow-x: hidden;
+}
+
+#root {
+  width: 100%;
+  min-height: 100vh;
+}
+
+.page-title {
+  font-size: 24px;
+  font-weight: bold;
+}
+
+/* Button styles */
+.back-button {
+  color: #007acc;
+  text-decoration: none;
+  padding: 4px 8px;
+  border: 1px solid #007acc;
+  border-radius: 4px;
+  display: inline-block;
+  transition: background-color 0.2s;
+  user-select: none;
+}
+
+.back-button:hover {
+  background-color: #007acc;
+  color: white;
+}
+
+.project-type-button {
+  background-color: #d4edda;
+  color: #155724;
+  text-decoration: none;
+  padding: 4px 8px;
+  border: 1px solid #d4edda;
+  border-radius: 4px;
+  display: inline-block;
+  transition: background-color 0.2s;
+  user-select: none;
+  font-family: sans-serif;
+  font-weight: normal;
+}
+
+/* Common utility classes */
+.button-container {
+  margin-top: 20px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* Loading states */
+.loading-spinner {
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  border: 3px solid #f3f3f3;
+  border-top: 3px solid #007acc;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Common container styles */
+.content-container {
+  padding: 20px;
+  background-color: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+}
+
+.content-container h3 {
+  margin-top: 0;
+  margin-bottom: 15px;
+  color: #495057;
+}
+
+/* Error and status containers */
+.loading-container {
+  padding: 20px;
+  text-align: center;
+  background-color: #f0f8ff;
+  border: 1px solid #87ceeb;
+  border-radius: 8px;
+}
+
+.error-container {
+  padding: 20px;
+  background-color: #ffe6e6;
+  border: 1px solid #ff9999;
+  border-radius: 8px;
+  color: #cc0000;
+}
+
+.error-container h3 {
+  margin-top: 0;
+}
+
+.no-content-container {
+  padding: 20px;
+  background-color: #fff3cd;
+  border: 1px solid #ffeaa7;
+  border-radius: 8px;
+}
+
+/* Common refresh button */
+.refresh-button {
+  background-color: #28a745;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-right: 10px;
+  font-size: 14px;
+  transition: background-color 0.2s;
+}
+
+.refresh-button:hover {
+  background-color: #218838;
+}
+
+.refresh-button:disabled {
+  background-color: #6c757d;
+  cursor: not-allowed;
+}

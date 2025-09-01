@@ -1,0 +1,29 @@
+/* Education-specific styles */
+
+.edu-tag {
+  display: inline-block;
+  padding: 3px 6px;
+  background: #f0f9f0;
+  border: 1px solid #90c695;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  color: #2d5a2d;
+  white-space: nowrap;
+  font-family: sans-serif;
+  transition: all 0.2s ease;
+  text-align: center;
+}
+
+.edu-tag:hover {
+  background: #e8f5e8;
+}
+
+/* Education section wrapper */
+.education {
+  /* Add any education-specific overrides here */
+}
+
+.edu-school {
+  font-weight: bold;
+  font-size: 1.0rem;
+}
