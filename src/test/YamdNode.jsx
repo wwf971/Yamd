@@ -5,7 +5,7 @@ import YamdNodeDivider from './components/YamdNodeDivider.jsx';
 import YamdNodeKey from './components/YamdNodeKey.jsx';
 import YamdNodeTopRight from './components/YamdNodeTopRight.jsx';
 import YamdNodeAnonym from './components/YamdNodeAnonym.jsx';
-import YamdNodeDefault from './components/YamdNodeDefault.jsx';
+import YamdNodeText from './components/YamdNodeText.jsx';
 import YamdChildrenNodes from './YamdChildrenNodes.jsx';
 import { AddListBulletBeforeYamdNode, getChildrenDisplay } from './YamdRenderUtils.js';
 
@@ -91,7 +91,7 @@ const YamdNode = ({ nodeId, getNodeDataById, parentInfo = null }) => {
           - bb
           - cc
         */
-        <YamdNodeDefault 
+        <YamdNodeText 
           nodeId={nodeId} 
           getNodeDataById={getNodeDataById} 
           parentInfo={parentInfo} 
