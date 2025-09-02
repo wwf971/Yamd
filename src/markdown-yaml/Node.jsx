@@ -291,7 +291,6 @@ export const TagItem = React.memo(({ item, itemIndex, customClassName }) => {
 export const DividerNode = React.memo(({ name, value, childStyle = 'default', selfClass }) => {
   // Defensive check for childStyle
   const safeChildStyle = childStyle || 'default';
-  
   return (
     <div className="node-subcategory node-subcategory-divider">
       <div className="node-divider-line">

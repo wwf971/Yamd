@@ -1,0 +1,441 @@
+/* YamdNode Component Styles */
+
+/* Common styles */
+.yamd-error {
+  color: red;
+  font-style: italic;
+  background: #ffebee;
+  padding: 2px;
+  border-radius: 4px;
+  border: 1px solid #ffcdd2;
+}
+
+.yamd-title-default {
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 8px;
+}
+
+.yamd-tag {
+  display: inline-block;
+  padding: 3px 6px;
+  background: #e8f4f8;
+  border: 1px solid #b8daff;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  color: #0056b3;
+  margin: 2px;
+  white-space: nowrap;
+}
+
+/* Default node */
+.yamd-node-default {
+  margin-bottom: 2px;
+}
+
+/* List styles - using divs instead of ul/ol/li */
+.yamd-ulist {
+  margin: 0;
+  padding-left: 0;
+}
+
+.yamd-olist {
+  margin: 0;
+  padding-left: 0;
+}
+
+.yamd-plist {
+  margin: 0;
+  padding-left: 0;
+}
+
+.yamd-list-item {
+  margin-bottom: 1px;
+  display: flex;
+  align-items: flex-start;
+}
+
+.yamd-plist-item {
+  margin-bottom: 1px;
+  display: flex;
+  align-items: flex-start;
+}
+
+/* Custom bullet styles - dimensions now controlled by BULLET_DIMENSIONS in YamdRenderUtils.js */
+
+.yamd-bullet-disc {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background-color: #333;
+}
+
+.yamd-bullet-number {
+  font-size: 0.8rem;
+  color: #333;
+  font-weight: normal;
+  line-height: 1;
+}
+
+/* Plain list (pl) - vertical stack without bullets */
+.yamd-plain {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  margin: 1px 0;
+}
+
+.yamd-plain-item {
+  margin: 0;
+}
+
+.yamd-plain-content {
+  font-size: 0.9rem;
+  color: #374151;
+  line-height: 1.3;
+}
+
+/* Paragraphs */
+.yamd-paragraphs {
+  margin: 2px 0;
+}
+
+.yamd-paragraph {
+  margin: 2px 0;
+  line-height: 1.2;
+}
+
+/* Tags container */
+.yamd-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 4px 0;
+}
+
+/* Timeline styles */
+.yamd-timeline {
+  position: relative;
+  margin: 4px 0;
+}
+
+.yamd-timeline-item {
+  display: flex;
+  align-items: flex-start;
+  margin-bottom: 3px;
+  position: relative;
+}
+
+.yamd-timeline-marker {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #007acc;
+  margin-right: 3px;
+  margin-top: 4px;
+  flex-shrink: 0;
+}
+
+.yamd-timeline-content {
+  flex: 1;
+}
+
+/* Divider styles */
+.yamd-node-divider {
+  margin: 4px 0;
+}
+
+.yamd-divider-line {
+  position: relative;
+  text-align: center;
+  margin: 3px 0;
+  height: 1px;
+  background: #d1d5db;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.yamd-divider-line::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: #d1d5db;
+  z-index: 1;
+}
+
+.yamd-divider-text {
+  background: white;
+  padding: 1px 3px;
+  font-size: 0.9em;
+  font-weight: 600;
+  color: #374151;
+  position: relative;
+  z-index: 10;
+  white-space: nowrap;
+}
+
+/* Panel styles */
+.yamd-panel {
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  background: #fafafa;
+  margin: 2px 0;
+  overflow: hidden;
+}
+
+.yamd-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 8px;
+  gap: 4px;
+  background: #f5f5f5;
+  border-bottom: 1px solid #e0e0e0;
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.2s ease;
+}
+
+.yamd-panel-header:hover {
+  background: #e8e8e8;
+}
+
+.yamd-panel-title {
+  font-weight: 600;
+  color: #333;
+  font-size: 1rem;
+}
+
+.yamd-panel-toggle {
+  background: none;
+  border: 1px solid #ccc;
+  font-size: 0.75rem;
+  color: #666;
+  cursor: pointer;
+  padding: 1px 3px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+.yamd-panel-toggle:hover {
+  background: #ddd;
+  color: #333;
+}
+
+.yamd-panel-content {
+  padding: 6px 8px;
+  background: white;
+}
+
+/* Top-right styles */
+.yamd-node-top-right-wrapper {
+  position: relative;
+  width: 100%;
+  margin: 2px 0;
+}
+
+.yamd-top-right-parent {
+  position: absolute;
+  top: 0;
+  right: 0;
+  font-weight: 500;
+  color: #555;
+  padding: 1px 3px;
+  font-size: 0.9em;
+  background: #f0f0f0;
+  border-radius: 4px;
+}
+
+.yamd-top-right-content {
+  padding-top: 2px;
+  padding-right: 60px; /* Space for top-right content */
+}
+
+/* Key styles */
+.yamd-node-key-flat {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+  margin: 4px 0;
+}
+
+.yamd-node-key-with-valuenum {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 4px 0;
+}
+
+.yamd-key-siblings {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.yamd-key-remaining {
+  margin-left: 3px;
+}
+
+.yamd-key-title {
+  font-weight: 600;
+  color: #333;
+  font-size: 0.9em;
+}
+
+/* Timeline styles */
+.yamd-timeline {
+  position: relative;
+  margin: 2px 0;
+}
+
+.yamd-timeline-item {
+  display: flex;
+  align-items: flex-start;
+  margin-bottom: 2px;
+}
+
+.yamd-timeline-bullet-container {
+  flex-shrink: 0;
+  margin-right: 6px;
+}
+
+.yamd-timeline-bullet-wrapper {
+  position: relative;
+  width: 12px;
+  height: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.yamd-timeline-connect-line {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 2px;
+  background-color: #666;
+  z-index: 1;
+}
+
+.yamd-timeline-bullet-default {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: white;
+  border: 2px solid #666;
+  z-index: 2;
+}
+
+.yamd-timeline-bullet-check {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #22c55e;
+  border: 2px solid #16a34a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+}
+
+.yamd-timeline-bullet-question {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+}
+
+.yamd-timeline-bullet-dash {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+}
+
+.yamd-timeline-bullet-screw {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #f3f4f6;
+  border: 2px solid #d1d5db;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+}
+
+.yamd-timeline-bullet-up-arrow {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #dbeafe;
+  border: 2px solid #93c5fd;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+}
+
+.yamd-timeline-content {
+  flex: 1;
+  padding-top: 1px;
+}
+
+.yamd-timeline-title {
+  font-weight: 600;
+  margin-bottom: 1px;
+}
+
+.yamd-timeline-item-title {
+  font-size: 0.9rem;
+  color: #374151;
+}
+
+.yamd-timeline-details {
+  margin-top: 1px;
+  padding-left: 4px;
+}
+
+.yamd-timeline-item-text {
+  font-size: 0.8rem;
+  color: #6b7280;
+  line-height: 1.2;
+}
+
+/* default classes for different content types */
+.yamd-default {
+  font-size: 0.9rem;
+  color: #333;
+}
+
+.yamd-list-content {
+  font-size: 0.9rem;
+  color: #374151;
+  line-height: 1.4;
+}
+
+.yamd-paragraph-content {
+  font-size: 1rem;
+  color: #374151;
+  line-height: 1.6;
+}
+
+.yamd-timeline-content {
+  font-size: 0.9rem;
+  color: #374151;
+  line-height: 1.4;
+}

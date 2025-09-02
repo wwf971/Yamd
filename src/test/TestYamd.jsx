@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
+import YamdNode from './YamdNode.jsx';
 import { 
   parseYamlToJson, 
   formatJson, 
   getSampleYaml, 
+  getCornerCaseYaml,
   processNodes, 
   flattenJson 
 } from './ParseYamd.js';
@@ -12,6 +14,7 @@ const TestYamd = () => {
   const [jsonOutput, setJsonOutput] = useState('');
   const [processedOutput, setProcessedOutput] = useState('');
   const [flattenedOutput, setFlattenedOutput] = useState('');
+  const [flattenedData, setFlattenedData] = useState(null);
   const [parseError, setParseError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
@@ -23,7 +26,7 @@ const TestYamd = () => {
     setTimeout(() => {
       const yamlResult = parseYamlToJson(yamlInput);
       
-      if (yamlResult.success) {
+      if (yamlResult.code === 0) {
         try {
           // Step 1: YAML → JSON
           const rawJson = yamlResult.data;
@@ -37,6 +40,7 @@ const TestYamd = () => {
           const { flattened, rootId } = flattenJson(processedData);
           const flattenedResult = { nodes: flattened, rootId };
           setFlattenedOutput(formatJson(flattenedResult));
+          setFlattenedData({ nodes: flattened, rootId });
           
           setParseError('');
         } catch (error) {
@@ -49,7 +53,8 @@ const TestYamd = () => {
         setJsonOutput('');
         setProcessedOutput('');
         setFlattenedOutput('');
-        setParseError(yamlResult.error);
+        setFlattenedData(null);
+        setParseError(yamlResult.message);
       }
       
       setIsLoading(false);
@@ -69,6 +74,16 @@ const TestYamd = () => {
     setJsonOutput('');
     setProcessedOutput('');
     setFlattenedOutput('');
+    setFlattenedData(null);
+    setParseError('');
+  };
+
+  const handleLoadCornerCases = () => {
+    setYamlInput(getCornerCaseYaml());
+    setJsonOutput('');
+    setProcessedOutput('');
+    setFlattenedOutput('');
+    setFlattenedData(null);
     setParseError('');
   };
 
@@ -121,9 +136,23 @@ const TestYamd = () => {
         >
           Load Sample
         </button>
+        
+        <button 
+          onClick={handleLoadCornerCases}
+          style={{
+            padding: '8px 16px',
+            backgroundColor: '#17a2b8',
+            color: 'white',
+            border: 'none',
+            borderRadius: '4px',
+            cursor: 'pointer'
+          }}
+        >
+          Corner Cases
+        </button>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gridTemplateRows: '1fr 1fr', gap: '15px', height: '600px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gridTemplateRows: 'auto auto', gap: '15px' }}>
         {/* Panel 1: YAML Input */}
         <div style={{ display: 'flex', flexDirection: 'column' }}>
           <h3 style={{ margin: '0 0 10px 0', color: '#333', fontSize: '1rem' }}>1. YAML Input</h3>
@@ -132,7 +161,7 @@ const TestYamd = () => {
             onChange={(e) => setYamlInput(e.target.value)}
             placeholder="Enter your YAML here..."
             style={{
-              flex: 1,
+              height: '300px',
               padding: '8px',
               border: '1px solid #ccc',
               borderRadius: '4px',
@@ -152,7 +181,7 @@ const TestYamd = () => {
           <h3 style={{ margin: '0 0 10px 0', color: '#333', fontSize: '1rem' }}>2. Raw JSON</h3>
           {parseError ? (
             <div style={{
-              flex: 1,
+              height: '300px',
               padding: '8px',
               border: '1px solid #dc3545',
               borderRadius: '4px',
@@ -171,7 +200,7 @@ const TestYamd = () => {
               readOnly
               placeholder="Raw JSON from YAML..."
               style={{
-                flex: 1,
+                height: '300px',
                 padding: '8px',
                 border: '1px solid #007acc',
                 borderRadius: '4px',
@@ -196,7 +225,7 @@ const TestYamd = () => {
             readOnly
             placeholder="Processed nodes with parsed attributes..."
             style={{
-              flex: 1,
+              height: '300px',
               padding: '8px',
               border: '1px solid #28a745',
               borderRadius: '4px',
@@ -220,7 +249,7 @@ const TestYamd = () => {
             readOnly
             placeholder="Flattened ID-based structure..."
             style={{
-              flex: 1,
+              height: '300px',
               padding: '8px',
               border: '1px solid #ffc107',
               borderRadius: '4px',
@@ -236,6 +265,26 @@ const TestYamd = () => {
           </div>
         </div>
       </div>
+
+      {/* Full-width Rendering Panel */}
+      {flattenedData && (
+        <div style={{ marginTop: '20px' }}>
+          <h3 style={{ margin: '0 0 15px 0', color: '#333', fontSize: '1.1rem' }}>5. Rendered Document</h3>
+          <div style={{
+            border: '2px solid #28a745',
+            borderRadius: '8px',
+            padding: '20px',
+            backgroundColor: '#f8fff8',
+            minHeight: '200px'
+          }}>
+            <YamdNode 
+              nodeId={flattenedData.rootId}
+              getNodeDataById={(nodeId) => flattenedData.nodes[nodeId]}
+              parentInfo={null}
+            />
+          </div>
+        </div>
+      )}
 
       <div style={{ marginTop: '20px', padding: '15px', backgroundColor: '#e9ecef', borderRadius: '4px' }}>
         <h4 style={{ margin: '0 0 10px 0' }}>Processing Pipeline:</h4>

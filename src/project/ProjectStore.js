@@ -384,7 +384,7 @@ export const useProjectStore = create(
             children: [bibListId]
           };
           
-          // Add bibliography list  
+          // add bibliography list  
           currentProject.projectDataParsed[bibListId] = {
             id: bibListId,
             type: 'ordered-list',
@@ -392,7 +392,7 @@ export const useProjectStore = create(
             children: []
           };
           
-          // Create individual reference nodes
+          // create individual reference nodes
           Array.from(bibKeys).forEach(key => {
             const refNodeId = nanoid();
             currentProject.projectDataParsed[refNodeId] = {
