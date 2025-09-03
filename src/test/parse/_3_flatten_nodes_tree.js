@@ -1,10 +1,13 @@
+import { parseLatexInline } from './_4_latex.js';
+
 /**
  * Flatten nested node structure into ID-based dictionary
  * @param {any} processedData - Processed nested node structure
- * @returns {object} - {flattened, rootId}
+ * @returns {object} - {nodes, rootNodeId, assets}
  */
 export function flattenJson(processedData) {
   const flattened = {};
+  const assets = {}; // New assets system for LaTeX and other rich content
   let idCounter = 0;
   
   const generateId = () => `yamd_${String(++idCounter).padStart(3, '0')}`;
@@ -32,7 +35,7 @@ export function flattenJson(processedData) {
       
     } else if (node && typeof node === 'object' && node.type) {
       // Handle processed nodes with type
-      flattened[nodeId] = {
+      const nodeData = {
         id: nodeId,
         type: node.type,
         parentId,
@@ -41,6 +44,26 @@ export function flattenJson(processedData) {
         attr: node.attr || {},
         children: []
       };
+      
+      // Preserve special node attributes
+      if (node.type === 'latex' || node.type === 'image' || node.type === 'video') {
+        if (node.caption !== undefined) {
+          nodeData.caption = node.caption;
+        }
+        // Height is now stored in attr, but preserve it if it exists at node level
+        if (node.height !== undefined) {
+          nodeData.height = node.height;
+        }
+        // Preserve user-defined HTML ID
+        if (node.htmlId !== undefined) {
+          nodeData.htmlId = node.htmlId;
+        }
+      }
+      
+      // Note: LaTeX processing will be done in a separate step (step 4)
+      // This flattening is step 3, LaTeX processing happens after flattening
+      
+      flattened[nodeId] = nodeData;
       
       if (node.children) {
         if (Array.isArray(node.children)) {
@@ -70,14 +93,20 @@ export function flattenJson(processedData) {
       
     } else {
       // Handle primitive values
-      flattened[nodeId] = {
+      const textString = String(node);
+      const nodeData = {
         id: nodeId,
         type: 'text',
         parentId,
-        textRaw: String(node),
-        textOriginal: String(node),
+        textRaw: textString,
+        textOriginal: textString,
         attr: {}
       };
+      
+      // Note: LaTeX processing will be done in a separate step (step 4)
+      // This flattening is step 3, LaTeX processing happens after flattening
+      
+      flattened[nodeId] = nodeData;
     }
     
     return nodeId;
@@ -85,5 +114,5 @@ export function flattenJson(processedData) {
   
   const rootId = flattenNode(processedData);
   
-  return { flattened, rootId };
+  return { nodes: flattened, rootNodeId: rootId, assets };
 }

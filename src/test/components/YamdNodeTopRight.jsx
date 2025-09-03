@@ -5,7 +5,7 @@ import { renderYamdListBullet, getChildrenDisplay } from '../YamdRenderUtils.js'
 /**
  * Top-right node renderer - positions title in top-right corner
  */
-const YamdNodeTopRight = ({ nodeId, getNodeDataById, parentInfo }) => {
+const YamdNodeTopRight = ({ nodeId, getNodeDataById, getAssetById, parentInfo }) => {
   const nodeData = getNodeDataById(nodeId);
   
   if (!nodeData) {
@@ -13,7 +13,7 @@ const YamdNodeTopRight = ({ nodeId, getNodeDataById, parentInfo }) => {
   }
 
   const title = nodeData.textRaw || nodeData.textOriginal || '';
-  const childDisplay = getChildrenDisplay(nodeData);
+  const childDisplay = getChildrenDisplay(nodeData, false, parentInfo);
   const childClass = nodeData.attr?.childClass;
   
   // Use the utility function to get appropriate CSS class
@@ -35,6 +35,8 @@ const YamdNodeTopRight = ({ nodeId, getNodeDataById, parentInfo }) => {
         <YamdChildrenRenderer
           childIds={nodeData.children}
           getNodeDataById={getNodeDataById}
+          getAssetById={getAssetById}
+          shouldAddIndent={true}
           parentInfo={{ 
             ...parentInfo, 
             ...(childDisplay && { childDisplay }),

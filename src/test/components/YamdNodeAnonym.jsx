@@ -4,7 +4,7 @@ import { YamdChildrenRenderer } from '../YamdNode.jsx';
 /**
  * Anonymous node renderer - skips title completely and renders only children (for nodes with empty textRaw)
  */
-const YamdNodeAnonym = ({ nodeId, getNodeDataById, parentInfo }) => {
+const YamdNodeAnonym = ({ nodeId, getNodeDataById, getAssetById, parentInfo }) => {
   const nodeData = getNodeDataById(nodeId);
   
   if (!nodeData) {
@@ -23,6 +23,8 @@ const YamdNodeAnonym = ({ nodeId, getNodeDataById, parentInfo }) => {
     <YamdChildrenRenderer
       childIds={nodeData.children || []}
       getNodeDataById={getNodeDataById}
+      getAssetById={getAssetById}
+      shouldAddIndent={false}
       parentInfo={childrenParentInfo}
     />
   );

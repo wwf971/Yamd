@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
 import YamdNode from './YamdNode.jsx';
+import { loadMathJax } from '@/mathjax/MathJaxLoad.js';
 import { 
   parseYamlToJson, 
   formatJson, 
   getSampleYaml, 
   getCornerCaseYaml,
   processNodes, 
-  flattenJson 
+  flattenJson,
+  processAllLaTeXInline
 } from './ParseYamd.js';
 
 const TestYamd = () => {
@@ -18,37 +20,41 @@ const TestYamd = () => {
   const [parseError, setParseError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleParse = () => {
+  // initialize mathjax
+  React.useEffect(() => {
+    console.log("🔧 Loading MathJax for TestYamd...");
+    loadMathJax().catch(err => {
+      console.error('Failed to load MathJax in TestYamd:', err);
+    });
+  }, []);
+
+  const handleParse = async () => {
     setIsLoading(true);
     setParseError('');
     
-    // Add small delay to show loading state
-    setTimeout(() => {
+    try {
+      // Step 1: YAML → JSON
       const yamlResult = parseYamlToJson(yamlInput);
       
       if (yamlResult.code === 0) {
-        try {
-          // Step 1: YAML → JSON
-          const rawJson = yamlResult.data;
-          setJsonOutput(formatJson(rawJson));
-          
-          // Step 2: Process nodes (apply square bracket grammar)
-          const processedData = processNodes(rawJson);
-          setProcessedOutput(formatJson(processedData));
-          
-          // Step 3: Flatten to ID-based structure
-          const { flattened, rootId } = flattenJson(processedData);
-          const flattenedResult = { nodes: flattened, rootId };
-          setFlattenedOutput(formatJson(flattenedResult));
-          setFlattenedData({ nodes: flattened, rootId });
-          
-          setParseError('');
-        } catch (error) {
-          console.error('Processing error:', error);
-          setParseError(`Processing error: ${error.message}`);
-          setProcessedOutput('');
-          setFlattenedOutput('');
-        }
+        const rawJson = yamlResult.data;
+        setJsonOutput(formatJson(rawJson));
+        
+        // Step 2: Process nodes (apply square bracket grammar)
+        const processedData = processNodes(rawJson);
+        setProcessedOutput(formatJson(processedData));
+        
+        // Step 3: Flatten to ID-based structure
+        const flattenedData = flattenJson(processedData);
+        
+        // Step 4: Process inline LaTeX
+        const finalData = await processAllLaTeXInline(flattenedData);
+        
+        const finalResult = { nodes: finalData.nodes, rootNodeId: finalData.rootNodeId, assets: finalData.assets };
+        setFlattenedOutput(formatJson(finalResult));
+        setFlattenedData(finalResult);
+        
+        setParseError('');
       } else {
         setJsonOutput('');
         setProcessedOutput('');
@@ -56,9 +62,15 @@ const TestYamd = () => {
         setFlattenedData(null);
         setParseError(yamlResult.message);
       }
-      
-      setIsLoading(false);
-    }, 100);
+    } catch (error) {
+      console.error('Processing error:', error);
+      setParseError(`Processing error: ${error.message}`);
+      setProcessedOutput('');
+      setFlattenedOutput('');
+      setFlattenedData(null);
+    }
+    
+    setIsLoading(false);
   };
 
   const handleClear = () => {
@@ -277,11 +289,23 @@ const TestYamd = () => {
             backgroundColor: '#f8fff8',
             minHeight: '200px'
           }}>
-            <YamdNode 
-              nodeId={flattenedData.rootId}
-              getNodeDataById={(nodeId) => flattenedData.nodes[nodeId]}
-              parentInfo={null}
-            />
+        <YamdNode
+          nodeId={flattenedData.rootNodeId}
+          getNodeDataById={(nodeId) => flattenedData.nodes[nodeId]}
+          getAssetById={(assetId) => flattenedData.assets?.[assetId]}
+          parentInfo={null}
+          globalInfo={{
+            fetchExternalData: (nodeData) => {
+              // Default implementation: always return code 1 (component should handle itself)
+              console.log('🌐 fetchExternalData called with:', nodeData);
+              return {
+                code: 1, // Component should handle data fetching itself
+                message: 'Component should handle data fetching directly',
+                data: null
+              };
+            }
+          }}
+        />
           </div>
         </div>
       )}
@@ -289,10 +313,11 @@ const TestYamd = () => {
       <div style={{ marginTop: '20px', padding: '15px', backgroundColor: '#e9ecef', borderRadius: '4px' }}>
         <h4 style={{ margin: '0 0 10px 0' }}>Processing Pipeline:</h4>
         <ol style={{ margin: 0, paddingLeft: '20px' }}>
-          <li><strong>YAML Input:</strong> Enter YAML with square bracket grammar like <code>[self=panel, child=ul]</code></li>
+          <li><strong>YAML Input:</strong> Enter YAML with square bracket grammar like <code>[self=panel, child=ul]</code> and inline LaTeX like <code>$E = mc^2$</code></li>
           <li><strong>Raw JSON:</strong> Direct YAML-to-JSON conversion without processing</li>
           <li><strong>Processed Nodes:</strong> Square bracket attributes parsed, nodes typed, children remain nested objects</li>
-          <li><strong>Flattened Structure:</strong> ID-based flat dictionary with parent-child references (like ProjectStore)</li>
+          <li><strong>Flattened Structure:</strong> ID-based flat dictionary with parent-child references</li>
+          <li><strong>LaTeX Processing:</strong> Inline LaTeX patterns detected, registered in assets, and converted to clean HTML (NO MathJax fallback)</li>
         </ol>
         <div style={{ marginTop: '10px', fontSize: '0.9em', color: '#555' }}>
           <strong>Grammar Examples:</strong> <code>name[self=panel]</code>, <code>[self=divider,child=ul]</code>, <code>item[selfClass=highlight]</code>

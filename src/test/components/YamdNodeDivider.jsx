@@ -5,7 +5,7 @@ import { getChildrenDisplay } from '../YamdRenderUtils.js';
 /**
  * Divider node renderer - displays title as a divider line with text
  */
-const YamdNodeDivider = ({ nodeId, getNodeDataById, parentInfo }) => {
+const YamdNodeDivider = ({ nodeId, getNodeDataById, getAssetById, parentInfo }) => {
   const nodeData = getNodeDataById(nodeId);
   
   if (!nodeData) {
@@ -13,7 +13,7 @@ const YamdNodeDivider = ({ nodeId, getNodeDataById, parentInfo }) => {
   }
 
   const title = nodeData.textRaw || nodeData.textOriginal || '';
-  const childDisplay = getChildrenDisplay(nodeData);
+  const childDisplay = getChildrenDisplay(nodeData, false, parentInfo);
   const childClass = nodeData.attr?.childClass;
   
   // Use the utility function to get appropriate CSS class
@@ -33,7 +33,7 @@ const YamdNodeDivider = ({ nodeId, getNodeDataById, parentInfo }) => {
   }, [parentInfo, title]);
 
   return (
-    <div className="yamd-node-divider">
+    <div className="yamd-node-divider yamd-full-width">
       <div ref={dividerRef} className="yamd-divider-line">
         <span className={nodeClass}>{title}</span>
       </div>
@@ -41,6 +41,8 @@ const YamdNodeDivider = ({ nodeId, getNodeDataById, parentInfo }) => {
         <YamdChildrenRenderer
           childIds={nodeData.children}
           getNodeDataById={getNodeDataById}
+          getAssetById={getAssetById}
+          shouldAddIndent={false}
           parentInfo={{ 
             ...parentInfo, 
             ...(childDisplay && { childDisplay }),

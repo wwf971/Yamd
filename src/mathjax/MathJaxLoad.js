@@ -1,17 +1,21 @@
-// loadMathJax -->
+
+// loadMathJax() --call--> initMathJaxNoScan()
   // set window.MathJax before load MathJax .js script
     // ready() => {initMathJaxNoScan}
   // loadMathJaxScript // load MathJax .js script
 
+// MathJaxStore.js: a zustand store that helps avoid multiple simultaneous MathJax initialization
 import { useMathJaxStore } from './MathJaxStore.js';
 
+
+// initialize mathjx without triggering a DOM scan and replace
 const initMathJaxNoScan = () => {
+  /*
   // when MathJax is ready, ready() will be called.
   // if call defaultRead() in this ready() callback function, MathJax will scan the entire document.
-  // this is not always desired.
+    // this is not always desired.
   // sometimes the document is not fully loaded yet, when MathJax is ready
-
-
+  */
   console.log('🔍 Available MathJax startup methods:', Object.keys(window.MathJax.startup));
   // try manual initialization step by step with error handling
   console.log('🔧 Initializing MathJax manually without document scanning...');
@@ -65,8 +69,6 @@ const initMathJaxNoScan = () => {
 };
 
 export const loadMathJax = () => {
-  console.log("🔧 loadMathJax() called - checking state...");
-  
   if (typeof window === 'undefined') {
     return Promise.resolve();
   }

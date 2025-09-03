@@ -28,9 +28,200 @@
   white-space: nowrap;
 }
 
+/* Inline LaTeX styles */
+.yamd-latex-inline {
+  display: inline;
+  color: #2e7d32;
+  /* MathJax will override most styling, but this provides fallback */
+}
+
+.yamd-latex-converted {
+  /* Successfully converted LaTeX with clean HTML */
+  color: inherit; /* Don't override LaTeX colors */
+}
+
+.yamd-latex-converted svg {
+  /* Reset any inherited stroke/fill colors and apply custom margins */
+  stroke: currentColor;
+  fill: currentColor;
+  /* margin: 4px 2px; */
+    /* Custom margins: 4px vertical, 2px horizontal */
+  vertical-align: middle; /* Better alignment with text */
+  display: inline-block;
+  max-width: 100%; /* Prevent overflow */
+  height: auto; /* Maintain aspect ratio */
+}
+
+/* Ensure LaTeX doesn't inherit link colors or other unwanted styles */
+.yamd-latex-converted {
+  text-decoration: none !important;
+  border: none !important;
+  background: none !important;
+}
+
+.yamd-latex-raw {
+  /* Raw LaTeX text displayed when conversion failed */
+  color: #f57c00;
+  font-style: italic;
+  font-family: monospace;
+}
+
+.yamd-latex-missing {
+  /* LaTeX with missing asset */
+  color: #d32f2f;
+  font-style: italic;
+  font-family: monospace;
+}
+
+.yamd-text-segment {
+  display: inline;
+}
+
+/* LaTeX Block styles */
+.yamd-latex-block {
+  margin: 4px 0;
+  padding: 4px;
+  border: 1px solid #f0f0f0;
+  border-radius: 2px;
+  text-align: center;
+}
+
+.yamd-latex-content {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 40px;
+  margin-bottom: 4px;
+}
+
+.yamd-latex-rendered svg {
+  margin: 2px 0; /* Block LaTeX margins */
+  max-width: 100%;
+  height: auto;
+}
+
+.yamd-latex-caption {
+  font-size: 0.85em;
+  color: #666;
+  margin-top: 4px;
+  text-align: center;
+}
+
+.yamd-latex-label {
+  font-weight: 600;
+  color: #333;
+}
+
+/* Image Block styles */
+.yamd-image-block {
+  margin: 4px 0;
+  padding: 4px;
+  border: 1px solid #f0f0f0;
+  border-radius: 2px;
+  text-align: center;
+}
+
+.yamd-image-content {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.yamd-image-element {
+  max-width: 100%;
+  height: auto;
+  border-radius: 2px;
+}
+
+.yamd-image-fallback {
+  padding: 20px;
+  color: #666;
+  font-style: italic;
+}
+
+.yamd-image-caption {
+  font-size: 0.85em;
+  color: #666;
+  margin-top: 4px;
+  text-align: center;
+}
+
+.yamd-image-label {
+  font-weight: 600;
+  color: #333;
+}
+
+.yamd-image-error .yamd-image-content {
+  padding: 20px;
+  background: #fff5f5;
+  border: 1px solid #fed7d7;
+  border-radius: 4px;
+}
+
+/* Video Block styles */
+.yamd-video-block {
+  margin: 4px 0;
+  padding: 4px;
+  border: 1px solid #f0f0f0;
+  border-radius: 2px;
+  text-align: center;
+}
+
+.yamd-video-content {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.yamd-video-element {
+  max-width: 100%;
+  height: auto;
+  border-radius: 2px;
+}
+
+.yamd-video-fallback {
+  padding: 20px;
+  color: #666;
+  font-style: italic;
+}
+
+.yamd-video-caption {
+  font-size: 0.85em;
+  color: #666;
+  margin-top: 4px;
+  text-align: center;
+}
+
+.yamd-video-label {
+  font-weight: 600;
+  color: #333;
+}
+
+.yamd-video-error .yamd-video-content {
+  padding: 20px;
+  background: #fff5f5;
+  border: 1px solid #fed7d7;
+  border-radius: 4px;
+}
+
+.yamd-latex-fallback {
+  font-family: monospace;
+  color: #f57c00;
+  font-style: italic;
+}
+
 /* Default node */
 .yamd-node-default {
   margin-bottom: 2px;
+}
+
+.yamd-list {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  width: 100%;
 }
 
 /* List styles - using divs instead of ul/ol/li */
@@ -53,12 +244,15 @@
   margin-bottom: 1px;
   display: flex;
   align-items: flex-start;
+  align-self: stretch;
+  width: 100%;
 }
 
 .yamd-plist-item {
   margin-bottom: 1px;
   display: flex;
   align-items: flex-start;
+  width: 100%;
 }
 
 /* Custom bullet styles - dimensions now controlled by BULLET_DIMENSIONS in YamdRenderUtils.js */
@@ -112,6 +306,22 @@
   flex-wrap: wrap;
   gap: 4px;
   margin: 4px 0;
+}
+
+/* Force panels to break out of flex containers */
+.yamd-tags .yamd-panel,
+.yamd-list-item .yamd-panel,
+.yamd-plist-item .yamd-panel {
+  flex-basis: 100%;
+  width: 100%;
+  align-self: stretch;
+}
+
+/* Full width utility class */
+.yamd-full-width {
+  width: 100% !important;
+  flex: 1 1 100% !important;
+  min-width: 0 !important;
 }
 
 /* Timeline styles */
@@ -186,6 +396,10 @@
   background: #fafafa;
   margin: 2px 0;
   overflow: hidden;
+  width: 100%; /* Span full container width */
+  box-sizing: border-box;
+  flex: 1 1 100%; /* Force full width in flex containers */
+  min-width: 0; /* Allow shrinking in flex */
 }
 
 .yamd-panel-header {

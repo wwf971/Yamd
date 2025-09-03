@@ -5,7 +5,7 @@ import { getChildrenDisplay } from '../YamdRenderUtils.js';
 /**
  * Panel node renderer - displays collapsible panel with show/hide functionality
  */
-const YamdNodePanel = ({ nodeId, getNodeDataById, parentInfo }) => {
+const YamdNodePanel = ({ nodeId, getNodeDataById, getAssetById, parentInfo }) => {
   const nodeData = getNodeDataById(nodeId);
   
   if (!nodeData) {
@@ -13,7 +13,7 @@ const YamdNodePanel = ({ nodeId, getNodeDataById, parentInfo }) => {
   }
 
   const title = nodeData.textRaw || nodeData.textOriginal || '';
-  const childDisplay = getChildrenDisplay(nodeData);
+  const childDisplay = getChildrenDisplay(nodeData, false, parentInfo);
   const childClass = nodeData.attr?.childClass;
   
   // use the utility function to get appropriate CSS class
@@ -66,6 +66,8 @@ const YamdNodePanel = ({ nodeId, getNodeDataById, parentInfo }) => {
           <YamdChildrenRenderer
             childIds={nodeData.children}
             getNodeDataById={getNodeDataById}
+            getAssetById={getAssetById}
+            shouldAddIndent={false}
             parentInfo={{ 
               ...parentInfo, 
               ...(childDisplay && { childDisplay }),

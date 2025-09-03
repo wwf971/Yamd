@@ -53,8 +53,8 @@ export const LaTeX2Chtml = async (latexContent, nodeId = 'unknown') => {
   }
 };
 
-// ensure the mathJaxScript.src = 'https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js';
-// otherwise tex2svg, tex2svgPromise are not available
+// ensure that mathJaxScript.src = 'https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js';
+  // otherwise tex2svg, tex2svgPromise will not be available
 export const LaTeX2Svg = async (latexContent, nodeId = 'unknown') => {
   const store = useMathJaxStore.getState();
   
@@ -90,7 +90,7 @@ export const LaTeX2Svg = async (latexContent, nodeId = 'unknown') => {
     });
     
     const svgString = svg.outerHTML;
-    console.log(`✅ LaTeX converted to SVG for node: ${nodeId}`);
+    // console.log(`✅ LaTeX converted to SVG for node: ${nodeId}`);
     return svgString;
     
   } catch (error) {

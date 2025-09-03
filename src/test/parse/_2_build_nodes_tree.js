@@ -19,6 +19,282 @@ export function processNodes(jsonData) {
 }
 
 /**
+ * Check if object has alternative YAMD grammar for leaf nodes (indentation mistake tolerance)
+ * @param {object} obj - Object to check
+ * @returns {string|null} - Leaf node key with null value, or null if not found
+ */
+function checkAlternativeYamdGrammarForLeafNode(obj) {
+/*
+standard yaml grammar for latex node:
+  - [latex]xxx:
+      a: b
+      c: d
+alternative yaml grammar for latex node:
+  - [latex]xxx:
+    a: b
+    c: d
+
+This also applies to other leaf node types like [image], [video], etc.
+*/
+  
+  const entries = Object.entries(obj);
+  if (entries.length < 2) return null; // Need at least 2 entries for this mistake
+  
+  for (const [key, value] of entries) {
+    // Check if key looks like a leaf node type and has null value
+    if (value === null && key.includes('[')) {
+      const { attr } = extractSquareBracketAttr(key);
+      const nodeType = determineNodeType(attr);
+      // Check for leaf node types that support this grammar
+      if (nodeType === 'latex' || nodeType === 'image' || nodeType === 'video') {
+        console.log('🔧 Detected alternative YAMD grammar for leaf node:', key, 'with null value');
+        return key;
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Handle alternative YAMD grammar for leaf nodes by merging attributes
+ * @param {object} obj - Object with leaf node indentation mistake
+ * @param {string} leafNodeKey - The leaf node key with null value
+ * @returns {object} - Corrected leaf node
+ */
+function handleAlternativeYamdGrammarForLeafNode(obj, leafNodeKey) {
+  console.log('🔧 Handling alternative YAMD grammar for leaf node:', leafNodeKey);
+  
+  const { textRaw, attr, textOriginal } = extractSquareBracketAttr(leafNodeKey);
+  const nodeType = determineNodeType(attr);
+  
+  // Collect all other entries as attributes
+  const mergedAttributes = {};
+  for (const [key, value] of Object.entries(obj)) {
+    if (key !== leafNodeKey) {
+      mergedAttributes[key] = value;
+    }
+  }
+  
+  console.log('🔧 Merging attributes:', mergedAttributes);
+  
+  // Process the appropriate leaf node type with merged attributes
+  let processedNode;
+  if (nodeType === 'latex') {
+    processedNode = processLaTeXNode(attr, textRaw, textOriginal, mergedAttributes);
+  } else if (nodeType === 'image') {
+    processedNode = processImageNode(attr, textRaw, textOriginal, mergedAttributes);
+  } else if (nodeType === 'video') {
+    processedNode = processVideoNode(attr, textRaw, textOriginal, mergedAttributes);
+  } else {
+    // Fallback to generic processing
+    processedNode = {
+      type: nodeType,
+      textRaw,
+      textOriginal,
+      attr: { ...attr },
+      children: [],
+      ...mergedAttributes // Merge attributes directly
+    };
+  }
+  
+  // Return as a single-entry object (like the correct indentation would produce)
+  return { [textOriginal]: processedNode };
+}
+
+/**
+ * Process LaTeX node - special handling for LaTeX blocks
+ * @param {object} attr - Parsed attributes 
+ * @param {string} textRaw - Raw text content
+ * @param {string} textOriginal - Original text
+ * @param {any} value - Node value (children/content)
+ * @returns {object} - Processed LaTeX node
+ */
+function processLaTeXNode(attr, textRaw, textOriginal, value) {
+  console.log('🔧 Processing LaTeX node in tree building phase:', { textRaw, textOriginal, value });
+  
+  // Initialize LaTeX node
+  const latexNode = {
+    type: 'latex',
+    textRaw: textRaw || '', // Always use textRaw for LaTeX content
+    textOriginal,
+    attr: { ...attr }, // Copy existing attributes
+    children: [],
+    caption: null // Caption stays at node level for easy access
+  };
+  
+  // Process the value to extract LaTeX attributes
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    // Handle object with content, caption, height
+    for (const [key, val] of Object.entries(value)) {
+      if (key === 'content' && typeof val === 'string') {
+        latexNode.textRaw = val; // Use textRaw for LaTeX content
+      } else if (key === 'caption' && typeof val === 'string') {
+        latexNode.caption = val;
+      } else if (key === 'height' && typeof val === 'string') {
+        latexNode.attr.height = val; // Store height in attr
+      } else if ((key === 'caption_title' || key === 'caption-title') && typeof val === 'string') {
+        latexNode.attr.caption_title = val; // Store custom caption title in attr
+      } else if (key === 'id' && typeof val === 'string') {
+        latexNode.htmlId = val; // Store user-defined ID for HTML element (not in attr)
+      }
+    }
+  } else if (Array.isArray(value)) {
+    // Handle array value - process recursively but look for specific keys
+    const processedChildren = value.map(item => processNode(item));
+    
+    // Extract content, caption, height from processed children
+    for (const child of processedChildren) {
+      if (typeof child === 'object' && child.textRaw) {
+        if (child.textRaw === 'content' && child.children && child.children.length > 0) {
+          const contentChild = child.children[0];
+          if (typeof contentChild === 'object' && contentChild.textRaw) {
+            latexNode.textRaw = contentChild.textRaw; // Use textRaw for LaTeX content
+          }
+        } else if (child.textRaw === 'caption' && child.children && child.children.length > 0) {
+          const captionChild = child.children[0];
+          if (typeof captionChild === 'object' && captionChild.textRaw) {
+            latexNode.caption = captionChild.textRaw;
+          }
+        } else if (child.textRaw === 'height' && child.children && child.children.length > 0) {
+          const heightChild = child.children[0];
+          if (typeof heightChild === 'object' && heightChild.textRaw) {
+            latexNode.attr.height = heightChild.textRaw; // Store height in attr
+          }
+        } else if ((child.textRaw === 'caption_title' || child.textRaw === 'caption-title') && child.children && child.children.length > 0) {
+          const captionTitleChild = child.children[0];
+          if (typeof captionTitleChild === 'object' && captionTitleChild.textRaw) {
+            latexNode.attr.caption_title = captionTitleChild.textRaw; // Store custom caption title in attr
+          }
+        } else if (child.textRaw === 'id' && child.children && child.children.length > 0) {
+          const idChild = child.children[0];
+          if (typeof idChild === 'object' && idChild.textRaw) {
+            latexNode.htmlId = idChild.textRaw; // Store user-defined ID for HTML element (not in attr)
+          }
+        }
+      }
+    }
+  }
+  
+  console.log('✅ LaTeX node processed:', latexNode);
+  return latexNode;
+}
+
+/**
+ * Process Image node - special handling for image blocks
+ * @param {object} attr - Parsed attributes 
+ * @param {string} textRaw - Raw text content (image src)
+ * @param {string} textOriginal - Original text
+ * @param {any} value - Node value (children/content)
+ * @returns {object} - Processed image node
+ */
+function processImageNode(attr, textRaw, textOriginal, value) {
+  console.log('🔧 Processing Image node in tree building phase:', { textRaw, textOriginal, value });
+  
+  // Initialize image node
+  const imageNode = {
+    type: 'image',
+    textRaw: textRaw || '', // Image src
+    textOriginal,
+    attr: { ...attr },
+    children: [],
+    caption: null
+  };
+  
+  // Process the value to extract image attributes
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    // Handle object with src, caption, alt, etc.
+    for (const [key, val] of Object.entries(value)) {
+      if (key === 'src' && typeof val === 'string') {
+        imageNode.textRaw = val; // Use textRaw for image src
+      } else if (key === 'caption' && typeof val === 'string') {
+        imageNode.caption = val;
+      } else if (key === 'alt' && typeof val === 'string') {
+        imageNode.attr.alt = val;
+      } else if (key === 'width' && typeof val === 'string') {
+        imageNode.attr.width = val;
+      } else if (key === 'height' && typeof val === 'string') {
+        imageNode.attr.height = val;
+      } else if (key === 'id' && typeof val === 'string') {
+        imageNode.htmlId = val; // Store user-defined ID for HTML element (not in attr)
+      }
+    }
+  } else if (Array.isArray(value)) {
+    // Handle array value - process recursively but look for specific keys
+    const processedChildren = value.map(item => processNode(item));
+    
+    // Extract src, caption, alt from processed children
+    for (const child of processedChildren) {
+      if (typeof child === 'object' && child.textRaw) {
+        if (child.textRaw === 'src' && child.children && child.children.length > 0) {
+          const srcChild = child.children[0];
+          if (typeof srcChild === 'object' && srcChild.textRaw) {
+            imageNode.textRaw = srcChild.textRaw; // Use textRaw for image src
+          }
+        } else if (child.textRaw === 'caption' && child.children && child.children.length > 0) {
+          const captionChild = child.children[0];
+          if (typeof captionChild === 'object' && captionChild.textRaw) {
+            imageNode.caption = captionChild.textRaw;
+          }
+        } else if (child.textRaw === 'alt' && child.children && child.children.length > 0) {
+          const altChild = child.children[0];
+          if (typeof altChild === 'object' && altChild.textRaw) {
+            imageNode.attr.alt = altChild.textRaw;
+          }
+        } else if (child.textRaw === 'id' && child.children && child.children.length > 0) {
+          const idChild = child.children[0];
+          if (typeof idChild === 'object' && idChild.textRaw) {
+            imageNode.htmlId = idChild.textRaw; // Store user-defined ID for HTML element (not in attr)
+          }
+        }
+      }
+    }
+  }
+  
+  console.log('✅ Image node processed:', imageNode);
+  return imageNode;
+}
+
+/**
+ * Process Video node - special handling for video blocks
+ * @param {object} attr - Parsed attributes 
+ * @param {string} textRaw - Raw text content (video src)
+ * @param {string} textOriginal - Original text
+ * @param {any} value - Node value (children/content)
+ * @returns {object} - Processed video node
+ */
+function processVideoNode(attr, textRaw, textOriginal, value) {
+  console.log('🔧 Processing Video node in tree building phase:', { textRaw, textOriginal, value });
+  
+  // Initialize video node (similar to image but for videos)
+  const videoNode = {
+    type: 'video',
+    textRaw: textRaw || '', // Video src
+    textOriginal,
+    attr: { ...attr },
+    children: [],
+    caption: null
+  };
+  
+  // Process attributes similar to image node
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    for (const [key, val] of Object.entries(value)) {
+      if (key === 'src' && typeof val === 'string') {
+        videoNode.textRaw = val;
+      } else if (key === 'caption' && typeof val === 'string') {
+        videoNode.caption = val;
+      } else if (['width', 'height', 'controls', 'autoplay', 'loop', 'muted', 'playOnLoad'].includes(key)) {
+        videoNode.attr[key] = val;
+      } else if (key === 'id' && typeof val === 'string') {
+        videoNode.htmlId = val; // Store user-defined ID for HTML element (not in attr)
+      }
+    }
+  }
+  
+  console.log('✅ Video node processed:', videoNode);
+  return videoNode;
+}
+
+/**
  * Process a single node (recursive)
  * @param {any} node - Node to process
  * @returns {any} - Processed node
@@ -41,14 +317,35 @@ function processNode(node) {
     // Process objects - handle keys with square bracket attributes
     const processedObj = {};
     
+    // Check for alternative YAMD grammar for leaf nodes: [type]xxx: null with other attributes
+    const leafNodeKeyWithNullValue = checkAlternativeYamdGrammarForLeafNode(node);
+    if (leafNodeKeyWithNullValue) {
+      return handleAlternativeYamdGrammarForLeafNode(node, leafNodeKeyWithNullValue);
+    }
+    
     for (const [key, value] of Object.entries(node)) {
-      // Extract attributes from the key
+      // extract attributes from the key
       const { textRaw, attr, textOriginal } = extractSquareBracketAttr(key);
       
-      // Determine node type based on attributes
+      // determine node type based on attributes
       const nodeType = determineNodeType(attr);
       
-      // Process the value recursively
+      // special handling for leaf nodes - don't process children recursively
+      if (nodeType === 'latex') {
+        const processedNode = processLaTeXNode(attr, textRaw, textOriginal, value);
+        processedObj[textOriginal] = processedNode;
+        continue; // Skip normal processing
+      } else if (nodeType === 'image') {
+        const processedNode = processImageNode(attr, textRaw, textOriginal, value);
+        processedObj[textOriginal] = processedNode;
+        continue; // Skip normal processing
+      } else if (nodeType === 'video') {
+        const processedNode = processVideoNode(attr, textRaw, textOriginal, value);
+        processedObj[textOriginal] = processedNode;
+        continue; // Skip normal processing
+      }
+      
+      // process the value recursively for non-LaTeX nodes
       const processedValue = Array.isArray(value) ? value.map(item => processNode(item)) : processNode(value);
       
       // Create processed node
@@ -76,7 +373,10 @@ function processNode(node) {
  * @returns {string} - Node type
  */
 function determineNodeType(attr) {
-  if (attr.selfDisplay) {
+  // Check for explicit type first (like [latex])
+  if (attr.type) {
+    return attr.type;
+  } else if (attr.selfDisplay) {
     return 'node';
   } else if (attr.childDisplay || attr.childClass || attr.valueNum !== null) {
     return 'node';

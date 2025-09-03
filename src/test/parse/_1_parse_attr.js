@@ -1,6 +1,9 @@
 /**
- * Parse square bracket attributes from text
- * Handles grammar like: [key=value, key2=value2] or [shorthand]
+ * parse square bracket attributes from text
+ * example:
+ *   xxx[a=b,c=d]
+ *   xxx[yy]
+ *   [a=b,c=d]xxx
  */
 
 /**
@@ -118,7 +121,7 @@ export function extractSquareBracketAttr(nodeStr) {
       
       if (rawKey) {
         // Normalize key and value
-        const normalizedKey = normalizeAttributeKey(rawKey);
+        const normalizedKey = normalizeAttrKey(rawKey);
         const normalizedValue = normalizeAttributeValue(normalizedKey, rawValue);
         
         // Handle quoted values
@@ -146,7 +149,7 @@ export function extractSquareBracketAttr(nodeStr) {
  * @param {string} key - The attribute key
  * @returns {string} - Normalized key
  */
-export function normalizeAttributeKey(key) {
+export function normalizeAttrKey(key) {
   const lowerKey = key.toLowerCase().trim();
   
   // Map synonyms to canonical keys
@@ -217,6 +220,15 @@ export function normalizeAttributeValue(key, value) {
  */
 export function parseShorthandAttribute(shorthand) {
   const trimmed = shorthand.trim().toLowerCase();
+  
+  // Handle special node types
+  if (trimmed === 'latex') {
+    return { type: 'latex', selfDisplay: 'latex' };
+  } else if (trimmed === 'image' || trimmed === 'img') {
+    return { type: 'image', selfDisplay: 'image' };
+  } else if (trimmed === 'video' || trimmed === 'vid') {
+    return { type: 'video', selfDisplay: 'video' };
+  }
   
   // Determine if it's selfDisplay or childDisplay based on the value
   const childDisplayValues = ['ul', 'ol', 'p', 'timeline', 'plain-list', 'plain_list', 'unordered-list', 'ordered-list', 'paragraph'];

@@ -2,11 +2,12 @@ import React from 'react';
 import { YamdChildrenRenderer, getNodeClass } from '../YamdNode.jsx';
 import { getChildrenDisplay, AddListBulletBeforeYamdText } from '../YamdRenderUtils.js';
 import YamdRichText from './YamdRichText.jsx';
+import YamdPlainText from './YamdPlainText.jsx';
 
 /**
  * Text node renderer - displays plain text content and children in vertical layout
  */
-const YamdNodeText = ({ nodeId, getNodeDataById, parentInfo }) => {
+const YamdNodeText = ({ nodeId, getNodeDataById, getAssetById, parentInfo }) => {
   const nodeData = getNodeDataById(nodeId);
   
   if (!nodeData) {
@@ -14,7 +15,8 @@ const YamdNodeText = ({ nodeId, getNodeDataById, parentInfo }) => {
   }
 
   const selfPlainText = nodeData.textRaw || nodeData.textOriginal || '';
-  const childDisplay = getChildrenDisplay(nodeData);
+  const selfRichText = nodeData.textRich; // Rich text segments if LaTeX was processed
+  const childDisplay = getChildrenDisplay(nodeData, false, parentInfo);
   const childClass = nodeData.attr?.childClass;
   const shouldRenderBullet = parentInfo?.childDisplay === 'ul' || parentInfo?.childDisplay === 'ol';
   
@@ -23,11 +25,24 @@ const YamdNodeText = ({ nodeId, getNodeDataById, parentInfo }) => {
 
   return (
     <div className="yamd-node-text">
-      {selfPlainText && (
+      {selfPlainText && !selfRichText && (
+        <AddListBulletBeforeYamdText
+          childNode={
+            <YamdPlainText 
+              text={selfPlainText}
+              className={nodeClass}
+              parentInfo={parentInfo}
+            />
+          }
+        />
+      )}
+      {selfRichText && (
         <AddListBulletBeforeYamdText
           childNode={
             <YamdRichText 
               text={selfPlainText}
+              textRich={selfRichText}
+              getAssetById={getAssetById}
               className={nodeClass}
               parentInfo={parentInfo}
             />
@@ -38,6 +53,8 @@ const YamdNodeText = ({ nodeId, getNodeDataById, parentInfo }) => {
         <YamdChildrenRenderer
           childIds={nodeData.children}
           getNodeDataById={getNodeDataById}
+          getAssetById={getAssetById}
+          shouldAddIndent={true}
           parentInfo={{ 
             ...parentInfo, 
             ...(childDisplay && { childDisplay }),

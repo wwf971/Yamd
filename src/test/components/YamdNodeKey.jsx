@@ -5,7 +5,7 @@ import { renderYamdListBullet, getChildrenDisplay } from '../YamdRenderUtils.js'
 /**
  * Key node renderer - renders title and children as siblings, with optional valueNum support
  */
-const YamdNodeKey = ({ nodeId, getNodeDataById, parentInfo }) => {
+const YamdNodeKey = ({ nodeId, getNodeDataById, getAssetById, parentInfo }) => {
   const nodeData = getNodeDataById(nodeId);
   
   if (!nodeData) {
@@ -13,7 +13,7 @@ const YamdNodeKey = ({ nodeId, getNodeDataById, parentInfo }) => {
   }
 
   const title = nodeData.textRaw || nodeData.textOriginal || '';
-  const childDisplay = getChildrenDisplay(nodeData);
+  const childDisplay = getChildrenDisplay(nodeData, false, parentInfo);
   const childClass = nodeData.attr?.childClass || 'yamd-tag';
   const valueNum = nodeData.attr?.valueNum;
   const children = nodeData.children || [];
@@ -42,6 +42,7 @@ const YamdNodeKey = ({ nodeId, getNodeDataById, parentInfo }) => {
               key={childId}
               nodeId={childId}
               getNodeDataById={getNodeDataById}
+              getAssetById={getAssetById}
               parentInfo={{ ...parentInfo, childClass }}
             />
           ))}
@@ -53,6 +54,8 @@ const YamdNodeKey = ({ nodeId, getNodeDataById, parentInfo }) => {
             <YamdChildrenRenderer
               childIds={remainingChildIds}
               getNodeDataById={getNodeDataById}
+              getAssetById={getAssetById}
+              shouldAddIndent={false}
               parentInfo={{ 
                 ...parentInfo, 
                 ...(childDisplay && { childDisplay }),
@@ -78,6 +81,7 @@ const YamdNodeKey = ({ nodeId, getNodeDataById, parentInfo }) => {
             key={childId}
             nodeId={childId}
             getNodeDataById={getNodeDataById}
+            getAssetById={getAssetById}
             parentInfo={{ ...parentInfo, childClass }}
           />
         ))}

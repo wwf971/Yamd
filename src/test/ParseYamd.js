@@ -9,7 +9,7 @@ export { getSampleYaml, getCornerCaseYaml } from './parse/_0_yaml_sample.js';
 // Attribute parsing
 export { 
   extractSquareBracketAttr, 
-  normalizeAttributeKey, 
+  normalizeAttrKey, 
   normalizeAttributeValue, 
   parseShorthandAttribute 
 } from './parse/_1_parse_attr.js';
@@ -20,12 +20,16 @@ export { processNodes } from './parse/_2_build_nodes_tree.js';
 // Tree flattening  
 export { flattenJson } from './parse/_3_flatten_nodes_tree.js';
 
+// LaTeX processing (inline and block)
+export { parseLatexInline, processAllLaTeXInline } from './parse/_4_latex.js';
+
 /**
  * Complete Yamd processing pipeline
  * @param {string} yamlString - Input YAML string
+ * @param {boolean} processLatex - Whether to process LaTeX (default: true)
  * @returns {object} - {success: boolean, data: object, error: string}
  */
-export function processYamd(yamlString) {
+export async function processYamd(yamlString, processLatex = true) {
   try {
     // Step 1: Parse YAML to JSON
     const yamlResult = parseYamlToJson(yamlString);
@@ -41,11 +45,17 @@ export function processYamd(yamlString) {
     const processedData = processNodes(yamlResult.data);
 
     // Step 3: Flatten to ID-based structure
-    const { flattened, rootId } = flattenJson(processedData);
+    const flattenedData = flattenJson(processedData);
+
+    // Step 4: Process inline LaTeX (optional)
+    let finalData = flattenedData;
+    if (processLatex) {
+      finalData = await processAllLaTeXInline(flattenedData);
+    }
 
     return {
       success: true,
-      data: { nodes: flattened, rootId },
+      data: { nodes: finalData.nodes, rootNodeId: finalData.rootNodeId, assets: finalData.assets },
       error: null
     };
   } catch (error) {

@@ -64,7 +64,7 @@ const BULLET_COMPONENTS = {
 };
 
 // Timeline item component
-const YamdTimelineItem = React.memo(({ nodeId, getNodeDataById, itemIndex, isLast, bulletRefs, lineHeights, parentInfo }) => {
+const YamdTimelineItem = React.memo(({ nodeId, getNodeDataById, getAssetById, itemIndex, isLast, bulletRefs, lineHeights, parentInfo }) => {
   const nodeData = getNodeDataById(nodeId);
   
   if (!nodeData) {
@@ -109,6 +109,7 @@ const YamdTimelineItem = React.memo(({ nodeId, getNodeDataById, itemIndex, isLas
                 key={childId}
                 nodeId={childId}
                 getNodeDataById={getNodeDataById}
+                getAssetById={getAssetById}
                 parentInfo={{ ...parentInfo, childClass: 'yamd-timeline-item-text' }}
               />
             ))}
@@ -120,7 +121,7 @@ const YamdTimelineItem = React.memo(({ nodeId, getNodeDataById, itemIndex, isLas
 });
 
 // Main YamdTimeline component
-const YamdTimeline = ({ childIds, getNodeDataById, parentInfo }) => {
+const YamdTimeline = ({ childIds, getNodeDataById, getAssetById, parentInfo }) => {
   const [lineHeights, setLineHeights] = useState([]);
   const bulletRefs = useRef([]);
   
@@ -167,6 +168,7 @@ const YamdTimeline = ({ childIds, getNodeDataById, parentInfo }) => {
             key={childId}
             nodeId={childId}
             getNodeDataById={getNodeDataById}
+            getAssetById={getAssetById}
             itemIndex={index}
             isLast={isLast}
             bulletRefs={bulletRefs}
