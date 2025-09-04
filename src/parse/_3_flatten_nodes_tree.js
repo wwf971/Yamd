@@ -26,6 +26,7 @@ function isLeafNodeType(node) {
   
   // Define leaf node types - easily extensible for future types
   // Add new leaf node types here as needed (e.g., 'audio', 'chart', 'diagram', etc.)
+  // Note: image-list is NOT a leaf node because it has children (individual images)
   const leafNodeTypes = ['latex', 'image', 'video'];
   return leafNodeTypes.includes(node.type);
 }
@@ -111,14 +112,24 @@ export function flattenJson(processedData) {
       // Handle regular objects
       const entries = Object.entries(node);
       
-      // Optimization: If object has only one entry and the value is a leaf node,
-      // flatten the leaf node directly instead of creating intermediate object
+      // Optimization: If object has only one entry and the value is a leaf node or primitive,
+      // flatten the value directly instead of creating intermediate object
       if (entries.length === 1) {
         const [key, value] = entries[0];
-        if (isLeafNodeType(value)) {
-          // This is a single leaf node - flatten it directly to avoid intermediate object
+        if (isLeafNodeType(value)
+          // || typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean'
+        ) {
+          // This is a single leaf node or primitive value - flatten it directly to avoid intermediate object
           return flattenNode(value, parentId);
         }
+        /*
+          - a:b
+          - cc
+          will be interpreted as:
+          - a
+            -b
+        */
+        return flattenNode(value, parentId);
       }
       
       // Otherwise, create object node as before

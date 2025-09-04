@@ -1,19 +1,18 @@
 import React from 'react';
 import YamdTimeline from './components/YamdTimeline.jsx';
 import { LIST_INDENT } from './YamdRenderSettings.js';
+import YamdNode from './YamdNode.jsx';
 
 /**
  * Component for rendering children nodes based on childDisplay style from parentInfo
  * @param {Array} childIds - Array of child node IDs
  * @param {object} parentInfo - Parent context information containing childDisplay and childClass
- * @param {React.Component} YamdNodeComponent - YamdNode component passed to avoid circular dependency
  * @param {boolean} shouldAddIndent - Whether to add indentation to children (controlled by parent component type)
  * @param {object} globalInfo - Global context with getNodeDataById, getAssetById, getRefById, and fetchExternalData methods
  */
   const YamdChildrenNodes = ({ 
     childIds, 
     parentInfo = null,
-    YamdNodeComponent,
     shouldAddIndent = false,
     globalInfo = null
   }) => {
@@ -37,7 +36,7 @@ import { LIST_INDENT } from './YamdRenderSettings.js';
     <div className={joinClassNames(containerClassName)}>
       {childIds.map((childId, index) => (
         <div key={childId} className={joinClassNames(itemClassName)}>
-          <YamdNodeComponent 
+          <YamdNode 
             nodeId={childId} 
             parentInfo={{ 
               ...parentInfo, 
@@ -101,12 +100,12 @@ import { LIST_INDENT } from './YamdRenderSettings.js';
     case 'paragraph':
     case 'p':
       return (
-        <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'flex-start' }}>
+        <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'flex-start', maxWidth: '100%'}}>
           <div style={{ width: shouldAddIndent ? LIST_INDENT.childIndent : '0px', height: '0px' }} />
           <div className="yamd-paragraphs">
             {childIds.map(childId => (
               <div key={childId} className="yamd-paragraph">
-                <YamdNodeComponent 
+                <YamdNode 
                   nodeId={childId} 
                   parentInfo={{ ...parentInfo, childClass: childClass || 'yamd-paragraph-content' }}
                   globalInfo={globalInfo}
@@ -131,7 +130,7 @@ import { LIST_INDENT } from './YamdRenderSettings.js';
       return (
         <div className="yamd-tags">
           {childIds.map(childId => (
-            <YamdNodeComponent 
+            <YamdNode 
               key={childId}
               nodeId={childId} 
               parentInfo={{ ...parentInfo, childClass: childClass || 'yamd-tag' }}

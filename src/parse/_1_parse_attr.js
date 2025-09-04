@@ -281,6 +281,8 @@ export function parseShorthandAttribute(shorthand) {
     return { type: 'image', selfDisplay: 'image' };
   } else if (trimmed === 'video' || trimmed === 'vid') {
     return { type: 'video', selfDisplay: 'video' };
+  } else if (trimmed === 'image-list' || trimmed === 'imagelist') {
+    return { type: 'image-list', selfDisplay: 'image-list' };
   }
   
   // Determine if it's selfDisplay or childDisplay based on the value

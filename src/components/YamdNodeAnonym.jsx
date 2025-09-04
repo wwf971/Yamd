@@ -1,5 +1,5 @@
 import React from 'react';
-import { YamdChildrenRenderer } from '../YamdNode.jsx';
+import YamdChildrenNodes from '../YamdChildrenNodes.jsx';
 
 /**
  * Anonymous node renderer - skips title completely and renders only children (for nodes with empty textRaw)
@@ -24,7 +24,7 @@ const YamdNodeAnonym = ({ nodeId, parentInfo, globalInfo }) => {
 
   // Render only children, no title
   return (
-    <YamdChildrenRenderer
+    <YamdChildrenNodes
       childIds={nodeData.children || []}
       shouldAddIndent={false}
       parentInfo={childrenParentInfo}

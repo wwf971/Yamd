@@ -126,6 +126,32 @@ Video Examples[panel,panelDefault=expand]:
     controls: true
     width: "400px"
 
+# Image List Examples
+Image Lists[panel,panelDefault=expand]:
+  - "[image-list,subindex='abc',alignX=center]Multiple images in one line":
+    - "src": "https://picsum.photos/400/200"
+      "caption": "First image caption"
+    - "src": "https://picsum.photos/400/200"
+      "caption": "Second image caption"
+    - "src": "https://picsum.photos/400/200"
+      "caption": "Third image caption"
+    "height": "300px"
+
+  - "[image-list,subindex='LR',alignX=left]Paired comparison images":
+    - "[image]": 
+       "src": "https://picsum.photos/400/200"
+       "caption": "Before image"
+    - "[image]":
+       "src": "https://picsum.photos/400/200"
+       "caption": "After image"
+    "height": "200px"
+
+  - "[image-list,subindex='123',alignX=right]Numbered sequence":
+    - "https://picsum.photos/400/200"
+    - "https://picsum.photos/400/200" 
+    - "https://picsum.photos/400/200"
+    "height": "100px"
+
   # Reference System Examples
   - "Reference Examples[panel,panelDefault=expand]":
     - "Text with references": "As shown in \\\\ref{}{summation-formula}, the mathematical relationship is clear. See also \\\\ref{Figure 1}{sample-image} for visual representation."

@@ -75,7 +75,7 @@ export const LaTeX2Svg = async (latexContent, nodeId = 'unknown') => {
   }
 
   try {
-    console.log(`🔄 Converting LaTeX to SVG for node: ${nodeId}`);
+    // console.log(`🔄 Converting LaTeX to SVG for node: ${nodeId}`);
 
     // Clean LaTeX content - remove any existing delimiters
     let cleanLatex = latexContent.trim();

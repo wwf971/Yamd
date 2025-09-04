@@ -10,11 +10,9 @@ const YamdNodeImage = ({ nodeId, parentInfo, globalInfo }) => {
   if (!globalInfo?.getNodeDataById) {
     return <div className="yamd-error">Missing globalInfo.getNodeDataById</div>;
   }
-  
   const nodeData = globalInfo.getNodeDataById(nodeId);
-  
   if (!nodeData) {
-    return <div className="yamd-error">Image node not found: {nodeId}</div>;
+    return <div className="yamd-error">Image node not found: nodeId: {nodeId}</div>;
   }
 
   // Try to fetch external data if globalInfo.fetchExternalData is available
@@ -82,17 +80,27 @@ const YamdNodeImage = ({ nodeId, parentInfo, globalInfo }) => {
   // Get alignment strategy for the image
   const alignmentStrategy = getAlignmentStrategy(nodeData, parentInfo);
 
+  // Handle forced height from image-list parent
+  const forcedHeight = parentInfo?.forcedHeight;
+
   const imageStyle = {
     ...(customWidth && { width: customWidth }),
     ...(customHeight && { height: customHeight }),
-    maxWidth: '100%',
-    height: 'auto'
+    ...(forcedHeight ? {
+      height: `${forcedHeight}px`,
+      width: 'auto', // Let width be determined by aspect ratio
+      maxWidth: 'none' // Don't limit the natural width
+    } : {
+      maxWidth: '100%',
+      height: 'auto'
+    })
   };
 
   const containerStyle = {
     display: 'flex',
     justifyContent: alignmentStrategy,
-    width: '100%'
+    width: '100%',
+    height: '100%'
   };
 
   return (
@@ -124,8 +132,8 @@ const YamdNodeImage = ({ nodeId, parentInfo, globalInfo }) => {
           {(() => {
             if (nodeData.assetId && globalInfo?.getAssetById) {
               const asset = globalInfo.getAssetById(nodeData.assetId);
-              if (asset && !asset.no_index && asset.indexOfSameType) {
-                return ` ${asset.indexOfSameType}`;
+              if (asset && !asset.no_index && (asset.indexStr || asset.indexOfSameType)) {
+                return ` ${asset.indexStr || asset.indexOfSameType}`;
               }
             }
             return '';

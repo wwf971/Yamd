@@ -1,5 +1,6 @@
 import React from 'react';
-import { YamdChildrenRenderer, getNodeClass } from '../YamdNode.jsx';
+import { getNodeClass } from '../YamdNode.jsx';
+import YamdChildrenNodes from '../YamdChildrenNodes.jsx';
 import { renderYamdListBullet, getChildrenDisplay } from '../YamdRenderUtils.js';
 
 /**
@@ -36,7 +37,7 @@ const YamdNodeTopRight = ({ nodeId, parentInfo, globalInfo }) => {
       {/* Children content in the main area */}
       <div className="yamd-top-right-content">
         {nodeData.children && nodeData.children.length > 0 && (
-        <YamdChildrenRenderer
+        <YamdChildrenNodes
           childIds={nodeData.children}
           shouldAddIndent={true}
           parentInfo={{ 

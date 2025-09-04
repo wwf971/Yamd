@@ -1,5 +1,6 @@
 import React, { useRef, useEffect } from 'react';
-import { YamdChildrenRenderer, getNodeClass } from '../YamdNode.jsx';
+import { getNodeClass } from '../YamdNode.jsx';
+import YamdChildrenNodes from '../YamdChildrenNodes.jsx';
 import { getChildrenDisplay } from '../YamdRenderUtils.js';
 
 /**
@@ -42,7 +43,7 @@ const YamdNodeDivider = ({ nodeId, parentInfo, globalInfo }) => {
         <span className={nodeClass}>{title}</span>
       </div>
       {nodeData.children && nodeData.children.length > 0 && (
-        <YamdChildrenRenderer
+        <YamdChildrenNodes
           childIds={nodeData.children}
           shouldAddIndent={false}
           parentInfo={{ 

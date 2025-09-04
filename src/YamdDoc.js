@@ -149,7 +149,7 @@ export const createGlobalInfo = (flattenedData, handleRefClick, handleBibClick) 
       };
     },
     fetchExternalData: (nodeData) => {
-      console.log('🌐 fetchExternalData called with:', nodeData);
+      // console.log('🌐 fetchExternalData called with:', nodeData);
       return {
         code: 1, // Component should handle data fetching itself
         message: 'Component should handle data fetching directly',

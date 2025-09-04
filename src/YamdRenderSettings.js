@@ -3,10 +3,21 @@
  * Centralized configuration for consistent styling across components
  */
 
+
+
 // Bullet dimensions and positioning
 export const BULLET_DIMENSIONS = {
   width: '12px',
   height: '1.2em'
+};
+
+// Timeline bullet dimensions and positioning
+export const TIMELINE_BULLET_DIMENSIONS = {
+  container_width: '20px',    // Width of the bullet container
+  container_height: '20px',   // Height of the bullet container
+  bullet_width: '15px',       // Width of the actual bullet SVG
+  bullet_height: '15px',      // Height of the actual bullet SVG
+  connect_line_gap: '2px'     // Gap between connect lines and bullets
 };
 
 // Indentation settings for nested content
@@ -42,6 +53,9 @@ export const TIMELINE_SETTINGS = {
   itemSpacing: '16px'
 };
 
+export const IMAGE_LIST_SETTINGS = {
+  defaultHeight: '200px'
+};
 
 // Image settings
 export const IMAGE_SETTINGS = {

@@ -18,7 +18,7 @@ export const useNodeParseStore = create(
       
       const parseNode = (node, parentId = null) => {
         const nodeId = nanoid();
-        console.log('🔍 parseNode called with:', { node, parentId, nodeId });
+        // console.log('🔍 parseNode called with:', { node, parentId, nodeId });
         
         if (Array.isArray(node)) {
           // Handle arrays

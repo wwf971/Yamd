@@ -1,5 +1,6 @@
 import React from 'react';
-import { YamdChildrenRenderer, getNodeClass } from '../YamdNode.jsx';
+import { getNodeClass } from '../YamdNode.jsx';
+import YamdChildrenNodes from '../YamdChildrenNodes.jsx';
 import { getChildrenDisplay, AddListBulletBeforeYamdText } from '../YamdRenderUtils.js';
 import YamdRichText from './YamdRichText.jsx';
 import YamdPlainText from './YamdPlainText.jsx';
@@ -29,6 +30,7 @@ const YamdNodeText = React.memo(({ nodeId, parentInfo, globalInfo }) => {
 
   return (
     <div className="yamd-node-text">
+      {/* self content */}
       {selfPlainText && !selfRichText && (
         <AddListBulletBeforeYamdText
           childNode={
@@ -53,8 +55,10 @@ const YamdNodeText = React.memo(({ nodeId, parentInfo, globalInfo }) => {
           }
         />
       )}
+
+      {/* children content */}
       {nodeData.children && nodeData.children.length > 0 && (
-        <YamdChildrenRenderer
+        <YamdChildrenNodes
           childIds={nodeData.children}
           shouldAddIndent={true}
           parentInfo={{ 

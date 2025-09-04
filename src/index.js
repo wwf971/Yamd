@@ -1,7 +1,8 @@
 // Main entry point for Yamd module
 export { default as YamdDoc } from './YamdDoc.jsx';
-export { default as YamdNode, getNodeClass, YamdChildrenRenderer } from './YamdNode.jsx';
+export { default as YamdNode, getNodeClass } from './YamdNode.jsx';
 export { default as YamdChildrenNodes } from './YamdChildrenNodes.jsx';
+export { default as YamdImageList } from './components/YamdImageList.jsx';
 export { default as TestYamd } from './TestYamd.jsx';
 
 // Export parsing utilities
@@ -22,7 +23,9 @@ export {
   getChildrenDefaultDisplay,
   AddListBulletBeforeYamdNode,
   AddListBulletBeforeYamdText,
-  getAlignmentStrategy
+  getAlignmentStrategy,
+  renderYamdTimelineBullet,
+  AddTimelineBulletBeforeYamdNode
 } from './YamdRenderUtils.js';
 
 // export render settings
@@ -33,7 +36,9 @@ export {
   PANEL_SETTINGS,
   TIMELINE_SETTINGS,
   IMAGE_SETTINGS,
-  VIDEO_SETTINGS
+  VIDEO_SETTINGS,
+  IMAGE_LIST_SETTINGS,
+  TIMELINE_BULLET_DIMENSIONS
 } from './YamdRenderSettings.js';
 
 // export MathJax utilities

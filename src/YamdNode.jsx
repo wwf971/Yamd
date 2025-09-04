@@ -1,6 +1,6 @@
 import React from 'react';
 import './YamdNode.css';
-import YamdNodePanel from './components/YamdNodePanel.jsx';
+import YamdPanel from './components/YamdPanel.jsx';
 import YamdNodeDivider from './components/YamdNodeDivider.jsx';
 import YamdNodeKey from './components/YamdNodeKey.jsx';
 import YamdNodeTopRight from './components/YamdNodeTopRight.jsx';
@@ -9,6 +9,7 @@ import YamdNodeText from './components/YamdNodeText.jsx';
 import YamdNodeLaTeX from './components/YamdNodeLaTeX.jsx';
 import YamdNodeImage from './components/YamdNodeImage.jsx';
 import YamdNodeVideo from './components/YamdNodeVideo.jsx';
+import YamdImageList from './components/YamdImageList.jsx';
 import YamdChildrenNodes from './YamdChildrenNodes.jsx';
 import { AddListBulletBeforeYamdNode, getChildrenDisplay } from './YamdRenderUtils.js';
 
@@ -83,12 +84,27 @@ const YamdNode = React.memo(({ nodeId, parentInfo = null, globalInfo = null }) =
       );
     }
     
+    if (nodeData.type === 'image-list') {
+      return (
+        <AddListBulletBeforeYamdNode 
+          childNode={
+            <YamdImageList
+              nodeId={nodeId}
+              parentInfo={parentInfo}
+              globalInfo={globalInfo}
+            />
+          }
+          alignBullet='flex-start'
+        />
+      );
+    }
+    
     switch (selfDisplay) {
     case 'panel':
       return (
         <AddListBulletBeforeYamdNode 
           childNode={
-            <YamdNodePanel 
+            <YamdPanel 
               nodeId={nodeId} 
               parentInfo={parentInfo}
               globalInfo={globalInfo} 
@@ -166,9 +182,6 @@ const YamdNode = React.memo(({ nodeId, parentInfo = null, globalInfo = null }) =
  * @param {object} parentInfo - Parent context information containing childDisplay and childClass
  * @param {boolean} shouldAddIndent - Whether to add indentation to children (controlled by parent component type)
  */
-export const YamdChildrenRenderer = (props) => (
-  <YamdChildrenNodes {...props} YamdNodeComponent={YamdNode} />
-);
 
 /**
  * Utility function to get the appropriate CSS class for a node

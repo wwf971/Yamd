@@ -1,11 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { YamdChildrenRenderer, getNodeClass } from '../YamdNode.jsx';
+import { getNodeClass } from '../YamdNode.jsx';
+import YamdChildrenNodes from '../YamdChildrenNodes.jsx';
 import { getChildrenDisplay } from '../YamdRenderUtils.js';
 
 /**
  * Panel node renderer - displays collapsible panel with show/hide functionality
  */
-const YamdNodePanel = ({ nodeId, parentInfo, globalInfo }) => {
+const YamdPanel = ({ nodeId, parentInfo, globalInfo }) => {
   if (!globalInfo?.getNodeDataById) {
     return <div className="yamd-error">Missing globalInfo.getNodeDataById</div>;
   }
@@ -40,14 +41,22 @@ const YamdNodePanel = ({ nodeId, parentInfo, globalInfo }) => {
   // notify parent about preferred bullet Y position if there's a bullet to the left
   useEffect(() => {
     if (parentInfo?.hasBulletToLeft && parentInfo?.notifyPreferredBulletYPos && buttonRef.current) {
-      // Calculate the Y position of the button's midline relative to the panel's top
+      // Calculate the Y position of the button's midline relative to the bullet container
       const buttonRect = buttonRef.current.getBoundingClientRect();
-      const panelRect = buttonRef.current.closest('.yamd-panel').getBoundingClientRect();
-      const buttonRelativeTop = buttonRect.top - panelRect.top;
-      const preferredBulletYPos = buttonRelativeTop + (buttonRect.height / 2);
-      parentInfo.notifyPreferredBulletYPos(preferredBulletYPos);
+      const bulletContainerClass = parentInfo?.bulletContainerClassName || '.yamd-panel';
+      if (parentInfo?.bulletContainerClassName) {
+        console.warn('Child found bullet container class from parentInfo:', parentInfo.bulletContainerClassName);
+      }
+      const bulletContainer = buttonRef.current.closest(bulletContainerClass);
+      
+      if (bulletContainer) {
+        const containerRect = bulletContainer.getBoundingClientRect();
+        const buttonRelativeTop = buttonRect.top - containerRect.top;
+        const preferredBulletYPos = buttonRelativeTop + (buttonRect.height / 2);
+        parentInfo.notifyPreferredBulletYPos(preferredBulletYPos);
+      }
     }
-  }, [parentInfo, title, isExpanded]); // Re-calculate when content might change
+  }, [parentInfo, title, isExpanded]); // re-calculate when content might change
 
   return (
     <div className="yamd-panel">
@@ -67,7 +76,7 @@ const YamdNodePanel = ({ nodeId, parentInfo, globalInfo }) => {
       {isExpanded && (
         <div className="yamd-panel-content">
           {nodeData.children && nodeData.children.length > 0 && (
-          <YamdChildrenRenderer
+          <YamdChildrenNodes
             childIds={nodeData.children}
             shouldAddIndent={false}
             parentInfo={{ 
@@ -84,4 +93,4 @@ const YamdNodePanel = ({ nodeId, parentInfo, globalInfo }) => {
   );
 };
 
-export default YamdNodePanel;
+export default YamdPanel;

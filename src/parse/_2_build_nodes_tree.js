@@ -39,14 +39,14 @@ This also applies to other leaf node types like [image], [video], etc.
   
   const entries = Object.entries(obj);
   if (entries.length < 2) return null; // Need at least 2 entries for this mistake
-  
+
   for (const [key, value] of entries) {
     // Check if key looks like a leaf node type and has null value
     if (value === null && key.includes('[')) {
       const { attr } = extractSquareBracketAttr(key);
       const nodeType = determineNodeType(attr);
       // Check for leaf node types that support this grammar
-      if (nodeType === 'latex' || nodeType === 'image' || nodeType === 'video') {
+      if (nodeType === 'latex' || nodeType === 'image' || nodeType === 'video' || nodeType === 'image-list') {
         console.log('🔧 Detected alternative YAMD grammar for leaf node:', key, 'with null value');
         return key;
       }
@@ -85,6 +85,8 @@ function handleAlternativeYamdGrammarForLeafNode(obj, leafNodeKey) {
     processedNode = processImageNode(attr, textRaw, textOriginal, mergedAttributes);
   } else if (nodeType === 'video') {
     processedNode = processVideoNode(attr, textRaw, textOriginal, mergedAttributes);
+  } else if (nodeType === 'image-list') {
+    processedNode = processImageListNode(attr, textRaw, textOriginal, mergedAttributes);
   } else {
     // Fallback to generic processing
     processedNode = {
@@ -295,6 +297,114 @@ function processVideoNode(attr, textRaw, textOriginal, value) {
 }
 
 /**
+ * Process image-list node - special handling for image list blocks
+ * @param {object} attr - Parsed attributes 
+ * @param {string} textRaw - Raw text content
+ * @param {string} textOriginal - Original text
+ * @param {any} value - Node value (children/content)
+ * @returns {object} - Processed image-list node
+ */
+function processImageListNode(attr, textRaw, textOriginal, value) {
+  
+  // Clean attr by removing redundant type (it's already in the node type field)
+  const cleanAttr = { ...attr };
+  delete cleanAttr.type;
+  delete cleanAttr.selfDisplay; // Remove redundant selfDisplay too
+  
+  // Initialize image-list node
+  const imageListNode = {
+    type: 'image-list',
+    textRaw: textRaw || '',
+    textOriginal,
+    attr: cleanAttr,
+    children: []
+  };
+  
+  // Process value - extract attributes and children
+  if (value && typeof value === 'object') {
+    if (Array.isArray(value)) {
+      // Direct array of children - process them normally but they'll be forced to images during flattening
+      imageListNode.children = value.map(item => processNode(item));
+    } else {
+      // Object with potential attributes and children
+      const children = [];
+      for (const [key, val] of Object.entries(value)) {
+        // Recognize image-list level attributes (properties that should belong to the image-list)
+        if (['height', 'width', 'caption', 'alignX', 'subindex'].includes(key)) {
+          // Store as image-list attribute
+          if (key === 'caption') {
+            imageListNode.caption = val;
+          } else {
+            imageListNode.attr[key] = val;
+          }
+        } else if (key === 'children' && Array.isArray(val)) {
+          // The main children array - force each child to be an image
+          val.forEach(childItem => {
+            if (typeof childItem === 'string') {
+              // Direct URL string - create image node
+              const imageNode = processImageNode({ type: 'image', selfDisplay: 'image' }, childItem, `[image]${childItem}`, null);
+              children.push(imageNode);
+            } else if (childItem && typeof childItem === 'object') {
+              // Object with src/caption - force to be image
+              const forcedImageNode = forceNodeToImage(childItem);
+              children.push(forcedImageNode);
+            } else {
+              // Fallback to normal processing
+              children.push(processNode(childItem));
+            }
+          });
+        } else {
+          // Everything else is treated as a child - process normally
+          if (Array.isArray(val)) {
+            // Array of children
+            children.push(...val.map(item => processNode(item)));
+          } else {
+            // Single child
+            children.push(processNode({ [key]: val }));
+          }
+        }
+      }
+      imageListNode.children = children;
+    }
+  }
+  
+  return imageListNode;
+}
+
+/**
+ * Force a node to be treated as an image node
+ * @param {object} nodeObj - Node object to convert to image
+ * @returns {object} - Image node
+ */
+function forceNodeToImage(nodeObj) {
+  if (typeof nodeObj === 'string') {
+    // Direct URL string
+    return processImageNode({ type: 'image', selfDisplay: 'image' }, nodeObj, `[image]${nodeObj}`, null);
+  }
+  
+  // Check if object has 'src' property - this is image data
+  if (nodeObj && typeof nodeObj === 'object' && nodeObj.src) {
+    // Object with src property - treat as image with attributes
+    const src = nodeObj.src;
+    return processImageNode({ type: 'image', selfDisplay: 'image' }, src, `[image]${src}`, nodeObj);
+  }
+  
+  // Extract the first key-value pair and force it to be an image
+  const [key, value] = Object.entries(nodeObj)[0];
+  
+  if (key === 'src' && typeof value === 'string') {
+    // Direct src specification
+    return processImageNode({ type: 'image', selfDisplay: 'image' }, value, `[image]${value}`, nodeObj);
+  } else {
+    // Treat the key as potential image content and value as attributes
+    const { textRaw, attr, textOriginal } = extractSquareBracketAttr(key);
+    // Force type to image
+    const imageAttr = { ...attr, type: 'image', selfDisplay: 'image' };
+    return processImageNode(imageAttr, textRaw, textOriginal || `[image]${textRaw}`, value);
+  }
+}
+
+/**
  * Process a single node (recursive)
  * @param {any} node - Node to process
  * @returns {any} - Processed node
@@ -323,6 +433,42 @@ function processNode(node) {
       return handleAlternativeYamdGrammarForLeafNode(node, leafNodeKeyWithNullValue);
     }
     
+    // Check if this object contains an image-list key that needs to consume all entries
+    let imageListKey = null;
+    for (const [key, value] of Object.entries(node)) {
+      const { attr } = extractSquareBracketAttr(key);
+      const nodeType = determineNodeType(attr);
+      if (nodeType === 'image-list') {
+        imageListKey = key;
+        break;
+      }
+    }
+
+    // special handling for image-list: consume ALL entries in this object
+    if (imageListKey) {
+      const { textRaw, attr, textOriginal } = extractSquareBracketAttr(imageListKey);
+      const imageListValue = node[imageListKey];
+      
+      // Collect all other entries as attributes for the image-list
+      const allEntries = {};
+      for (const [key, value] of Object.entries(node)) {
+        if (key !== imageListKey) {
+          allEntries[key] = value;
+        }
+      }
+      
+      // Add the main value to the entries
+      if (Array.isArray(imageListValue)) {
+        allEntries.children = imageListValue;
+      } else {
+        allEntries.main = imageListValue;
+      }
+      
+      const processedNode = processImageListNode(attr, textRaw, textOriginal, allEntries);
+      processedObj[textOriginal] = processedNode;
+      return processedObj; // Return early since we consumed all entries
+    }
+    
     for (const [key, value] of Object.entries(node)) {
       // extract attributes from the key
       const { textRaw, attr, textOriginal } = extractSquareBracketAttr(key);
@@ -348,13 +494,13 @@ function processNode(node) {
       // process the value recursively for non-LaTeX nodes
       const processedValue = Array.isArray(value) ? value.map(item => processNode(item)) : processNode(value);
       
-      // Create processed node
+      // create processed node
       const processedNode = {
         type: nodeType,
         textRaw,
         textOriginal, 
         attr,
-        children: processedValue
+        children: Array.isArray(processedValue) ? processedValue : [processedValue]
       };
       
       // Use original key as the object key
@@ -373,7 +519,7 @@ function processNode(node) {
  * @returns {string} - Node type
  */
 function determineNodeType(attr) {
-  // Check for explicit type first (like [latex])
+  // Check for explicit type first (like [latex], [image], [image-list])
   if (attr.type) {
     return attr.type;
   } else if (attr.selfDisplay) {

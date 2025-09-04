@@ -359,6 +359,12 @@ export function registerImageBlock(nodeData, assets = {}, allNodes = {}) {
   const shouldIndex = !nodeData.attr?.no_index;
   const indexOfSameType = shouldIndex ? existingImages.length + 1 : null;
   
+  // Handle subindex for image-list support
+  const subindex = nodeData.attr?.subindex || null;
+  const indexStr = indexOfSameType && subindex 
+    ? `${indexOfSameType}${subindex}` 
+    : (indexOfSameType ? String(indexOfSameType) : null);
+  
   // Register image block in assets
   assets[assetId] = {
     id: assetId,
@@ -369,6 +375,8 @@ export function registerImageBlock(nodeData, assets = {}, allNodes = {}) {
     width: nodeData.attr?.width,
     height: nodeData.attr?.height,
     indexOfSameType,
+    subindex,
+    indexStr,
     no_index: !shouldIndex
   };
   
@@ -532,7 +540,7 @@ export async function processAllTextSegments(flattenedData) {
     
     if (processedNode.textRich) {
       segmentNodesFound++;
-      console.log(`✅ Processed text segments in node ${nodeId}`);
+      // console.log(`✅ Processed text segments in node ${nodeId}`);
     }
     
     processedNodes[nodeId] = processedNode;
@@ -561,7 +569,7 @@ export async function processAllTextSegments(flattenedData) {
       
       asset.htmlContent = svgContent; // Store clean SVG directly
       convertedCount++;
-      console.log(`✅ Converted LaTeX asset ${asset.id}`);
+      // console.log(`✅ Converted LaTeX asset ${asset.id}`);
     } catch (error) {
       console.warn(`❌ Failed to convert LaTeX asset ${asset.id}:`, error);
       asset.htmlContent = null; // Will display raw text

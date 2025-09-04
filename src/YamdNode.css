@@ -120,11 +120,14 @@
   border: 1px solid #f0f0f0;
   border-radius: 2px;
   text-align: center;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 }
 
 .yamd-image-content {
   display: flex;
-  justify-content: center;
+  justify-content: center !important;
   align-items: center;
   margin-bottom: 4px;
 }
@@ -144,7 +147,7 @@
 .yamd-image-caption {
   font-size: 0.85em;
   color: #666;
-  margin-top: 4px;
+  margin-top: 0px;
   text-align: center;
 }
 
@@ -391,6 +394,10 @@
   width: 100%;
 }
 
+.yamd-bullet-container {
+  max-width: 100%;
+}
+
 /* Custom bullet styles - dimensions now controlled by BULLET_DIMENSIONS in YamdRenderUtils.js */
 
 .yamd-bullet-disc {
@@ -439,7 +446,7 @@
 /* Tags container */
 .yamd-tags {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: wrap;     /* don't wrap */
   gap: 4px;
   margin: 4px 0;
 }
@@ -528,7 +535,7 @@
 /* Panel styles */
 .yamd-panel {
   border: 1px solid #e0e0e0;
-  border-radius: 8px;
+  border-radius: 4px;
   background: #fafafa;
   margin: 2px 0;
   overflow: hidden;
@@ -653,21 +660,81 @@
 
 .yamd-timeline-bullet-container {
   flex-shrink: 0;
-  margin-right: 6px;
+  margin-right: 0px;
 }
 
 .yamd-timeline-bullet-wrapper {
   position: relative;
-  width: 12px;
-  height: 12px;
+  width: 20px;
+  height: 20px;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
+.yamd-timeline-bullet-svg-container {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.yamd-image-list-scroll-container {
+  width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  box-sizing: border-box;
+  padding: 2px; /* padding to prevent content cutoff */
+}
+
+/* Image List Styles */
+.yamd-image-list {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 4px;
+  align-items: center;
+  width: max-content; /* Allow container to expand with content */
+  flex-wrap: nowrap;
+  min-width: 100%; /* Ensure it's at least full width */
+}
+
+.yamd-image-list-item {
+  flex: 0 0 auto;      /* Don't grow, don't shrink, auto width */
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+}
+
+.yamd-image-list-item .yamd-image-block {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.yamd-image-list-item .yamd-image-content {
+  display: flex !important;
+  align-items: center;
+  justify-content: center !important;
+  max-height: calc(100% - 40px); /* Reserve space for caption */
+}
+
+.yamd-image-list-item .yamd-image-element {
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+}
+
+.yamd-image-list-item .yamd-image-caption {
+  flex: 0 0 auto;
+  margin-top: 0px;
+}
+
 .yamd-timeline-connect-line {
   position: absolute;
-  top: 12px;
   left: 50%;
   transform: translateX(-50%);
   width: 2px;
