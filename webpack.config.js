@@ -1,11 +1,15 @@
-const HtmlWebpackPlugin = require('html-webpack-plugin');
-const path = require('path');
+import HtmlWebpackPlugin from 'html-webpack-plugin';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 
 // @ resolves to ./src/ in both dev and production mode
   // @/xxx.css
 
-module.exports = (env, argv) => {
+export default (env, argv) => {
   const isDevelopment = argv.mode !== 'production';
   // package.json: "dev": "webpack serve"
   // package.json: "build": "webpack --mode=production"
@@ -63,6 +67,9 @@ module.exports = (env, argv) => {
     extensions: ['.js', '.jsx', '.css'],
     alias: {
       '@': path.resolve(__dirname, 'src'),
+      // Ensure single React instance
+      'react': path.resolve(__dirname, 'node_modules/react'),
+      'react-dom': path.resolve(__dirname, 'node_modules/react-dom'),
     },
     modules: [
       'node_modules',
@@ -79,7 +86,7 @@ module.exports = (env, argv) => {
       directory: path.resolve(__dirname),
       publicPath: '/',
     },
-    port: 5175,
+    port: 5179,
     open: false,
     historyApiFallback: {
       index: '/index.html',

@@ -8,7 +8,7 @@
 import { useMathJaxStore } from './MathJaxStore.js';
 
 
-// initialize mathjx without triggering a DOM scan and replace
+// initialize MathJax without triggering a DOM scan and replace
 const initMathJaxNoScan = () => {
   /*
   // when MathJax is ready, ready() will be called.
@@ -68,6 +68,46 @@ const initMathJaxNoScan = () => {
   }
 };
 
+// Initialize MathJax when it already exists on window
+const initializeMathJax = async () => {
+  console.log("🔧 Initializing existing MathJax...");
+  
+  // Check if MathJax is ready
+  if (window.MathJax.startup && window.MathJax.startup.document) {
+    console.log("🔧 MathJax startup already initialized, running initMathJaxNoScan...");
+    const success = initMathJaxNoScan();
+    if (success) {
+      console.log("✅ MathJax initialization completed");
+      // Update store state immediately
+      useMathJaxStore.getState().setMathJaxReady(true);
+      return Promise.resolve();
+    } else {
+      throw new Error("MathJax initialization failed");
+    }
+  } else {
+    // MathJax exists but startup is not ready yet
+    console.log("🔧 MathJax startup not ready, waiting...");
+    return new Promise((resolve, reject) => {
+      const checkReady = () => {
+        if (window.MathJax.startup && window.MathJax.startup.document) {
+          const success = initMathJaxNoScan();
+          if (success) {
+            console.log("✅ MathJax initialization completed after waiting");
+            // Update store state immediately
+            useMathJaxStore.getState().setMathJaxReady(true);
+            resolve();
+          } else {
+            reject(new Error("MathJax initialization failed"));
+          }
+        } else {
+          setTimeout(checkReady, 100);
+        }
+      };
+      checkReady();
+    });
+  }
+};
+
 export const loadMathJax = () => {
   if (typeof window === 'undefined') {
     return Promise.resolve();
@@ -101,9 +141,18 @@ export const loadMathJax = () => {
     
     // Check if MathJax is already loaded at window level
     if (typeof window.MathJax !== 'undefined') {
-      console.log("✅ MathJax already exists on window");
-      store.setMathJaxReady(true);
-      resolve();
+      console.log("✅ MathJax already exists on window, initializing...");
+      // MathJax exists but may not be properly initialized
+      // Run the initialization process to ensure it's ready
+      initializeMathJax().then(() => {
+        console.log("✅ MathJax initialization completed, updating store state");
+        store.setMathJaxReady(true);
+        resolve();
+      }).catch((error) => {
+        console.error('❌ Failed to initialize existing MathJax:', error);
+        store.setMathJaxError(true, 'Failed to initialize existing MathJax');
+        reject(error);
+      });
       return;
     }
 

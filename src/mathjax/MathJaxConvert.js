@@ -1,7 +1,7 @@
 // MathJax LaTeX conversion utility functions
 // Handles LaTeX to HTML/SVG conversion using MathJax APIs
 
-import { useMathJaxStore } from '@/mathjax/MathJaxStore.js';
+import { useMathJaxStore } from './MathJaxStore.js';
 
 /**
  * Convert LaTeX to CHTML using tex2chtmlPromise

@@ -1,7 +1,7 @@
 import React from 'react';
 import './Node.css';
-import '@/home/SkillTree.css'
-import '@/home/Education.css'
+// import '@/home/SkillTree.css'  // Not available in Yamd module
+// import '@/home/Education.css'  // Not available in Yamd module
 import NodeTimeline from './NodeTimeline.jsx';
 
 // Error Boundary Component for Node rendering
