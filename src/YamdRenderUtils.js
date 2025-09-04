@@ -164,7 +164,7 @@ export const AddListBulletBeforeYamdNode = ({ childNode, alignBullet = 'center' 
   const childParentInfo = React.useMemo(() => injectIntoParentInfo(parentInfo, {
     hasBulletToLeft: true,
     notifyPreferredBulletYPos,
-    bulletContainerClassName: 'yamd-bullet-container'
+    bulletContainerClassName: '.yamd-bullet-container'
   }), [parentInfo, notifyPreferredBulletYPos]);
 
   // Clone childNode and inject enhanced parentInfo - stable identity
@@ -179,7 +179,7 @@ export const AddListBulletBeforeYamdNode = ({ childNode, alignBullet = 'center' 
     return (
       <div className="yamd-bullet-container" style={{ display: 'flex', alignItems: 'flex-start' }}>
         {bulletElement}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', maxWidth: '100%'}}>
+        <div className="yamd-child-container">
           {enhancedChildNode}
         </div>
       </div>
@@ -416,7 +416,7 @@ export const AddTimelineBulletBeforeYamdNode = ({
     ...parentInfo,
     hasBulletToLeft: true,
     notifyPreferredBulletYPos,
-    bulletContainerClassName: 'yamd-timeline-item'
+    bulletContainerClassName: '.yamd-timeline-item' // don't forget beginning with a dot
   }), [parentInfo, notifyPreferredBulletYPos]);
 
   // Clone childNode and inject enhanced parentInfo

@@ -16,6 +16,13 @@
   margin-bottom: 8px;
 }
 
+.yamd-child-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  max-width: 100%;
+}
+
 .yamd-tag {
   display: inline-block;
   padding: 3px 6px;
@@ -123,6 +130,7 @@
   display: flex;
   flex-direction: column;
   justify-content: center;
+  align-items: center;
 }
 
 .yamd-image-content {
@@ -289,7 +297,7 @@
 
 .yamd-bib-entry {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 2px;
   margin-bottom: 0px;
   line-height: 1.2;
@@ -729,6 +737,60 @@
 }
 
 .yamd-image-list-item .yamd-image-caption {
+  flex: 0 0 auto;
+  margin-top: 0px;
+}
+
+.yamd-video-list-scroll-container {
+  width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  box-sizing: border-box;
+  padding: 2px; /* padding to prevent content cutoff */
+}
+
+/* Video List Styles */
+.yamd-video-list {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 4px;
+  align-items: center;
+  width: max-content; /* Allow container to expand with content */
+  flex-wrap: nowrap;
+  min-width: 100%; /* Ensure it's at least full width */
+}
+
+.yamd-video-list-item {
+  flex: 0 0 auto;      /* Don't grow, don't shrink, auto width */
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+}
+
+.yamd-video-list-item .yamd-video-block {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.yamd-video-list-item .yamd-video-content {
+  display: flex !important;
+  align-items: center;
+  justify-content: center !important;
+  max-height: calc(100% - 40px); /* Reserve space for caption */
+}
+
+.yamd-video-list-item .yamd-video-element {
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+}
+
+.yamd-video-list-item .yamd-video-caption {
   flex: 0 0 auto;
   margin-top: 0px;
 }

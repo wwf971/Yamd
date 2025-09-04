@@ -41,21 +41,14 @@ const YamdPanel = ({ nodeId, parentInfo, globalInfo }) => {
   // notify parent about preferred bullet Y position if there's a bullet to the left
   useEffect(() => {
     if (parentInfo?.hasBulletToLeft && parentInfo?.notifyPreferredBulletYPos && buttonRef.current) {
-
       // Calculate the Y position of the button's midline relative to the bullet container
       const buttonRect = buttonRef.current.getBoundingClientRect();
       const bulletContainerClass = parentInfo?.bulletContainerClassName || '.yamd-panel';
       if (parentInfo?.bulletContainerClassName) {
-        console.warn('Child found bullet container class from parentInfo:', parentInfo.bulletContainerClassName);
+        // console.log('Child found bullet container class from parentInfo:', parentInfo.bulletContainerClassName);
       }
       const bulletContainer = buttonRef.current.closest(bulletContainerClass);
-      console.log('YamdPanel bulletContainer:', bulletContainer);
-      console.log('YamdPanel bulletContainerClass:', bulletContainerClass);
-      console.log('YamdPanel noteId:', nodeId);
-      console.log('YamdPanel parentInfo:', parentInfo);
-      console.log('YamdPanel buttonRef:', buttonRef.current);
-      console.log('YamdPanel buttonRect:', buttonRect);
-      console.log('YamdPanel parentInfo?.hasBulletToLeft:', parentInfo?.hasBulletToLeft);
+      
       if (bulletContainer) {
         const containerRect = bulletContainer.getBoundingClientRect();
         const buttonRelativeTop = buttonRect.top - containerRect.top;

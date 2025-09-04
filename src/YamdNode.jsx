@@ -10,6 +10,7 @@ import YamdNodeLaTeX from './components/YamdNodeLaTeX.jsx';
 import YamdNodeImage from './components/YamdNodeImage.jsx';
 import YamdNodeVideo from './components/YamdNodeVideo.jsx';
 import YamdImageList from './components/YamdImageList.jsx';
+import YamdVideoList from './components/YamdVideoList.jsx';
 import YamdChildrenNodes from './YamdChildrenNodes.jsx';
 import { AddListBulletBeforeYamdNode, getChildrenDisplay } from './YamdRenderUtils.js';
 
@@ -89,6 +90,21 @@ const YamdNode = React.memo(({ nodeId, parentInfo = null, globalInfo = null }) =
         <AddListBulletBeforeYamdNode 
           childNode={
             <YamdImageList
+              nodeId={nodeId}
+              parentInfo={parentInfo}
+              globalInfo={globalInfo}
+            />
+          }
+          alignBullet='flex-start'
+        />
+      );
+    }
+    
+    if (nodeData.type === 'video-list') {
+      return (
+        <AddListBulletBeforeYamdNode 
+          childNode={
+            <YamdVideoList
               nodeId={nodeId}
               parentInfo={parentInfo}
               globalInfo={globalInfo}

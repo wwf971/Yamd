@@ -57,6 +57,10 @@ export const IMAGE_LIST_SETTINGS = {
   defaultHeight: '200px'
 };
 
+export const VIDEO_LIST_SETTINGS = {
+  defaultHeight: '200px'
+};
+
 // Image settings
 export const IMAGE_SETTINGS = {
   captionTitleDefault: 'Figure'

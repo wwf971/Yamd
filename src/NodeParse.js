@@ -112,7 +112,7 @@ export const useNodeParseStore = create(
           };
         }
         
-        console.log('🔍 parseNode returning nodeId:', nodeId, 'parsed[nodeId]:', parsed[nodeId]);
+        // console.log('🔍 parseNode returning nodeId:', nodeId, 'parsed[nodeId]:', parsed[nodeId]);
         return nodeId;
       };
       

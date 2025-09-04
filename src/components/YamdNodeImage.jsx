@@ -98,13 +98,29 @@ const YamdNodeImage = ({ nodeId, parentInfo, globalInfo }) => {
 
   const containerStyle = {
     display: 'flex',
-    justifyContent: alignmentStrategy,
-    width: '100%',
-    height: '100%'
+    justifyContent: 'center', // Always center image within its content container
+    alignItems: 'center', // Always center image within its content container
+    ...(forcedHeight ? {
+      // Inside YamdImageList: fill the item container
+      width: '100%',
+      height: '100%'
+    } : {
+      // Independent image: size to content only
+      width: 'max-content', // Only take the width needed for the image
+      height: 'auto',
+      flexShrink: 0 // Don't shrink below content size
+    })
+  };
+
+  // For independent images, apply alignment at the block level
+  const blockStyle = forcedHeight ? {} : {
+    display: 'flex',
+    alignSelf: alignmentStrategy, // This controls where yamd-image-content sits within yamd-image-block
+    width: 'max-content'
   };
 
   return (
-    <div className={`yamd-image-block ${nodeClass}`} id={nodeData.htmlId}>
+    <div className={`yamd-image-block ${nodeClass}`} id={nodeData.htmlId} style={blockStyle}>
       <div className="yamd-image-content" style={containerStyle}>
         <img 
           src={imageSrc}

@@ -137,6 +137,8 @@ Image Lists[panel,panelDefault=expand]:
       "caption": "Third image caption"
     "height": "300px"
 
+  - "Testing image-list subindex references: Please refer to image [ref,5a] for the first item."
+
   - "[image-list,subindex='LR',alignX=left]Paired comparison images":
     - "[image]": 
        "src": "https://picsum.photos/400/200"
@@ -151,6 +153,32 @@ Image Lists[panel,panelDefault=expand]:
     - "https://picsum.photos/400/200" 
     - "https://picsum.photos/400/200"
     "height": "100px"
+
+# Video Lists
+Video Lists[panel,panelDefault=expand]:
+  - "[video-list,subindex='abc',alignX=center]Multiple videos in one line":
+    - "src": "https://sample-videos.com/zip/10/mp4/SampleVideo_360x240_1mb.mp4"
+      "caption": "First video caption"
+    - "src": "https://sample-videos.com/zip/10/mp4/SampleVideo_1280x720_1mb.mp4"
+      "caption": "Second video caption"
+    - "src": "https://sample-videos.com/zip/10/mp4/SampleVideo_640x360_1mb.mp4"
+      "caption": "Third video caption"
+    "height": "250px"
+
+  - "[video-list,subindex='LR',alignX=left]Paired comparison videos":
+    - "[video]": 
+       "src": "https://sample-videos.com/zip/10/mp4/SampleVideo_360x240_1mb.mp4"
+       "caption": "Before video"
+    - "[video]":
+       "src": "https://sample-videos.com/zip/10/mp4/SampleVideo_640x360_1mb.mp4"
+       "caption": "After video"
+    "height": "180px"
+
+  - "[video-list,subindex='123',alignX=right]Numbered video sequence":
+    - "https://sample-videos.com/zip/10/mp4/SampleVideo_360x240_1mb.mp4"
+    - "https://sample-videos.com/zip/10/mp4/SampleVideo_640x360_1mb.mp4" 
+    - "https://sample-videos.com/zip/10/mp4/SampleVideo_1280x720_1mb.mp4"
+    "height": "150px"
 
   # Reference System Examples
   - "Reference Examples[panel,panelDefault=expand]":

@@ -352,18 +352,15 @@ export function registerImageBlock(nodeData, assets = {}, allNodes = {}) {
   let assetCounter = Object.keys(assets).filter(id => id.startsWith('image_')).length;
   const assetId = `image_${String(++assetCounter).padStart(3, '0')}`;
   
-  // Count existing image assets for indexOfSameType (only count indexed blocks)
-  const existingImages = Object.values(assets).filter(asset => 
-    asset.type === 'image-block' && asset.indexOfSameType !== null
-  );
+  // Register asset during processAllTextSegments - indexing will be calculated later in scanAssets()
   const shouldIndex = !nodeData.attr?.no_index;
-  const indexOfSameType = shouldIndex ? existingImages.length + 1 : null;
   
-  // Handle subindex for image-list support
+  // Store basic subindex from node attributes (if any)
   const subindex = nodeData.attr?.subindex || null;
-  const indexStr = indexOfSameType && subindex 
-    ? `${indexOfSameType}${subindex}` 
-    : (indexOfSameType ? String(indexOfSameType) : null);
+  
+  // Initially set to null - will be calculated in scanAssets()
+  const indexOfSameType = null;
+  const indexStr = null;
   
   // Register image block in assets
   assets[assetId] = {
@@ -377,7 +374,8 @@ export function registerImageBlock(nodeData, assets = {}, allNodes = {}) {
     indexOfSameType,
     subindex,
     indexStr,
-    no_index: !shouldIndex
+    no_index: !shouldIndex,
+    nodeId: nodeData.id // Store node ID for later reference during scanAssets
   };
   
   // Return enhanced node data with asset reference
@@ -609,4 +607,160 @@ export function debugLatexParsing(text, segments, assets = {}) {
   });
   console.log('Reconstructed:', segmentsToText(segments));
   console.log('MathJax format:', segmentsToMathJax(segments));
+}
+
+/**
+ * Scan assets and calculate proper indexing, especially for image-list subindices
+ * @param {object} flattenedData - The flattened node structure
+ * @param {object} assets - The assets object to update
+ */
+export function scanAssets(flattenedData, assets) {
+  console.error("scanAssets called");
+  // Get all image and video assets that should be indexed
+  const imageAssets = Object.values(assets).filter(asset => 
+    asset.type === 'image-block' && !asset.no_index
+  );
+  const videoAssets = Object.values(assets).filter(asset => 
+    asset.type === 'video-block' && !asset.no_index
+  );
+  
+  console.log(`scanAssets called: found ${imageAssets.length} images and ${videoAssets.length} videos to index`);
+  
+  if (imageAssets.length === 0 && videoAssets.length === 0) {
+    return;
+  }
+  
+  let imageCounter = 0;
+  let videoCounter = 0;
+  const imageListGroups = new Map(); // Track image-list groups
+  const videoListGroups = new Map(); // Track video-list groups
+  
+  for (const asset of imageAssets) {
+    const nodeData = flattenedData[asset.nodeId];
+    if (!nodeData) {
+      continue;
+    }
+    
+    // Check if this image is part of an image-list
+    const parentNodeData = nodeData.parentId ? flattenedData[nodeData.parentId] : null;
+    const isInImageList = parentNodeData && parentNodeData.type === 'image-list';
+    
+    if (isInImageList) {
+      // Handle image-list subindices
+      const parentId = parentNodeData.id;
+      const subindexStrategy = parentNodeData.attr?.subindex || 'abc';
+      
+      if (!imageListGroups.has(parentId)) {
+        // First image in this image-list - assign new group number
+        imageCounter++;
+        const children = parentNodeData.children || [];
+        imageListGroups.set(parentId, {
+          baseIndex: imageCounter,
+          subindexStrategy: subindexStrategy,
+          children: children
+        });
+      }
+      
+      const group = imageListGroups.get(parentId);
+      const childIndex = group.children.indexOf(nodeData.id);
+      
+      if (childIndex >= 0) {
+        // Calculate subindex based on strategy
+        let calculatedSubindex;
+        const totalChildren = group.children.length;
+        
+        if (subindexStrategy === 'LR' && totalChildren === 2) {
+          calculatedSubindex = childIndex === 0 ? 'L' : 'R';
+        } else if (subindexStrategy === 'abc') {
+          calculatedSubindex = String.fromCharCode(97 + childIndex); // a, b, c, ...
+        } else if (subindexStrategy === 'ABC') {
+          calculatedSubindex = String.fromCharCode(65 + childIndex); // A, B, C, ...
+        } else if (subindexStrategy === '123') {
+          calculatedSubindex = String(childIndex + 1); // 1, 2, 3, ...
+        } else {
+          // Custom subindex pattern
+          calculatedSubindex = subindexStrategy[childIndex] || String(childIndex + 1);
+        }
+        
+        // Update asset with calculated values
+        asset.indexOfSameType = group.baseIndex;
+        asset.subindex = calculatedSubindex;
+        asset.indexStr = `${group.baseIndex}${calculatedSubindex}`;
+        
+      }
+    } else {
+      // Regular standalone image
+      imageCounter++;
+      asset.indexOfSameType = imageCounter;
+      asset.subindex = null;
+      asset.indexStr = String(imageCounter);
+      
+    }
+  }
+  
+  // Process video assets
+  for (const asset of videoAssets) {
+    const nodeData = flattenedData[asset.nodeId];
+    if (!nodeData) {
+      continue;
+    }
+    
+    // Check if this video is part of a video-list
+    const parentNodeData = nodeData.parentId ? flattenedData[nodeData.parentId] : null;
+    const isInVideoList = parentNodeData && parentNodeData.type === 'video-list';
+    
+    if (isInVideoList) {
+      // Handle video-list subindices
+      const parentId = parentNodeData.id;
+      const subindexStrategy = parentNodeData.attr?.subindex || 'abc';
+      
+      if (!videoListGroups.has(parentId)) {
+        // First video in this video-list - assign new group number
+        videoCounter++;
+        const children = parentNodeData.children || [];
+        videoListGroups.set(parentId, {
+          baseIndex: videoCounter,
+          subindexStrategy: subindexStrategy,
+          children: children
+        });
+      }
+      
+      const group = videoListGroups.get(parentId);
+      const childIndex = group.children.indexOf(nodeData.id);
+      
+      if (childIndex >= 0) {
+        // Calculate subindex based on strategy
+        let calculatedSubindex;
+        if (group.subindexStrategy === 'LR' && group.children.length === 2) {
+          calculatedSubindex = childIndex === 0 ? 'L' : 'R';
+        } else if (group.subindexStrategy === 'abc') {
+          calculatedSubindex = String.fromCharCode(97 + childIndex); // a, b, c, ...
+        } else if (group.subindexStrategy === 'ABC') {
+          calculatedSubindex = String.fromCharCode(65 + childIndex); // A, B, C, ...
+        } else if (group.subindexStrategy === '123') {
+          calculatedSubindex = String(childIndex + 1); // 1, 2, 3, ...
+        } else {
+          // Custom subindex pattern or unknown
+          calculatedSubindex = group.subindexStrategy[childIndex] || String(childIndex + 1);
+        }
+        
+        asset.indexOfSameType = group.baseIndex;
+        asset.subindex = calculatedSubindex;
+        asset.indexStr = `${group.baseIndex}${calculatedSubindex}`;
+      } else {
+        // Child not found in list - treat as standalone
+        videoCounter++;
+        asset.indexOfSameType = videoCounter;
+        asset.subindex = null;
+        asset.indexStr = String(videoCounter);
+      }
+    } else {
+      // Regular standalone video
+      videoCounter++;
+      asset.indexOfSameType = videoCounter;
+      asset.subindex = null;
+      asset.indexStr = String(videoCounter);
+    }
+  }
+  
 }

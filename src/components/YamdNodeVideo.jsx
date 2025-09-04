@@ -95,11 +95,29 @@ const YamdNodeVideo = ({ nodeId, parentInfo, globalInfo }) => {
 
   // Get alignment strategy for the video
   const alignmentStrategy = getAlignmentStrategy(nodeData, parentInfo);
+  
+  // Check if parent (like YamdVideoList) wants to force a specific height
+  const forcedHeight = parentInfo?.forcedHeight;
+  
+  // Apply forced height styling if provided by parent
+  if (forcedHeight) {
+    videoStyle.height = `${forcedHeight}px`;
+    videoStyle.width = 'auto';
+    videoStyle.maxWidth = 'none';
+  }
 
   const containerStyle = {
     display: 'flex',
-    justifyContent: alignmentStrategy,
-    width: '100%'
+    justifyContent: forcedHeight ? 'center' : alignmentStrategy, // Center in video-list, respect alignX when independent
+    width: forcedHeight ? '100%' : '100%',
+    height: forcedHeight ? '100%' : 'auto'
+  };
+  
+  // Block level alignment for independent videos (not inside video-list)
+  const blockStyle = forcedHeight ? {} : {
+    display: 'flex',
+    alignSelf: alignmentStrategy, // This controls where yamd-video-content sits within yamd-video-block
+    width: 'max-content' // Only take the width needed for the video
   };
 
   // Handle playOnLoad functionality
@@ -117,7 +135,7 @@ const YamdNodeVideo = ({ nodeId, parentInfo, globalInfo }) => {
   }, [playOnLoad]);
 
   return (
-    <div className={`yamd-video-block ${nodeClass}`} id={nodeData.htmlId}>
+    <div className={`yamd-video-block ${nodeClass}`} id={nodeData.htmlId} style={blockStyle}>
       <div className="yamd-video-content" style={containerStyle}>
         <video 
           ref={videoRef}

@@ -46,7 +46,6 @@ const YamdTimeline = ({ childIds, globalInfo, parentInfo }) => {
   // calculate connecting line heights after DOM updates
   const calculateLineHeights = React.useCallback(() => {
     /*
-
       bullet 1
           <-- connect_line_gap
         |
@@ -62,10 +61,10 @@ const YamdTimeline = ({ childIds, globalInfo, parentInfo }) => {
         const nextBullet = bulletRefs.current[i + 1];
         
         if (currentBullet && nextBullet) {
-          console.log(`Line ${i}: currentBullet=`, currentBullet, 'nextBullet=', nextBullet);
+          // console.log(`Line ${i}: currentBullet=`, currentBullet, 'nextBullet=', nextBullet);
           const rectCurrent = currentBullet.getBoundingClientRect();
           const rectNext = nextBullet.getBoundingClientRect();
-          console.log(`Line ${i}: rectCurrent=`, rectCurrent, 'rectNext=', rectNext);
+          // console.log(`Line ${i}: rectCurrent=`, rectCurrent, 'rectNext=', rectNext);
           
                       // Check if bounding rects are valid
             if (rectCurrent.width > 0 && rectNext.width > 0) {
@@ -73,13 +72,13 @@ const YamdTimeline = ({ childIds, globalInfo, parentInfo }) => {
               const connectLineGap = TIMELINE_BULLET_DIMENSIONS.connect_line_gap 
                 ? parseFloat(TIMELINE_BULLET_DIMENSIONS.connect_line_gap) 
                 : 2; // Fallback to 2px if undefined or NaN
-              console.log(`Line ${i}: connectLineGap=${connectLineGap}`);
+              // console.log(`Line ${i}: connectLineGap=${connectLineGap}`);
               
               // Calculate bottom manually if it's NaN
               const currentBottom = isNaN(rectCurrent.bottom) ? rectCurrent.top + rectCurrent.height : rectCurrent.bottom;
               const nextTop = isNaN(rectNext.top) ? rectNext.top : rectNext.top;
               
-              console.log(`Line ${i}: currentBottom=${currentBottom}, nextTop=${nextTop}`);
+              // console.log(`Line ${i}: currentBottom=${currentBottom}, nextTop=${nextTop}`);
               
               const lineStartY = currentBottom + connectLineGap;
               const lineEndY = nextTop - connectLineGap;
@@ -94,11 +93,11 @@ const YamdTimeline = ({ childIds, globalInfo, parentInfo }) => {
               const cssLineEndY = nextBulletCenterY - (parseInt(TIMELINE_BULLET_DIMENSIONS.bullet_height) / 2) - connectLineGap;
               const adjustedLineHeight = cssLineEndY - cssLineStartY;
               
-              console.log(`Line ${i}: lineHeight=${lineHeight}, adjustedLineHeight=${adjustedLineHeight}`);
-              console.log(`Line ${i}: cssLineStartY=${cssLineStartY}, cssLineEndY=${cssLineEndY}`);
+              // console.log(`Line ${i}: lineHeight=${lineHeight}, adjustedLineHeight=${adjustedLineHeight}`);
+              // console.log(`Line ${i}: cssLineStartY=${cssLineStartY}, cssLineEndY=${cssLineEndY}`);
               heights.push(Math.max(adjustedLineHeight, 8)); // Use same minimum as NodeRoot (8px)
             } else {
-              console.log(`Line ${i}: Invalid bounding rects - using fallback height`);
+              // console.log(`Line ${i}: Invalid bounding rects - using fallback height`);
               heights.push(20); // Fallback height
             }
         } else {

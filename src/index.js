@@ -3,6 +3,7 @@ export { default as YamdDoc } from './YamdDoc.jsx';
 export { default as YamdNode, getNodeClass } from './YamdNode.jsx';
 export { default as YamdChildrenNodes } from './YamdChildrenNodes.jsx';
 export { default as YamdImageList } from './components/YamdImageList.jsx';
+export { default as YamdVideoList } from './components/YamdVideoList.jsx';
 export { default as TestYamd } from './TestYamd.jsx';
 
 // Export parsing utilities
@@ -13,7 +14,9 @@ export {
   getCornerCaseYaml,
   processNodes,
   flattenJson,
-  processAllTextSegments
+  processAllTextSegments,
+  scanAssets,
+  processYamd
 } from './ParseYamd.js';
 
 // Export render utilities
@@ -38,6 +41,7 @@ export {
   IMAGE_SETTINGS,
   VIDEO_SETTINGS,
   IMAGE_LIST_SETTINGS,
+  VIDEO_LIST_SETTINGS,
   TIMELINE_BULLET_DIMENSIONS
 } from './YamdRenderSettings.js';
 

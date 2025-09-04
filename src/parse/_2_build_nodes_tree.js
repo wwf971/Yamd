@@ -87,6 +87,8 @@ function handleAlternativeYamdGrammarForLeafNode(obj, leafNodeKey) {
     processedNode = processVideoNode(attr, textRaw, textOriginal, mergedAttributes);
   } else if (nodeType === 'image-list') {
     processedNode = processImageListNode(attr, textRaw, textOriginal, mergedAttributes);
+  } else if (nodeType === 'video-list') {
+    processedNode = processVideoListNode(attr, textRaw, textOriginal, mergedAttributes);
   } else {
     // Fallback to generic processing
     processedNode = {
@@ -339,28 +341,105 @@ function processImageListNode(attr, textRaw, textOriginal, value) {
           }
         } else if (key === 'children' && Array.isArray(val)) {
           // The main children array - force each child to be an image
-          val.forEach(childItem => {
+          val.forEach((childItem, index) => {
+            let imageNode;
             if (typeof childItem === 'string') {
               // Direct URL string - create image node
-              const imageNode = processImageNode({ type: 'image', selfDisplay: 'image' }, childItem, `[image]${childItem}`, null);
-              children.push(imageNode);
+              imageNode = processImageNode({ type: 'image', selfDisplay: 'image' }, childItem, `[image]${childItem}`, null);
             } else if (childItem && typeof childItem === 'object') {
               // Object with src/caption - force to be image
-              const forcedImageNode = forceNodeToImage(childItem);
-              children.push(forcedImageNode);
+              imageNode = forceNodeToImage(childItem);
             } else {
               // Fallback to normal processing
-              children.push(processNode(childItem));
+              imageNode = processNode(childItem);
             }
+            
+            // Propagate subindex from image-list to child image node
+            if (imageListNode.attr.subindex && imageNode) {
+              const parentSubindex = imageListNode.attr.subindex;
+              const totalChildren = val.length;
+              let calculatedSubindex;
+              
+              if (parentSubindex === 'LR' && totalChildren === 2) {
+                calculatedSubindex = index === 0 ? 'L' : 'R';
+              } else if (parentSubindex === 'abc') {
+                calculatedSubindex = String.fromCharCode(97 + index); // a, b, c, ...
+              } else if (parentSubindex === 'ABC') {
+                calculatedSubindex = String.fromCharCode(65 + index); // A, B, C, ...
+              } else if (parentSubindex === '123') {
+                calculatedSubindex = String(index + 1); // 1, 2, 3, ...
+              } else {
+                // Custom subindex pattern
+                calculatedSubindex = parentSubindex[index] || String(index + 1);
+              }
+              
+              // Add subindex to image node attributes
+              if (!imageNode.attr) imageNode.attr = {};
+              imageNode.attr.subindex = calculatedSubindex;
+            }
+            
+            children.push(imageNode);
           });
         } else {
           // Everything else is treated as a child - process normally
           if (Array.isArray(val)) {
             // Array of children
-            children.push(...val.map(item => processNode(item)));
+            val.forEach((item, index) => {
+              const childNode = processNode(item);
+              
+              // Propagate subindex from image-list to child image node
+              if (imageListNode.attr.subindex && childNode) {
+                const parentSubindex = imageListNode.attr.subindex;
+                const totalChildren = val.length;
+                let calculatedSubindex;
+                
+                if (parentSubindex === 'LR' && totalChildren === 2) {
+                  calculatedSubindex = index === 0 ? 'L' : 'R';
+                } else if (parentSubindex === 'abc') {
+                  calculatedSubindex = String.fromCharCode(97 + index); // a, b, c, ...
+                } else if (parentSubindex === 'ABC') {
+                  calculatedSubindex = String.fromCharCode(65 + index); // A, B, C, ...
+                } else if (parentSubindex === '123') {
+                  calculatedSubindex = String(index + 1); // 1, 2, 3, ...
+                } else {
+                  // Custom subindex pattern
+                  calculatedSubindex = parentSubindex[index] || String(index + 1);
+                }
+                
+                // Add subindex to image node attributes
+                if (!childNode.attr) childNode.attr = {};
+                childNode.attr.subindex = calculatedSubindex;
+              }
+              
+              children.push(childNode);
+            });
           } else {
             // Single child
-            children.push(processNode({ [key]: val }));
+            const childNode = processNode({ [key]: val });
+            
+            // For single child, use first subindex
+            if (imageListNode.attr.subindex && childNode) {
+              const parentSubindex = imageListNode.attr.subindex;
+              let calculatedSubindex;
+              
+              if (parentSubindex === 'LR') {
+                calculatedSubindex = 'L'; // Single child gets 'L'
+              } else if (parentSubindex === 'abc') {
+                calculatedSubindex = 'a';
+              } else if (parentSubindex === 'ABC') {
+                calculatedSubindex = 'A';
+              } else if (parentSubindex === '123') {
+                calculatedSubindex = '1';
+              } else {
+                calculatedSubindex = parentSubindex[0] || '1';
+              }
+              
+              // Add subindex to image node attributes
+              if (!childNode.attr) childNode.attr = {};
+              childNode.attr.subindex = calculatedSubindex;
+            }
+            
+            children.push(childNode);
           }
         }
       }
@@ -369,6 +448,158 @@ function processImageListNode(attr, textRaw, textOriginal, value) {
   }
   
   return imageListNode;
+}
+
+/**
+ * Process video-list node to handle all entries as video-list properties
+ * @param {object} attr - Node attributes
+ * @param {string} textRaw - Raw text content
+ * @param {string} textOriginal - Original text
+ * @param {any} value - Node value (children/content)
+ * @returns {object} - Processed video-list node
+ */
+function processVideoListNode(attr, textRaw, textOriginal, value) {
+  
+  // Clean attr by removing redundant type (it's already in the node type field)
+  const cleanAttr = { ...attr };
+  delete cleanAttr.type;
+  delete cleanAttr.selfDisplay; // Remove redundant selfDisplay too
+  
+  // Initialize video-list node
+  const videoListNode = {
+    type: 'video-list',
+    textRaw: textRaw || '',
+    textOriginal,
+    attr: cleanAttr,
+    children: []
+  };
+  
+  // Process value - extract attributes and children
+  if (value && typeof value === 'object') {
+    if (Array.isArray(value)) {
+      // Direct array of children - process them normally but they'll be forced to videos during flattening
+      videoListNode.children = value.map(item => processNode(item));
+    } else {
+      // Object with potential attributes and children
+      const children = [];
+      for (const [key, val] of Object.entries(value)) {
+        // Recognize video-list level attributes (properties that should belong to the video-list)
+        if (['height', 'width', 'caption', 'alignX', 'subindex'].includes(key)) {
+          // Store as video-list attribute
+          if (key === 'caption') {
+            videoListNode.caption = val;
+          } else {
+            videoListNode.attr[key] = val;
+          }
+        } else if (key === 'children' && Array.isArray(val)) {
+          // The main children array - force each child to be a video
+          val.forEach((childItem, index) => {
+            let videoNode;
+            if (typeof childItem === 'string') {
+              // Direct URL string - create video node
+              videoNode = processVideoNode({ type: 'video', selfDisplay: 'video' }, childItem, `[video]${childItem}`, null);
+            } else if (childItem && typeof childItem === 'object') {
+              // Object with src/caption - force to be video
+              videoNode = forceNodeToVideo(childItem);
+            } else {
+              // Fallback to normal processing
+              videoNode = processNode(childItem);
+            }
+            
+            // Propagate subindex from video-list to child video node
+            if (videoListNode.attr.subindex && videoNode) {
+              const parentSubindex = videoListNode.attr.subindex;
+              const totalChildren = val.length;
+              let calculatedSubindex;
+              
+              if (parentSubindex === 'LR' && totalChildren === 2) {
+                calculatedSubindex = index === 0 ? 'L' : 'R';
+              } else if (parentSubindex === 'abc') {
+                calculatedSubindex = String.fromCharCode(97 + index); // a, b, c, ...
+              } else if (parentSubindex === 'ABC') {
+                calculatedSubindex = String.fromCharCode(65 + index); // A, B, C, ...
+              } else if (parentSubindex === '123') {
+                calculatedSubindex = String(index + 1); // 1, 2, 3, ...
+              } else {
+                // Custom subindex pattern
+                calculatedSubindex = parentSubindex[index] || String(index + 1);
+              }
+              
+              // Add subindex to video node attributes
+              if (!videoNode.attr) videoNode.attr = {};
+              videoNode.attr.subindex = calculatedSubindex;
+            }
+            
+            children.push(videoNode);
+          });
+        } else {
+          // Everything else is treated as a child - process normally
+          if (Array.isArray(val)) {
+            // Array of children
+            val.forEach((item, index) => {
+              const childNode = processNode(item);
+              
+              // Propagate subindex from video-list to child video node
+              if (videoListNode.attr.subindex && childNode) {
+                const parentSubindex = videoListNode.attr.subindex;
+                const totalChildren = val.length;
+                let calculatedSubindex;
+                
+                if (parentSubindex === 'LR' && totalChildren === 2) {
+                  calculatedSubindex = index === 0 ? 'L' : 'R';
+                } else if (parentSubindex === 'abc') {
+                  calculatedSubindex = String.fromCharCode(97 + index); // a, b, c, ...
+                } else if (parentSubindex === 'ABC') {
+                  calculatedSubindex = String.fromCharCode(65 + index); // A, B, C, ...
+                } else if (parentSubindex === '123') {
+                  calculatedSubindex = String(index + 1); // 1, 2, 3, ...
+                } else {
+                  // Custom subindex pattern
+                  calculatedSubindex = parentSubindex[index] || String(index + 1);
+                }
+                
+                // Add subindex to video node attributes
+                if (!childNode.attr) childNode.attr = {};
+                childNode.attr.subindex = calculatedSubindex;
+              }
+              
+              children.push(childNode);
+            });
+          } else {
+            // Single child
+            const childNode = processNode({ [key]: val });
+            
+            // For single child, use first subindex
+            if (videoListNode.attr.subindex && childNode) {
+              const parentSubindex = videoListNode.attr.subindex;
+              let calculatedSubindex;
+              
+              if (parentSubindex === 'LR') {
+                calculatedSubindex = 'L'; // Single child gets 'L'
+              } else if (parentSubindex === 'abc') {
+                calculatedSubindex = 'a';
+              } else if (parentSubindex === 'ABC') {
+                calculatedSubindex = 'A';
+              } else if (parentSubindex === '123') {
+                calculatedSubindex = '1';
+              } else {
+                calculatedSubindex = parentSubindex[0] || '1';
+              }
+              
+              // Add subindex to video node attributes
+              if (!childNode.attr) childNode.attr = {};
+              childNode.attr.subindex = calculatedSubindex;
+            }
+            
+            children.push(childNode);
+          }
+        }
+      }
+      videoListNode.children = children;
+    }
+  }
+  
+  return videoListNode;
 }
 
 /**
@@ -401,6 +632,48 @@ function forceNodeToImage(nodeObj) {
     // Force type to image
     const imageAttr = { ...attr, type: 'image', selfDisplay: 'image' };
     return processImageNode(imageAttr, textRaw, textOriginal || `[image]${textRaw}`, value);
+  }
+}
+
+/**
+ * Force a node to be treated as a video node
+ * @param {object} nodeObj - Node object to convert to video
+ * @returns {object} - Video node
+ */
+function forceNodeToVideo(nodeObj) {
+  if (typeof nodeObj === 'string') {
+    // Direct string - assume it's a video URL
+    return processVideoNode({ type: 'video', selfDisplay: 'video' }, nodeObj, `[video]${nodeObj}`, null);
+  } else if (nodeObj && typeof nodeObj === 'object') {
+    // Extract properties from the object
+    const { src, caption, ...otherProps } = nodeObj;
+    
+    if (src) {
+      // Has src property - create video node
+      const textRaw = src;
+      const textOriginal = `[video]${src}`;
+      const attr = { type: 'video', selfDisplay: 'video', ...otherProps };
+      const videoNode = processVideoNode(attr, textRaw, textOriginal, null);
+      if (caption) {
+        videoNode.caption = caption;
+      }
+      return videoNode;
+    } else {
+      // No src - try to force it as video anyway
+      const textRaw = nodeObj.textRaw || '';
+      const textOriginal = nodeObj.textOriginal || `[video]${textRaw}`;
+      const attr = { ...nodeObj.attr, type: 'video', selfDisplay: 'video' };
+      const value = nodeObj.children || nodeObj.value || null;
+      return processVideoNode(attr, textRaw, textOriginal, value);
+    }
+  } else {
+    // Fallback - create video node with attr
+    const attr = nodeObj?.attr || {};
+    const textRaw = nodeObj?.textRaw || '';
+    const textOriginal = nodeObj?.textOriginal || `[video]${textRaw}`;
+    const value = nodeObj?.children || nodeObj?.value || null;
+    const videoAttr = { ...attr, type: 'video', selfDisplay: 'video' };
+    return processVideoNode(videoAttr, textRaw, textOriginal || `[video]${textRaw}`, value);
   }
 }
 
