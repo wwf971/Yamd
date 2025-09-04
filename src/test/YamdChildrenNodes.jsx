@@ -5,15 +5,13 @@ import { LIST_INDENT } from './YamdRenderSettings.js';
 /**
  * Component for rendering children nodes based on childDisplay style from parentInfo
  * @param {Array} childIds - Array of child node IDs
- * @param {function} getNodeDataById - Function to get node data by ID
  * @param {object} parentInfo - Parent context information containing childDisplay and childClass
  * @param {React.Component} YamdNodeComponent - YamdNode component passed to avoid circular dependency
  * @param {boolean} shouldAddIndent - Whether to add indentation to children (controlled by parent component type)
+ * @param {object} globalInfo - Global context with getNodeDataById, getAssetById, getRefById, and fetchExternalData methods
  */
   const YamdChildrenNodes = ({ 
     childIds, 
-    getNodeDataById, 
-    getAssetById,
     parentInfo = null,
     YamdNodeComponent,
     shouldAddIndent = false,
@@ -21,7 +19,7 @@ import { LIST_INDENT } from './YamdRenderSettings.js';
   }) => {
   // render children based on parentInfo.childDisplay
   if (!childIds || childIds.length === 0) return null;
-
+  // console.log('🔍 YamdChildrenNodes rendering childIds:', childIds);
   const childDisplay = parentInfo?.childDisplay || 'pl';
   const childClass = parentInfo?.childClass;
   
@@ -41,8 +39,6 @@ import { LIST_INDENT } from './YamdRenderSettings.js';
         <div key={childId} className={joinClassNames(itemClassName)}>
           <YamdNodeComponent 
             nodeId={childId} 
-            getNodeDataById={getNodeDataById} 
-            getAssetById={getAssetById}
             parentInfo={{ 
               ...parentInfo, 
               childClass: childClass || defaultChildClass,
@@ -67,7 +63,10 @@ import { LIST_INDENT } from './YamdRenderSettings.js';
     case 'ul':
       return (
         <div style={getContainerStyle()} >
-          {renderChildList(['yamd-list', 'yamd-ulist'], ['yamd-list-item', 'yamd-full-width'])}
+          {renderChildList(['yamd-list', 'yamd-ulist'],
+            ['yamd-list-item',
+            'yamd-full-width'
+          ])}
         </div>
       );
       
@@ -76,7 +75,11 @@ import { LIST_INDENT } from './YamdRenderSettings.js';
     case 'ol':
       return (
         <div style={getContainerStyle()}>
-          {renderChildList(['yamd-list', 'yamd-olist'], ['yamd-list-item', 'yamd-full-width'])}
+          {renderChildList(['yamd-list', 'yamd-olist'],
+            [
+              'yamd-list-item',
+              'yamd-full-width'
+            ])}
         </div>
       );
       
@@ -85,7 +88,11 @@ import { LIST_INDENT } from './YamdRenderSettings.js';
     case 'pl':
       return (
         <div style={getContainerStyle()}>
-          {renderChildList(['yamd-list', 'yamd-plist'], ['yamd-list-item', 'yamd-plist-item', 'yamd-full-width'])}
+          {renderChildList(['yamd-list', 'yamd-plist'], [
+            'yamd-list-item',
+            'yamd-plist-item',
+            'yamd-full-width'
+          ])}
         </div>
       );
       
@@ -101,8 +108,6 @@ import { LIST_INDENT } from './YamdRenderSettings.js';
               <div key={childId} className="yamd-paragraph">
                 <YamdNodeComponent 
                   nodeId={childId} 
-                  getNodeDataById={getNodeDataById} 
-                  getAssetById={getAssetById}
                   parentInfo={{ ...parentInfo, childClass: childClass || 'yamd-paragraph-content' }}
                   globalInfo={globalInfo}
                 />
@@ -116,8 +121,7 @@ import { LIST_INDENT } from './YamdRenderSettings.js';
       return (
         <YamdTimeline
           childIds={childIds}
-          getNodeDataById={getNodeDataById}
-          getAssetById={getAssetById}
+          globalInfo={globalInfo}
           parentInfo={{ ...parentInfo, childClass: childClass || 'yamd-timeline-content' }}
         />
       );
@@ -130,8 +134,6 @@ import { LIST_INDENT } from './YamdRenderSettings.js';
             <YamdNodeComponent 
               key={childId}
               nodeId={childId} 
-              getNodeDataById={getNodeDataById} 
-              getAssetById={getAssetById}
               parentInfo={{ ...parentInfo, childClass: childClass || 'yamd-tag' }}
               globalInfo={globalInfo}
             />

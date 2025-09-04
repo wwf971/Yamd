@@ -7,8 +7,12 @@ import YamdPlainText from './YamdPlainText.jsx';
 /**
  * Text node renderer - displays plain text content and children in vertical layout
  */
-const YamdNodeText = ({ nodeId, getNodeDataById, getAssetById, parentInfo }) => {
-  const nodeData = getNodeDataById(nodeId);
+const YamdNodeText = React.memo(({ nodeId, parentInfo, globalInfo }) => {
+  if (!globalInfo?.getNodeDataById) {
+    return <div className="yamd-error">Missing globalInfo.getNodeDataById</div>;
+  }
+  
+  const nodeData = globalInfo.getNodeDataById(nodeId);
   
   if (!nodeData) {
     return <div className="yamd-error">Node not found: {nodeId}</div>;
@@ -42,9 +46,9 @@ const YamdNodeText = ({ nodeId, getNodeDataById, getAssetById, parentInfo }) => 
             <YamdRichText 
               text={selfPlainText}
               textRich={selfRichText}
-              getAssetById={getAssetById}
               className={nodeClass}
               parentInfo={parentInfo}
+              globalInfo={globalInfo}
             />
           }
         />
@@ -52,18 +56,17 @@ const YamdNodeText = ({ nodeId, getNodeDataById, getAssetById, parentInfo }) => 
       {nodeData.children && nodeData.children.length > 0 && (
         <YamdChildrenRenderer
           childIds={nodeData.children}
-          getNodeDataById={getNodeDataById}
-          getAssetById={getAssetById}
           shouldAddIndent={true}
           parentInfo={{ 
             ...parentInfo, 
             ...(childDisplay && { childDisplay }),
             ...(childClass && { childClass })
           }}
+          globalInfo={globalInfo}
         />
       )}
     </div>
   );
-};
+});
 
 export default YamdNodeText;

@@ -7,6 +7,59 @@
  */
 
 /**
+ * Whitelist of attributes that should be stored in the attr object
+ * This defines the canonical list of supported attributes across the system
+ */
+const ATTR_WHITELIST = {
+  // Display and layout
+  'selfDisplay': true,
+  'childDisplay': true,
+  'selfClass': true,
+  'childClass': true,
+  
+  // Alignment
+  'alignX': true,        // Horizontal alignment: 'left', 'center', 'right'
+  'alignY': true,        // Vertical alignment: 'top', 'center', 'bottom'
+  
+  // Panel attributes
+  'panelDefault': true,  // 'expand', 'collapse'
+  
+  // Node type and identification
+  'type': true,          // Node type: 'latex', 'image', 'video', etc.
+  'id': false,           // User-defined ID goes to htmlId, not attr
+  
+  // Content attributes
+  'valueNum': true,      // Numeric value for ordered lists, etc.
+  
+  // Media attributes (images, videos)
+  'alt': true,           // Alt text for images
+  'width': true,         // Width specification
+  'height': true,        // Height specification
+  'controls': true,      // Video controls
+  'autoplay': true,      // Video autoplay
+  'loop': true,          // Video loop
+  'muted': true,         // Video muted
+  'playOnLoad': true,    // Custom video attribute
+  
+  // LaTeX attributes
+  'caption_title': true, // Custom caption title
+  'captionTitle': true,  // Alternative naming
+  'no_index': true,      // Skip numbering
+  'noIndex': true,       // Alternative naming
+  
+  // Future extensibility - add new attributes here
+};
+
+/**
+ * Check if an attribute key should be stored in the attr object
+ * @param {string} key - Attribute key to check
+ * @returns {boolean} - True if should be stored in attr
+ */
+function shouldStoreInAttr(key) {
+  return ATTR_WHITELIST[key] === true;
+}
+
+/**
  * Extract and parse square bracket attributes from a string
  * @param {string} nodeStr - The string that may contain square bracket attributes
  * @returns {object} - {textRaw, attr, textOriginal}

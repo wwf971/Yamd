@@ -49,26 +49,27 @@ LaTeX Blocks[panel,panelDefault=expand]:
     caption: "Parameter vector in bold notation"
     height: "100px"
   
-  # Test no_index attribute - won't be numbered
-  - "[latex]x = y":
-    no_index: true
-    caption: "Simple equation without numbering"
-  
-  # Test custom caption title and user-defined ID
-  - "[latex]\\\\sum_{i=1}^n x_i":
-    caption_title: "Formula"
-    caption: "Summation notation example"
-    id: "summation-formula"
-  
-  # LaTeX indentation mistake tolerance is handled in code
-  # When users write wrong indentation, system auto-corrects it
-  # Wrong: [latex]xxx: followed by unindented attributes
-  # Right: [latex]xxx: followed by properly indented attributes
-  - "[latex]":
-      content: "\\\\frac{\\\\partial L}{\\\\partial \\\\theta} = \\\\nabla_{\\\\theta} L(\\\\theta)"
-      caption: "Gradient of loss function"
-  - "[latex]\\\\mathbf{X} = \\\\begin{bmatrix} x_1 & x_2 \\\\\\\\ x_3 & x_4 \\\\end{bmatrix}":
-      caption: "Matrix notation example"
+  - test latex block in list[child=ul]:
+    # Test no_index attribute - won't be numbered
+    - "[latex]x = y":
+      no_index: true
+      caption: "Simple equation without numbering"
+    
+    # Test custom caption title and user-defined ID
+    - "[latex]\\\\sum_{i=1}^n x_i":
+      caption_title: "Formula"
+      caption: "Summation notation example"
+      id: "summation-formula"
+    
+    # LaTeX indentation mistake tolerance is handled in code
+    # When users write wrong indentation, system auto-corrects it
+    # Wrong: [latex]xxx: followed by unindented attributes
+    # Right: [latex]xxx: followed by properly indented attributes
+    - "[latex]":
+        content: "\\\\frac{\\\\partial L}{\\\\partial \\\\theta} = \\\\nabla_{\\\\theta} L(\\\\theta)"
+        caption: "Gradient of loss function"
+    - "[latex]\\\\mathbf{X} = \\\\begin{bmatrix} x_1 & x_2 \\\\\\\\ x_3 & x_4 \\\\end{bmatrix}":
+        caption: "Matrix notation example"
 
 # Image Block Examples  
 Image Examples[panel,panelDefault=expand]:
@@ -96,7 +97,8 @@ Video Examples[panel,panelDefault=expand]:
     id: "sample-video"
   
   - "[vid]":
-    src: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
+    # src: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
+    src: "aaa"
     caption: "Big Buck Bunny sample video with playOnLoad"
     playOnLoad: true
     muted: true
@@ -106,7 +108,16 @@ Video Examples[panel,panelDefault=expand]:
   - "[video]https://sample-videos.com/zip/10/mp4/SampleVideo_640x360_1mb.mp4":
     caption: "Looping video example"
     loop: true
-    controls: true`;
+    controls: true
+
+  # Reference System Examples
+  - "Reference Examples[panel,panelDefault=expand]":
+    - "Text with references": "As shown in \\\\ref{}{summation-formula}, the mathematical relationship is clear. See also \\\\ref{Figure 1}{sample-image} for visual representation."
+    - "Auto-generated references": "The equation \\\\ref{}{summation-formula} demonstrates the concept, while \\\\ref{}{sample-video} provides additional context."
+    - "Bibliography citations": "This research builds on previous work \\\\bib{smith2020,jones2019}. The methodology follows \\\\bib{brown2021} and extends the findings of \\\\bib{davis2018,wilson2020}."
+    - "Mixed references": "The formula \\\\ref{}{summation-formula} is derived from \\\\bib{einstein1905}, as discussed in \\\\ref{Figure 1}{sample-image}."
+  - "Mixed content": "Einstein's famous equation $E = mc^2$ is referenced as \\\\ref{}{summation-formula}, and you can see \\\\ref{Visual example}{sample-image} for more details."
+  - "Complex example": "The study shows that \\\\ref{Equation 2}{summation-formula} correlates with the data in \\\\ref{}{sample-image}. For a demonstration, watch \\\\ref{}{sample-video}."`;
 }
 
 /**

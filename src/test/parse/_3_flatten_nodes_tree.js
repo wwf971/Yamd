@@ -1,4 +1,34 @@
-import { parseLatexInline } from './_4_latex.js';
+// No longer need parseLatexInline - text segment processing happens in step 4
+
+/**
+ * Check if a node is a leaf node type (nodes that don't have meaningful children)
+ * 
+ * Leaf nodes are special node types that represent self-contained content blocks
+ * and should not have their structure further processed during flattening.
+ * 
+ * @param {object} node - Node to check
+ * @returns {boolean} - True if node is a leaf node type
+ * 
+ * @example
+ * // Returns true for leaf nodes
+ * isLeafNodeType({ type: 'latex', textRaw: 'E=mc^2' })
+ * isLeafNodeType({ type: 'image', textRaw: 'image.jpg' })
+ * isLeafNodeType({ type: 'video', textRaw: 'video.mp4' })
+ * 
+ * // Returns false for non-leaf nodes
+ * isLeafNodeType({ type: 'node', children: [...] })
+ * isLeafNodeType({ type: 'text', textRaw: 'plain text' })
+ */
+function isLeafNodeType(node) {
+  if (!node || typeof node !== 'object' || !node.type) {
+    return false;
+  }
+  
+  // Define leaf node types - easily extensible for future types
+  // Add new leaf node types here as needed (e.g., 'audio', 'chart', 'diagram', etc.)
+  const leafNodeTypes = ['latex', 'image', 'video'];
+  return leafNodeTypes.includes(node.type);
+}
 
 /**
  * Flatten nested node structure into ID-based dictionary
@@ -78,7 +108,20 @@ export function flattenJson(processedData) {
       }
       
     } else if (node && typeof node === 'object') {
-      // Handle regular objects (convert to node structure)
+      // Handle regular objects
+      const entries = Object.entries(node);
+      
+      // Optimization: If object has only one entry and the value is a leaf node,
+      // flatten the leaf node directly instead of creating intermediate object
+      if (entries.length === 1) {
+        const [key, value] = entries[0];
+        if (isLeafNodeType(value)) {
+          // This is a single leaf node - flatten it directly to avoid intermediate object
+          return flattenNode(value, parentId);
+        }
+      }
+      
+      // Otherwise, create object node as before
       flattened[nodeId] = {
         id: nodeId,
         type: 'object',

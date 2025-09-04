@@ -5,8 +5,12 @@ import { getChildrenDisplay } from '../YamdRenderUtils.js';
 /**
  * Panel node renderer - displays collapsible panel with show/hide functionality
  */
-const YamdNodePanel = ({ nodeId, getNodeDataById, getAssetById, parentInfo }) => {
-  const nodeData = getNodeDataById(nodeId);
+const YamdNodePanel = ({ nodeId, parentInfo, globalInfo }) => {
+  if (!globalInfo?.getNodeDataById) {
+    return <div className="yamd-error">Missing globalInfo.getNodeDataById</div>;
+  }
+  
+  const nodeData = globalInfo.getNodeDataById(nodeId);
   
   if (!nodeData) {
     return <div className="yamd-error">Node not found: {nodeId}</div>;
@@ -65,14 +69,13 @@ const YamdNodePanel = ({ nodeId, getNodeDataById, getAssetById, parentInfo }) =>
           {nodeData.children && nodeData.children.length > 0 && (
           <YamdChildrenRenderer
             childIds={nodeData.children}
-            getNodeDataById={getNodeDataById}
-            getAssetById={getAssetById}
             shouldAddIndent={false}
             parentInfo={{ 
               ...parentInfo, 
               ...(childDisplay && { childDisplay }),
               ...(childClass && { childClass })
             }}
+            globalInfo={globalInfo}
           />
           )}
         </div>

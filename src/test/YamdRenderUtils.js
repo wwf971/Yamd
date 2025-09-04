@@ -102,7 +102,7 @@ export const getChildrenDefaultDisplay = (nodeData, isRoot = false, parentInfo =
     case 'divider':
       return 'ul';  // Divider children commonly use lists
     case 'panel':
-      return 'ul';  // Panel children default to plain list
+      return 'ul';  // Panel children default to unordered list
     case 'key':
       return 'pl';  // Key children default to plain list
     default:
@@ -170,7 +170,7 @@ export const AddListBulletBeforeYamdNode = ({ childNode, alignBullet = 'center' 
     return (
       <div className="yamd-bullet-container" style={{ display: 'flex', alignItems: 'flex-start' }}>
         {bulletElement}
-        <div style={{ flex: 1 }}>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column'}}>
           {enhancedChildNode}
         </div>
       </div>
@@ -186,9 +186,9 @@ export const AddListBulletBeforeYamdNode = ({ childNode, alignBullet = 'center' 
           position: 'relative',
           width: BULLET_DIMENSIONS.width, // Same width as normal bullet
           height: BULLET_DIMENSIONS.height, // Same height as normal bullet for layout calculation
-          flexShrink: 0,
           display: 'flex',
-          justifyContent: 'center'
+          flexShrink: 0,
+          justifyContent: 'center',
         }}>
           <div style={{
             position: 'absolute',
@@ -199,7 +199,9 @@ export const AddListBulletBeforeYamdNode = ({ childNode, alignBullet = 'center' 
             {bulletElement}
           </div>
         </div>
-        <div style={{ flex: 1 }}>
+        <div
+          style={{ flex: 1, display: 'flex'}}
+        >
           {enhancedChildNode}
         </div>
       </div>

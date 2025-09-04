@@ -4,8 +4,12 @@ import { YamdChildrenRenderer } from '../YamdNode.jsx';
 /**
  * Anonymous node renderer - skips title completely and renders only children (for nodes with empty textRaw)
  */
-const YamdNodeAnonym = ({ nodeId, getNodeDataById, getAssetById, parentInfo }) => {
-  const nodeData = getNodeDataById(nodeId);
+const YamdNodeAnonym = ({ nodeId, parentInfo, globalInfo }) => {
+  if (!globalInfo?.getNodeDataById) {
+    return <div className="yamd-error">Missing globalInfo.getNodeDataById</div>;
+  }
+  
+  const nodeData = globalInfo.getNodeDataById(nodeId);
   
   if (!nodeData) {
     return <div className="yamd-error">Node not found: {nodeId}</div>;
@@ -22,10 +26,9 @@ const YamdNodeAnonym = ({ nodeId, getNodeDataById, getAssetById, parentInfo }) =
   return (
     <YamdChildrenRenderer
       childIds={nodeData.children || []}
-      getNodeDataById={getNodeDataById}
-      getAssetById={getAssetById}
       shouldAddIndent={false}
       parentInfo={childrenParentInfo}
+      globalInfo={globalInfo}
     />
   );
 };

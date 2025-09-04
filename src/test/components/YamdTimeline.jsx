@@ -64,8 +64,12 @@ const BULLET_COMPONENTS = {
 };
 
 // Timeline item component
-const YamdTimelineItem = React.memo(({ nodeId, getNodeDataById, getAssetById, itemIndex, isLast, bulletRefs, lineHeights, parentInfo }) => {
-  const nodeData = getNodeDataById(nodeId);
+const YamdTimelineItem = React.memo(({ nodeId, globalInfo, itemIndex, isLast, bulletRefs, lineHeights, parentInfo }) => {
+  if (!globalInfo?.getNodeDataById) {
+    return <div className="yamd-error">Missing globalInfo.getNodeDataById</div>;
+  }
+  
+  const nodeData = globalInfo.getNodeDataById(nodeId);
   
   if (!nodeData) {
     return <div className="yamd-error">Timeline item not found: {nodeId}</div>;
@@ -108,8 +112,7 @@ const YamdTimelineItem = React.memo(({ nodeId, getNodeDataById, getAssetById, it
               <YamdNode
                 key={childId}
                 nodeId={childId}
-                getNodeDataById={getNodeDataById}
-                getAssetById={getAssetById}
+                globalInfo={globalInfo}
                 parentInfo={{ ...parentInfo, childClass: 'yamd-timeline-item-text' }}
               />
             ))}
@@ -121,7 +124,10 @@ const YamdTimelineItem = React.memo(({ nodeId, getNodeDataById, getAssetById, it
 });
 
 // Main YamdTimeline component
-const YamdTimeline = ({ childIds, getNodeDataById, getAssetById, parentInfo }) => {
+const YamdTimeline = ({ childIds, globalInfo, parentInfo }) => {
+  if (!globalInfo?.getNodeDataById) {
+    return <div className="yamd-error">Missing globalInfo.getNodeDataById</div>;
+  }
   const [lineHeights, setLineHeights] = useState([]);
   const bulletRefs = useRef([]);
   
@@ -167,8 +173,7 @@ const YamdTimeline = ({ childIds, getNodeDataById, getAssetById, parentInfo }) =
           <YamdTimelineItem 
             key={childId}
             nodeId={childId}
-            getNodeDataById={getNodeDataById}
-            getAssetById={getAssetById}
+            globalInfo={globalInfo}
             itemIndex={index}
             isLast={isLast}
             bulletRefs={bulletRefs}

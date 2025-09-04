@@ -5,8 +5,12 @@ import { renderYamdListBullet, getChildrenDisplay } from '../YamdRenderUtils.js'
 /**
  * Top-right node renderer - positions title in top-right corner
  */
-const YamdNodeTopRight = ({ nodeId, getNodeDataById, getAssetById, parentInfo }) => {
-  const nodeData = getNodeDataById(nodeId);
+const YamdNodeTopRight = ({ nodeId, parentInfo, globalInfo }) => {
+  if (!globalInfo?.getNodeDataById) {
+    return <div className="yamd-error">Missing globalInfo.getNodeDataById</div>;
+  }
+  
+  const nodeData = globalInfo.getNodeDataById(nodeId);
   
   if (!nodeData) {
     return <div className="yamd-error">Node not found: {nodeId}</div>;
@@ -34,14 +38,13 @@ const YamdNodeTopRight = ({ nodeId, getNodeDataById, getAssetById, parentInfo })
         {nodeData.children && nodeData.children.length > 0 && (
         <YamdChildrenRenderer
           childIds={nodeData.children}
-          getNodeDataById={getNodeDataById}
-          getAssetById={getAssetById}
           shouldAddIndent={true}
           parentInfo={{ 
             ...parentInfo, 
             ...(childDisplay && { childDisplay }),
             ...(childClass && { childClass })
           }}
+          globalInfo={globalInfo}
         />
         )}
       </div>

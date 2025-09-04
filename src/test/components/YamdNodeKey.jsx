@@ -5,8 +5,12 @@ import { renderYamdListBullet, getChildrenDisplay } from '../YamdRenderUtils.js'
 /**
  * Key node renderer - renders title and children as siblings, with optional valueNum support
  */
-const YamdNodeKey = ({ nodeId, getNodeDataById, getAssetById, parentInfo }) => {
-  const nodeData = getNodeDataById(nodeId);
+const YamdNodeKey = ({ nodeId, parentInfo, globalInfo }) => {
+  if (!globalInfo?.getNodeDataById) {
+    return <div className="yamd-error">Missing globalInfo.getNodeDataById</div>;
+  }
+  
+  const nodeData = globalInfo.getNodeDataById(nodeId);
   
   if (!nodeData) {
     return <div className="yamd-error">Node not found: {nodeId}</div>;
@@ -41,8 +45,7 @@ const YamdNodeKey = ({ nodeId, getNodeDataById, getAssetById, parentInfo }) => {
             <YamdNode
               key={childId}
               nodeId={childId}
-              getNodeDataById={getNodeDataById}
-              getAssetById={getAssetById}
+              globalInfo={globalInfo}
               parentInfo={{ ...parentInfo, childClass }}
             />
           ))}
@@ -53,14 +56,13 @@ const YamdNodeKey = ({ nodeId, getNodeDataById, getAssetById, parentInfo }) => {
           <div className="yamd-key-remaining">
             <YamdChildrenRenderer
               childIds={remainingChildIds}
-              getNodeDataById={getNodeDataById}
-              getAssetById={getAssetById}
               shouldAddIndent={false}
               parentInfo={{ 
                 ...parentInfo, 
                 ...(childDisplay && { childDisplay }),
                 ...(childClass && { childClass })
               }}
+              globalInfo={globalInfo}
             />
           </div>
         )}
@@ -80,8 +82,7 @@ const YamdNodeKey = ({ nodeId, getNodeDataById, getAssetById, parentInfo }) => {
           <YamdNode
             key={childId}
             nodeId={childId}
-            getNodeDataById={getNodeDataById}
-            getAssetById={getAssetById}
+            globalInfo={globalInfo}
             parentInfo={{ ...parentInfo, childClass }}
           />
         ))}

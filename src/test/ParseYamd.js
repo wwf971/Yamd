@@ -20,8 +20,8 @@ export { processNodes } from './parse/_2_build_nodes_tree.js';
 // Tree flattening  
 export { flattenJson } from './parse/_3_flatten_nodes_tree.js';
 
-// LaTeX processing (inline and block)
-export { parseLatexInline, processAllLaTeXInline } from './parse/_4_latex.js';
+// Text segment processing (LaTeX, refs, bibs)
+export { parseLatexInline, processAllTextSegments } from './parse/_4_text_segment.js';
 
 /**
  * Complete Yamd processing pipeline
@@ -47,17 +47,24 @@ export async function processYamd(yamlString, processLatex = true) {
     // Step 3: Flatten to ID-based structure
     const flattenedData = flattenJson(processedData);
 
-    // Step 4: Process inline LaTeX (optional)
+    // Step 4: Process text segments (LaTeX, refs, bibs) (optional)
     let finalData = flattenedData;
     if (processLatex) {
-      finalData = await processAllLaTeXInline(flattenedData);
+      finalData = await processAllTextSegments(flattenedData);
     }
 
-    return {
-      success: true,
-      data: { nodes: finalData.nodes, rootNodeId: finalData.rootNodeId, assets: finalData.assets },
-      error: null
-    };
+      return {
+    success: true,
+    data: { 
+      nodes: finalData.nodes, 
+      rootNodeId: finalData.rootNodeId, 
+      assets: finalData.assets, 
+      refs: finalData.refs || {},
+      bibs: finalData.bibs || {},
+      bibsLookup: finalData.bibsLookup || {}
+    },
+    error: null
+  };
   } catch (error) {
     return {
       success: false,

@@ -24,7 +24,7 @@ export const LATEX_SETTINGS = {
   // Margins for block LaTeX elements
   blockMargins: '8px 0',
   // Default caption title
-  defaultCaptionTitle: 'Eq'
+  captionTitleDefault: 'Eq'
 };
 
 // Panel settings
@@ -40,4 +40,15 @@ export const TIMELINE_SETTINGS = {
   bulletSize: '12px',
   lineWidth: '2px',
   itemSpacing: '16px'
+};
+
+
+// Image settings
+export const IMAGE_SETTINGS = {
+  captionTitleDefault: 'Figure'
+};
+
+export const VIDEO_SETTINGS = {
+  captionTitleDefault: 'Video',
+  maxHeight: '400px'
 };

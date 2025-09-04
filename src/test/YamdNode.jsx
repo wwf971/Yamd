@@ -15,13 +15,17 @@ import { AddListBulletBeforeYamdNode, getChildrenDisplay } from './YamdRenderUti
 /**
  * Main YamdNode component for rendering flattened Yamd data
  * @param {string} nodeId - The ID of the node to render
- * @param {function} getNodeDataById - Function to get node data by ID
- * @param {function} getAssetById - Function to get asset data by ID (for things like LaTeX rendering)
  * @param {object} parentInfo - Parent context information (default: null)
- * @param {object} globalInfo - Global context with fetchExternalData method (default: null)
+ * @param {object} globalInfo - Global context with getNodeDataById, getAssetById, getRefById, and fetchExternalData methods (default: null)
  */
-const YamdNode = ({ nodeId, getNodeDataById, getAssetById, parentInfo = null, globalInfo = null }) => {
-  const nodeData = getNodeDataById(nodeId);
+const YamdNode = React.memo(({ nodeId, parentInfo = null, globalInfo = null }) => {
+
+  // console.log('🔍 YamdNode rendering node:', nodeId);
+  if (!globalInfo?.getNodeDataById) {
+    return <div className="yamd-error">Missing globalInfo.getNodeDataById</div>;
+  }
+  
+  const nodeData = globalInfo.getNodeDataById(nodeId);
   
   if (!nodeData) {
     return <div className="yamd-error">Node not found: {nodeId}</div>;
@@ -36,36 +40,45 @@ const YamdNode = ({ nodeId, getNodeDataById, getAssetById, parentInfo = null, gl
         // Handle special leaf node types first
     if (nodeData.type === 'latex') {
       return (
-        <YamdNodeLaTeX
-          nodeId={nodeId}
-          getNodeDataById={getNodeDataById}
-          getAssetById={getAssetById}
-          parentInfo={parentInfo}
-          globalInfo={globalInfo}
+        <AddListBulletBeforeYamdNode 
+          childNode={
+            <YamdNodeLaTeX
+              nodeId={nodeId}
+              parentInfo={parentInfo}
+              globalInfo={globalInfo}
+            />
+          }
+          alignBullet='flex-start'
         />
       );
     }
     
     if (nodeData.type === 'image') {
       return (
-        <YamdNodeImage
-          nodeId={nodeId}
-          getNodeDataById={getNodeDataById}
-          getAssetById={getAssetById}
-          parentInfo={parentInfo}
-          globalInfo={globalInfo}
+        <AddListBulletBeforeYamdNode 
+          childNode={
+            <YamdNodeImage
+              nodeId={nodeId}
+              parentInfo={parentInfo}
+              globalInfo={globalInfo}
+            />
+          }
+          alignBullet='flex-start'
         />
       );
     }
     
     if (nodeData.type === 'video') {
       return (
-        <YamdNodeVideo
-          nodeId={nodeId}
-          getNodeDataById={getNodeDataById}
-          getAssetById={getAssetById}
-          parentInfo={parentInfo}
-          globalInfo={globalInfo}
+        <AddListBulletBeforeYamdNode 
+          childNode={
+            <YamdNodeVideo
+              nodeId={nodeId}
+              parentInfo={parentInfo}
+              globalInfo={globalInfo}
+            />
+          }
+          alignBullet='flex-start'
         />
       );
     }
@@ -77,9 +90,8 @@ const YamdNode = ({ nodeId, getNodeDataById, getAssetById, parentInfo = null, gl
           childNode={
             <YamdNodePanel 
               nodeId={nodeId} 
-              getNodeDataById={getNodeDataById} 
-              getAssetById={getAssetById}
-              parentInfo={parentInfo} 
+              parentInfo={parentInfo}
+              globalInfo={globalInfo} 
             />
           }
           alignBullet='flex-start'
@@ -92,9 +104,8 @@ const YamdNode = ({ nodeId, getNodeDataById, getAssetById, parentInfo = null, gl
           childNode={
             <YamdNodeDivider 
               nodeId={nodeId} 
-              getNodeDataById={getNodeDataById} 
-              getAssetById={getAssetById}
-              parentInfo={parentInfo} 
+              parentInfo={parentInfo}
+              globalInfo={globalInfo} 
             />
           }
           alignBullet='flex-start'
@@ -105,9 +116,8 @@ const YamdNode = ({ nodeId, getNodeDataById, getAssetById, parentInfo = null, gl
       return (
         <YamdNodeKey 
           nodeId={nodeId} 
-          getNodeDataById={getNodeDataById} 
-          getAssetById={getAssetById}
-          parentInfo={parentInfo} 
+          parentInfo={parentInfo}
+          globalInfo={globalInfo} 
         />
       );
     
@@ -115,9 +125,8 @@ const YamdNode = ({ nodeId, getNodeDataById, getAssetById, parentInfo = null, gl
       return (
         <YamdNodeTopRight 
           nodeId={nodeId} 
-          getNodeDataById={getNodeDataById} 
-          getAssetById={getAssetById}
-          parentInfo={parentInfo} 
+          parentInfo={parentInfo}
+          globalInfo={globalInfo} 
         />
       );
     
@@ -125,9 +134,8 @@ const YamdNode = ({ nodeId, getNodeDataById, getAssetById, parentInfo = null, gl
       return (
         <YamdNodeAnonym 
           nodeId={nodeId} 
-          getNodeDataById={getNodeDataById} 
-          getAssetById={getAssetById}
-          parentInfo={parentInfo} 
+          parentInfo={parentInfo}
+          globalInfo={globalInfo} 
         />
       );
     
@@ -140,16 +148,15 @@ const YamdNode = ({ nodeId, getNodeDataById, getAssetById, parentInfo = null, gl
         */
         <YamdNodeText 
           nodeId={nodeId} 
-          getNodeDataById={getNodeDataById} 
-          getAssetById={getAssetById}
-          parentInfo={parentInfo} 
+          parentInfo={parentInfo}
+          globalInfo={globalInfo} 
         />
       );
     }
   };
   
   return getNodeContent();
-};
+});
 
 /**
  * Component for rendering children based on childDisplay style from parentInfo

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import YamdNode from './YamdNode.jsx';
+import YamdDoc from './YamdDoc.jsx';
 import { loadMathJax } from '@/mathjax/MathJaxLoad.js';
 import { 
   parseYamlToJson, 
@@ -8,7 +8,7 @@ import {
   getCornerCaseYaml,
   processNodes, 
   flattenJson,
-  processAllLaTeXInline
+  processAllTextSegments
 } from './ParseYamd.js';
 
 const TestYamd = () => {
@@ -48,9 +48,16 @@ const TestYamd = () => {
         const flattenedData = flattenJson(processedData);
         
         // Step 4: Process inline LaTeX
-        const finalData = await processAllLaTeXInline(flattenedData);
+        const finalData = await processAllTextSegments(flattenedData);
         
-        const finalResult = { nodes: finalData.nodes, rootNodeId: finalData.rootNodeId, assets: finalData.assets };
+        const finalResult = { 
+          nodes: finalData.nodes, 
+          rootNodeId: finalData.rootNodeId, 
+          assets: finalData.assets, 
+          refs: finalData.refs || {},
+          bibs: finalData.bibs || {},
+          bibsLookup: finalData.bibsLookup || {}
+        };
         setFlattenedOutput(formatJson(finalResult));
         setFlattenedData(finalResult);
         
@@ -289,23 +296,7 @@ const TestYamd = () => {
             backgroundColor: '#f8fff8',
             minHeight: '200px'
           }}>
-        <YamdNode
-          nodeId={flattenedData.rootNodeId}
-          getNodeDataById={(nodeId) => flattenedData.nodes[nodeId]}
-          getAssetById={(assetId) => flattenedData.assets?.[assetId]}
-          parentInfo={null}
-          globalInfo={{
-            fetchExternalData: (nodeData) => {
-              // Default implementation: always return code 1 (component should handle itself)
-              console.log('🌐 fetchExternalData called with:', nodeData);
-              return {
-                code: 1, // Component should handle data fetching itself
-                message: 'Component should handle data fetching directly',
-                data: null
-              };
-            }
-          }}
-        />
+        <YamdDoc flattenedData={flattenedData} disableRefJump={false} />
           </div>
         </div>
       )}

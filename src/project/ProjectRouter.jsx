@@ -3,14 +3,8 @@ import { Routes, Route } from 'react-router-dom';
 import Project from './Project.jsx';
 
 
-
 const ProjectRouter = () => {
   // fetch project(a json dict) based on an url using zustand
-  
-
-  
-
-
   return (
     <Routes>
       {/* Route for specific projects: /project/music-haptic */}

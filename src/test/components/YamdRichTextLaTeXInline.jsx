@@ -4,7 +4,7 @@ import React from 'react';
  * LaTeX inline renderer component
  * Handles rendering of LaTeX segments with asset-based HTML conversion
  */
-const YamdRichTextLaTeXInline = ({ segment, getAssetById }) => {
+const YamdRichTextLaTeXInline = ({ segment, globalInfo }) => {
   if (segment.type !== 'latex_inline' || !segment.assetId) {
     // Not a LaTeX segment, should not be handled by this component
     return (
@@ -14,7 +14,15 @@ const YamdRichTextLaTeXInline = ({ segment, getAssetById }) => {
     );
   }
 
-  const asset = getAssetById(segment.assetId);
+  if (!globalInfo?.getAssetById) {
+    return (
+      <span className="yamd-text-segment yamd-error">
+        Missing globalInfo.getAssetById
+      </span>
+    );
+  }
+  
+  const asset = globalInfo.getAssetById(segment.assetId);
   
   if (!asset) {
     // Asset not found, display raw text

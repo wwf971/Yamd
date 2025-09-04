@@ -1,12 +1,16 @@
 import React from 'react';
 import { getNodeClass } from '../YamdNode.jsx';
-import { LATEX_SETTINGS } from '../YamdRenderSettings.js';
+import { IMAGE_SETTINGS } from '../YamdRenderSettings.js';
 
 /**
  * Image node renderer - displays images with captions
  */
-const YamdNodeImage = ({ nodeId, getNodeDataById, getAssetById, parentInfo, globalInfo }) => {
-  const nodeData = getNodeDataById(nodeId);
+const YamdNodeImage = ({ nodeId, parentInfo, globalInfo }) => {
+  if (!globalInfo?.getNodeDataById) {
+    return <div className="yamd-error">Missing globalInfo.getNodeDataById</div>;
+  }
+  
+  const nodeData = globalInfo.getNodeDataById(nodeId);
   
   if (!nodeData) {
     return <div className="yamd-error">Image node not found: {nodeId}</div>;
@@ -104,7 +108,19 @@ const YamdNodeImage = ({ nodeId, getNodeDataById, getAssetById, parentInfo, glob
       
       <div className="yamd-image-caption">
         <span className="yamd-image-label">
-          Image.
+          {/* Use IMAGE_SETTINGS for default caption title */}
+          {IMAGE_SETTINGS.captionTitleDefault}
+          {/* Show index number if available from asset */}
+          {(() => {
+            if (nodeData.assetId && globalInfo?.getAssetById) {
+              const asset = globalInfo.getAssetById(nodeData.assetId);
+              if (asset && !asset.no_index && asset.indexOfSameType) {
+                return ` ${asset.indexOfSameType}`;
+              }
+            }
+            return '';
+          })()}
+          .
         </span>
         {/* Show caption text if provided */}
         {nodeData.caption && (

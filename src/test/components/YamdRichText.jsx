@@ -1,13 +1,15 @@
 import React, { useRef, useEffect } from 'react';
 import YamdPlainText from './YamdPlainText.jsx';
 import YamdRichTextLaTeXInline from './YamdRichTextLaTeXInline.jsx';
+import YamdRichTextRef from './YamdRichTextRef.jsx';
+import YamdRichTextBib from './YamdRichTextBib.jsx';
 
 /**
  * Rich text renderer with inline LaTeX math support
  * Renders segmented text content with clean LaTeX conversion (NO MathJax fallback)
  * Also handles bullet positioning like YamdPlainText
  */
-const YamdRichText = ({ text, className, parentInfo, textRich = null, getAssetById = null }) => {
+const YamdRichText = ({ text, className, parentInfo, textRich = null, globalInfo = null }) => {
   // Ref to measure text for bullet positioning
   const textRef = useRef(null);
 
@@ -102,7 +104,25 @@ const YamdRichText = ({ text, className, parentInfo, textRich = null, getAssetBy
               <YamdRichTextLaTeXInline 
                 key={index}
                 segment={segment}
-                getAssetById={getAssetById}
+                globalInfo={globalInfo}
+              />
+            );
+          } else if (segment.type === 'ref-asset') {
+            // Use dedicated reference component
+            return (
+              <YamdRichTextRef
+                key={index}
+                segment={segment}
+                globalInfo={globalInfo}
+              />
+            );
+          } else if (segment.type === 'ref-bib') {
+            // Use dedicated bibliography component
+            return (
+              <YamdRichTextBib
+                key={index}
+                segment={segment}
+                globalInfo={globalInfo}
               />
             );
           } else {

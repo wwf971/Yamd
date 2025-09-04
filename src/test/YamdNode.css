@@ -79,11 +79,12 @@
 
 /* LaTeX Block styles */
 .yamd-latex-block {
-  margin: 4px 0;
+  margin: 0px 0;
   padding: 4px;
   border: 1px solid #f0f0f0;
   border-radius: 2px;
   text-align: center;
+  /* align-self will be set via inline styles for better readability */
 }
 
 .yamd-latex-content {
@@ -206,6 +207,137 @@
   border-radius: 4px;
 }
 
+/* Reference Link styles */
+.yamd-ref-link {
+  color: #0066cc;
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: all 0.2s ease;
+}
+
+.yamd-ref-link:hover {
+  color: #004499;
+  border-bottom-color: #0066cc;
+}
+
+.yamd-ref-link:visited {
+  color: #663399;
+}
+
+.yamd-ref-fallback {
+  font-family: monospace;
+  color: #999;
+  font-style: italic;
+}
+
+/* Bibliography Link styles */
+.yamd-bib-link {
+  color: #cc6600;
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: all 0.2s ease;
+  font-weight: 500;
+}
+
+.yamd-bib-link:hover {
+  color: #994400;
+  border-bottom-color: #cc6600;
+  background-color: rgba(204, 102, 0, 0.1);
+}
+
+.yamd-bib-text {
+  color: #666;
+  font-weight: 500;
+}
+
+.yamd-bib-fallback {
+  color: #999;
+  font-style: italic;
+}
+
+.yamd-bib-group {
+  font-weight: 500;
+}
+
+.yamd-bib-separator {
+  color: #666;
+  font-weight: 400;
+}
+
+/* Bibliography List styles - simple and clean */
+.yamd-bibs-list {
+  margin-top: 40px;
+  padding-top: 20px;
+  border-top: 1px solid #ddd;
+}
+
+.yamd-bibs-title {
+  font-size: 1.2em;
+  font-weight: 600;
+  margin: 0 0 4px 0;
+  color: inherit;
+}
+
+.yamd-bibs-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.yamd-bib-entry {
+  display: flex;
+  align-items: flex-start;
+  gap: 2px;
+  margin-bottom: 0px;
+  line-height: 1.2;
+}
+
+.yamd-bib-entry.highlighted {
+  background-color: #fef3c7;
+  transition: background-color 0.3s ease;
+  border-radius: 4px;
+  box-shadow: 0 0 0 2px #f59e0b;
+}
+
+.yamd-bib-index {
+  color: inherit;
+  font-weight: 500;
+  flex-shrink: 0;
+}
+
+.yamd-bib-key {
+  color: inherit;
+  font-weight: 500;
+  flex-shrink: 0;
+  min-width: fit-content;
+}
+
+.yamd-bib-entry .yamd-bib-text {
+  color: inherit;
+  font-weight: 400;
+  line-height: 1.5;
+  text-align: justify;
+  flex: 1;
+}
+
+.yamd-bib-entry .yamd-bib-fallback {
+  color: inherit;
+  font-style: italic;
+  font-weight: 400;
+  line-height: 1.5;
+  flex: 1;
+  opacity: 0.7;
+}
+
+/* Element highlighting for reference navigation */
+.element-highlighted {
+  background-color: rgba(255, 255, 0, 0.3) !important;
+  /* border: 2px solid #ffd700 !important; */
+  /* border-radius: 4px !important; */
+  transition: all 0.3s ease !important;
+  box-shadow: 0 0 10px rgba(255, 215, 0, 0.5) !important;
+}
+
 .yamd-latex-fallback {
   font-family: monospace;
   color: #f57c00;
@@ -221,7 +353,8 @@
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  width: 100%;
+  /* display: block; */
+  /* width: 100%; */
 }
 
 /* List styles - using divs instead of ul/ol/li */
@@ -243,8 +376,11 @@
 .yamd-list-item {
   margin-bottom: 1px;
   display: flex;
-  align-items: flex-start;
+  /* align-items: flex-start; */
+  align-items: stretch;
+  flex-direction: column;
   align-self: stretch;
+  /* display: block; */
   width: 100%;
 }
 

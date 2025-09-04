@@ -1,12 +1,16 @@
 import React, { useRef, useEffect } from 'react';
 import { getNodeClass } from '../YamdNode.jsx';
-import { LATEX_SETTINGS } from '../YamdRenderSettings.js';
+import { VIDEO_SETTINGS } from '../YamdRenderSettings.js';
 
 /**
  * Video node renderer - displays videos with captions
  */
-const YamdNodeVideo = ({ nodeId, getNodeDataById, getAssetById, parentInfo, globalInfo }) => {
-  const nodeData = getNodeDataById(nodeId);
+const YamdNodeVideo = ({ nodeId, parentInfo, globalInfo }) => {
+  if (!globalInfo?.getNodeDataById) {
+    return <div className="yamd-error">Missing globalInfo.getNodeDataById</div>;
+  }
+  
+  const nodeData = globalInfo.getNodeDataById(nodeId);
   const videoRef = useRef(null);
   
   if (!nodeData) {
@@ -83,7 +87,9 @@ const YamdNodeVideo = ({ nodeId, getNodeDataById, getAssetById, parentInfo, glob
     ...(customWidth && { width: customWidth }),
     ...(customHeight && { height: customHeight }),
     maxWidth: '100%',
-    height: 'auto'
+    height: 'auto',
+    // Apply default maxHeight if no custom height is specified
+    ...(!customHeight && { maxHeight: VIDEO_SETTINGS.maxHeight })
   };
 
   // Handle playOnLoad functionality
@@ -127,7 +133,18 @@ const YamdNodeVideo = ({ nodeId, getNodeDataById, getAssetById, parentInfo, glob
       
       <div className="yamd-video-caption">
         <span className="yamd-video-label">
-          Video.
+          Video
+          {/* Show index number if available from asset */}
+          {(() => {
+            if (nodeData.assetId && globalInfo?.getAssetById) {
+              const asset = globalInfo.getAssetById(nodeData.assetId);
+              if (asset && !asset.no_index && asset.indexOfSameType) {
+                return ` ${asset.indexOfSameType}`;
+              }
+            }
+            return '';
+          })()}
+          .
         </span>
         {/* Show caption text if provided */}
         {nodeData.caption && (
