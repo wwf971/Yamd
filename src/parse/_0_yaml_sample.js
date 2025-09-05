@@ -3,14 +3,16 @@
  */
 export function getSampleYaml() {
   return `# Sample Yamd Document
-  Introduction: Welcome to Yamd
-  Features[divider,childDisplay=ul]:
-    - Flexible styling with square bracket grammar
-    - "Support for various display types[selfDisplay=panel]":
-      - Panels with expand/collapse
-      - Timeline views 
-      - Lists and tags
-    - Easy to write and read`
+
+  - "[self=none,child=ul]":
+    - Introduction: Welcome to Yamd
+    - Features[divider,childDisplay=ul]:
+      - Flexible styling with square bracket grammar
+      - "Support for various display types[selfDisplay=panel]":
+        - Panels with expand/collapse
+        - Timeline views 
+        - Lists and tags
+      - Easy to write and read`
 
 // # Inline LaTeX Math Examples
 // Math Examples[panel,panelDefault=expand]:

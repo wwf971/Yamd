@@ -134,9 +134,10 @@ export const handleBackToSource = (setRefState) => {
  * @param {function} getNodeRefById - Node reference retrieval function
  * @returns {object} Global info object
  */
-export const createGlobalInfo = (flattenedData, handleRefClick, handleBibClick, registerNodeRef, getNodeRefById) => {
+export const createGlobalInfo = (flattenedData, handleRefClick, handleBibClick, registerNodeRef, getNodeRefById, docId) => {
   console.log('🔍 globalInfo re-created');
   return { 
+    docId: docId, // Include docId for Zustand positioning
     getNodeDataById: (nodeId) => flattenedData.nodes[nodeId],
     getAssetById: (assetId) => flattenedData.assets?.[assetId],
     getRefById: (refId) => flattenedData.refs?.[refId],

@@ -24,7 +24,6 @@ export {
   renderYamdListBullet,
   getChildrenDisplay,
   getChildrenDefaultDisplay,
-  AddListBulletBeforeYamdText,
   getAlignmentStrategy,
   renderYamdTimelineBullet,
   AddTimelineBulletBeforeYamdNode

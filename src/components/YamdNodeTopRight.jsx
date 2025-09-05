@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef, useEffect } from 'react';
 import { getNodeClass } from '../YamdNode.jsx';
 import YamdChildrenNodes from '../YamdChildrenNodes.jsx';
 import { renderYamdListBullet, getChildrenDisplay } from '../YamdRenderUtils.js';
@@ -7,6 +7,15 @@ import { renderYamdListBullet, getChildrenDisplay } from '../YamdRenderUtils.js'
  * Top-right node renderer - positions title in top-right corner
  */
 const YamdNodeTopRight = ({ nodeId, parentInfo, globalInfo }) => {
+  const nodeRef = useRef(null);
+
+  // Register the node reference after the component finishes rendering
+  useEffect(() => {
+    if (nodeRef.current) {
+      globalInfo?.registerNodeRef?.(nodeId, nodeRef.current);
+    }
+  }, [nodeId, globalInfo]);
+
   if (!globalInfo?.getNodeDataById) {
     return <div className="yamd-error">Missing globalInfo.getNodeDataById</div>;
   }

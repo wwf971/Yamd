@@ -11,7 +11,7 @@
  * @param {object} parentInfo - Parent context information
  * @returns {object} Result object with {code, message, data}
  */
-export const calculatePreferredYPosition = (textElement, textRich, containerClassName) => {
+export const calcPreferredBulletYPose = (textElement, textRich, containerClassName) => {
   try {
     if (!textElement) {
       return { code: -1, message: 'Text element not found', data: null };
@@ -38,9 +38,16 @@ export const calculatePreferredYPosition = (textElement, textRich, containerClas
           const range = document.createRange();
           range.selectNodeContents(firstTextNode);
           const rect = range.getBoundingClientRect();
-          const containerRect = textElement.getBoundingClientRect();
           
-          // Calculate relative position within the container
+          // CORRECT: Find bullet container using containerClassName
+          const bulletContainer = textElement.closest(containerClassName);
+          if (!bulletContainer) {
+            return { code: -1, message: `Text: bullet container ${containerClassName} not found`, data: null };
+          }
+          
+          const containerRect = bulletContainer.getBoundingClientRect();
+          
+          // Calculate relative position within the bullet container
           const relativeY = rect.top - containerRect.top;
           return { code: 0, message: 'Success', data: relativeY };
         }
@@ -50,7 +57,14 @@ export const calculatePreferredYPosition = (textElement, textRich, containerClas
         if (latexElements.length > 0) {
           const firstLatexElement = latexElements[0];
           const rect = firstLatexElement.getBoundingClientRect();
-          const containerRect = textElement.getBoundingClientRect();
+          
+          // CORRECT: Find bullet container using containerClassName
+          const bulletContainer = textElement.closest(containerClassName);
+          if (!bulletContainer) {
+            return { code: -1, message: `LaTeX: bullet container ${containerClassName} not found`, data: null };
+          }
+          
+          const containerRect = bulletContainer.getBoundingClientRect();
           
           const relativeY = rect.top - containerRect.top + (rect.height / 2);
           return { code: 0, message: 'Success', data: relativeY };
@@ -61,7 +75,14 @@ export const calculatePreferredYPosition = (textElement, textRich, containerClas
         if (refElements.length > 0) {
           const firstRefElement = refElements[0];
           const rect = firstRefElement.getBoundingClientRect();
-          const containerRect = textElement.getBoundingClientRect();
+          
+          // CORRECT: Find bullet container using containerClassName
+          const bulletContainer = textElement.closest(containerClassName);
+          if (!bulletContainer) {
+            return { code: -1, message: `Ref: bullet container ${containerClassName} not found`, data: null };
+          }
+          
+          const containerRect = bulletContainer.getBoundingClientRect();
           
           const relativeY = rect.top - containerRect.top + (rect.height / 2);
           return { code: 0, message: 'Success', data: relativeY };
@@ -72,7 +93,14 @@ export const calculatePreferredYPosition = (textElement, textRich, containerClas
         if (bibElements.length > 0) {
           const firstBibElement = bibElements[0];
           const rect = firstBibElement.getBoundingClientRect();
-          const containerRect = textElement.getBoundingClientRect();
+          
+          // CORRECT: Find bullet container using containerClassName
+          const bulletContainer = textElement.closest(containerClassName);
+          if (!bulletContainer) {
+            return { code: -1, message: `Bib: bullet container ${containerClassName} not found`, data: null };
+          }
+          
+          const containerRect = bulletContainer.getBoundingClientRect();
           
           const relativeY = rect.top - containerRect.top + (rect.height / 2);
           return { code: 0, message: 'Success', data: relativeY };
@@ -90,20 +118,4 @@ export const calculatePreferredYPosition = (textElement, textRich, containerClas
   } catch (error) {
     return { code: -1, message: `Error calculating position: ${error.message}`, data: null };
   }
-};
-
-/**
- * Get the appropriate container class name for bullet positioning
- * @param {string} containerClassName - The requesting container class name
- * @returns {string} The appropriate class name to use
- */
-export const getContainerClassName = (containerClassName) => {
-  // Map container class names to appropriate positioning strategies
-  const containerMap = {
-    '.yamd-bullet-container': 'bullet',
-    '.yamd-timeline-item': 'timeline',
-    '.yamd-list-item': 'list'
-  };
-  
-  return containerMap[containerClassName] || 'default';
 };

@@ -10,7 +10,6 @@ import { BULLET_DIMENSIONS, LIST_INDENT, TIMELINE_BULLET_DIMENSIONS } from './Ya
 export { BULLET_DIMENSIONS, LIST_INDENT };
 export {
   AddListBulletBeforeYamdNode,
-  AddListBulletBeforeYamdText,
   renderYamdListBullet,
 } from './components/AddBullet.jsx';
 

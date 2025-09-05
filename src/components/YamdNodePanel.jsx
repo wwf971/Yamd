@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import { getNodeClass } from '../YamdNode.jsx';
 import YamdChildrenNodes from '../YamdChildrenNodes.jsx';
 import { getChildrenDisplay } from '../YamdRenderUtils.js';
@@ -47,25 +47,8 @@ const YamdPanel = ({ nodeId, parentInfo, globalInfo }) => {
   // ref to measure button position for bullet positioning
   const buttonRef = useRef(null);
 
-  // notify parent about preferred bullet Y position if there's a bullet to the left
-  useEffect(() => {
-    if (parentInfo?.hasBulletToLeft && parentInfo?.notifyPreferredBulletYPos && buttonRef.current) {
-      // Calculate the Y position of the button's midline relative to the bullet container
-      const buttonRect = buttonRef.current.getBoundingClientRect();
-      const bulletContainerClass = parentInfo?.bulletContainerClassName || '.yamd-panel';
-      if (parentInfo?.bulletContainerClassName) {
-        // console.log('Child found bullet container class from parentInfo:', parentInfo.bulletContainerClassName);
-      }
-      const bulletContainer = buttonRef.current.closest(bulletContainerClass);
-      
-      if (bulletContainer) {
-        const containerRect = bulletContainer.getBoundingClientRect();
-        const buttonRelativeTop = buttonRect.top - containerRect.top;
-        const preferredBulletYPos = buttonRelativeTop + (buttonRect.height / 2);
-        parentInfo.notifyPreferredBulletYPos(preferredBulletYPos);
-      }
-    }
-  }, [parentInfo, title, isExpanded]); // re-calculate when content might change
+  // Note: Bullet positioning is now handled entirely by Zustand store in YamdNodeText
+  // No prop drilling logic needed here anymore
 
   return (
     <div ref={nodeRef} className="yamd-panel">

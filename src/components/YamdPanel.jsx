@@ -1,16 +1,64 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { getNodeClass } from '../YamdNode.jsx';
 import YamdChildrenNodes from '../YamdChildrenNodes.jsx';
 import { getChildrenDisplay } from '../YamdRenderUtils.js';
+import { useYamdDocStore } from '../YamdDocStore.js';
 
 /**
  * Panel node renderer - displays collapsible panel with show/hide functionality
  */
-const YamdPanel = ({ nodeId, parentInfo, globalInfo }) => {
+const YamdPanel = forwardRef(({ nodeId, parentInfo, globalInfo }, ref) => {
+  const nodeRef = useRef(null);
+
+  // Register the node reference after the component finishes rendering
+  useEffect(() => {
+    if (nodeRef.current) {
+      globalInfo?.registerNodeRef?.(nodeId, nodeRef.current);
+    }
+  }, [nodeId, globalInfo]);
+
+  // Expose calcPreferredBulletYPos to parent via ref
+  useImperativeHandle(ref, () => ({
+    calcPreferredBulletYPos: () => {
+      const docId = globalInfo?.docId;
+      calcPreferredBulletYPos(nodeId, docId, nodeRef, buttonRef);
+    }
+  }), [nodeId, globalInfo]);
+
+  // ===== ZUSTAND LOGIC =====
+  // get docId from globalInfo or use default
+  const docId = globalInfo?.docId; // don't use 'default-doc' here. let it be undefined.
+  
+  // Subscribe to request counter changes with custom equality function
+  useEffect(() => {
+    if (!nodeId || !docId) return;
+    console.log('YamdPanel noteId:', nodeId, 'useEffect subscribe');
+    const unsubscribe = useYamdDocStore.subscribe(
+      (state) => state.listBulletPreferredYPosRequests[docId]?.[nodeId] || {},
+      (requests) => {
+        console.log('noteId:', nodeId, 'YamdPanel useEffect subscribe triggered with requests:', requests);
+        // This will only fire if equalityFn returns false
+        calcPreferredBulletYPos(nodeId, docId, nodeRef, buttonRef);
+      },
+      {
+        equalityFn: (prev, next) => {
+          // Only skip if all counters are the same or decreased
+          const keys = new Set([...Object.keys(prev), ...Object.keys(next)]);
+          return Array.from(keys).every((key) => (next[key]?.requestCounter || 0) <= (prev[key]?.requestCounter || 0));
+        },
+      }
+    );
+    
+    // Immediately check for existing requests
+    calcPreferredBulletYPos(nodeId, docId, nodeRef, buttonRef);
+    return unsubscribe;
+  }, [nodeId, docId]);
+  // ===== END ZUSTAND LOGIC =====
+
   if (!globalInfo?.getNodeDataById) {
     return <div className="yamd-error">Missing globalInfo.getNodeDataById</div>;
   }
-  
+
   const nodeData = globalInfo.getNodeDataById(nodeId);
   
   if (!nodeData) {
@@ -24,7 +72,7 @@ const YamdPanel = ({ nodeId, parentInfo, globalInfo }) => {
   // use the utility function to get appropriate CSS class
   const nodeClass = getNodeClass(nodeData, parentInfo) || 'yamd-panel-title';
   
-  // Compute initial state only once and cache it
+  // compute initial state only once and cache it
   const [isExpanded, setIsExpanded] = useState(() => {
     return nodeData.attr?.panelDefault?.toLowerCase() === 'collapse' ? false : 
            nodeData.attr?.panelDefault?.toLowerCase() === 'expand' ? true :
@@ -38,39 +86,10 @@ const YamdPanel = ({ nodeId, parentInfo, globalInfo }) => {
   // ref to measure button position for bullet positioning
   const buttonRef = useRef(null);
 
-  // notify parent about preferred bullet Y position if there's a bullet to the left
-  useEffect(() => {
-    if (parentInfo?.hasBulletToLeft && parentInfo?.notifyPreferredBulletYPos && buttonRef.current) {
-
-      // Calculate the Y position of the button's midline relative to the bullet container
-      const buttonRect = buttonRef.current.getBoundingClientRect();
-      const bulletContainerClass = parentInfo?.bulletContainerClassName || '.yamd-panel';
-      if (parentInfo?.bulletContainerClassName) {
-        console.warn('Child found bullet container class from parentInfo:', parentInfo.bulletContainerClassName);
-      }
-      const bulletContainer = buttonRef.current.closest(bulletContainerClass);
-      console.log('YamdPanel bulletContainer:', bulletContainer);
-      console.log('YamdPanel bulletContainerClass:', bulletContainerClass);
-      console.log('YamdPanel noteId:', nodeId);
-      console.log('YamdPanel parentInfo:', parentInfo);
-      console.log('YamdPanel buttonRef:', buttonRef.current);
-      console.log('YamdPanel buttonRect:', buttonRect);
-      console.log('YamdPanel parentInfo?.hasBulletToLeft:', parentInfo?.hasBulletToLeft);
-      if (bulletContainer) {
-        const containerRect = bulletContainer.getBoundingClientRect();
-        const buttonRelativeTop = buttonRect.top - containerRect.top;
-        const preferredBulletYPos = buttonRelativeTop + (buttonRect.height / 2);
-        parentInfo.notifyPreferredBulletYPos(preferredBulletYPos);
-      }
-    }
-  }, [
-    parentInfo?.hasBulletToLeft,
-    parentInfo?.notifyPreferredBulletYPos,
-    parentInfo?.bulletContainerClassName, title, isExpanded
-  ]); // Only depend on specific properties
+  // Note: This component now provides bullet positioning via Zustand on demand
 
   return (
-    <div className="yamd-panel">
+    <div ref={nodeRef} className="yamd-panel">
       <div 
         className="yamd-panel-header" 
         onClick={toggleExpanded}
@@ -102,6 +121,56 @@ const YamdPanel = ({ nodeId, parentInfo, globalInfo }) => {
       )}
     </div>
   );
+});
+
+/**
+ * Calculate preferred bullet Y position for panel
+ * @param {string} nodeId - Node ID
+ * @param {string} docId - Document ID  
+ * @param {React.RefObject} nodeRef - Node DOM reference
+ * @param {React.RefObject} buttonRef - Button DOM reference
+ * @returns {void}
+ */
+const calcPreferredBulletYPos = (nodeId, docId, nodeRef, buttonRef) => {
+  if (!nodeRef.current || !buttonRef.current) return;
+  
+  const store = useYamdDocStore.getState();
+  // Get all requests for this node
+  const requests = store.getPreferredYPosRequests(docId, nodeId);
+  console.log('noteId:', nodeId, 'YamdPanel calcPreferredBulletYPos requests:', requests);
+  
+  // Update result for each requesting container
+  Object.keys(requests).forEach(containerClassName => {
+    try {
+      // CORRECT: Calculate relative to bullet container, not panel container
+      const buttonRect = buttonRef.current.getBoundingClientRect();
+      const bulletContainer = nodeRef.current.closest(containerClassName);
+      
+      if (!bulletContainer) {
+        const result = { code: -1, message: `Panel: bullet container ${containerClassName} not found`, data: null };
+        store.updateRequestResult(docId, nodeId, containerClassName, result);
+        store.incResponseCounter(docId, nodeId, containerClassName);
+        return;
+      }
+      
+      const containerRect = bulletContainer.getBoundingClientRect();
+      
+      // Button's Y position relative to bullet container
+      const buttonRelativeTop = buttonRect.top - containerRect.top;
+      const preferredYPos = buttonRelativeTop + (buttonRect.height / 2);
+      
+      const result = { code: 0, message: 'Panel button position', data: preferredYPos };
+      
+      // Update result in the Zustand store
+      store.updateRequestResult(docId, nodeId, containerClassName, result);
+      // Increment response counter in store
+      store.incResponseCounter(docId, nodeId, containerClassName);
+    } catch (error) {
+      const result = { code: -1, message: `Panel positioning error: ${error.message}`, data: null };
+      store.updateRequestResult(docId, nodeId, containerClassName, result);
+      store.incResponseCounter(docId, nodeId, containerClassName);
+    }
+  });
 };
 
 export default YamdPanel;

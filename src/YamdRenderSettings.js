@@ -3,7 +3,13 @@
  * Centralized configuration for consistent styling across components
  */
 
-
+// Indentation settings for nested content
+export const LIST_INDENT = {
+  // Indent for ul/ol/p children
+  childIndent: '3px',
+  // Indent for nested list items
+  nestedIndent: '3px'
+};
 
 // Bullet dimensions and positioning
 export const BULLET_DIMENSIONS = {
@@ -20,13 +26,6 @@ export const TIMELINE_BULLET_DIMENSIONS = {
   connect_line_gap: '2px'     // Gap between connect lines and bullets
 };
 
-// Indentation settings for nested content
-export const LIST_INDENT = {
-  // Indent for ul/ol/p children
-  childIndent: '12px',
-  // Indent for nested list items
-  nestedIndent: '12px'
-};
 
 // LaTeX rendering settings
 export const LATEX_SETTINGS = {

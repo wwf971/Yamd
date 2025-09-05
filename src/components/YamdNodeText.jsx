@@ -1,8 +1,7 @@
-import React, { useRef, useEffect, useState, useCallback } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import { getNodeClass } from '../YamdNode.jsx';
 import YamdChildrenNodes from '../YamdChildrenNodes.jsx';
 import { getChildrenDisplay } from '../YamdRenderUtils.js';
-import { AddListBulletBeforeYamdText } from './AddBullet.jsx';
 import YamdRichText from './YamdRichText.jsx';
 import YamdPlainText from './YamdPlainText.jsx';
 import { useYamdDocStore } from '../YamdDocStore.js';
@@ -19,55 +18,49 @@ const YamdNodeText = React.memo(({ nodeId, parentInfo, globalInfo }) => {
       globalInfo?.registerNodeRef?.(nodeId, nodeRef.current);
     }
   }, [nodeId, globalInfo]);
-
-  // Ref to access YamdRichText methods
+  // ref to access YamdRichText methods
   const richTextRef = useRef(null);
   
   // ===== ZUSTAND LOGIC =====
   // get docId from globalInfo or use default
   const docId = globalInfo?.docId
+
   
-  // function to calculate and provide preferred Y position
-  const providePreferredYPosition = useCallback(() => {
-    if (!nodeRef.current || !richTextRef.current?.getPreferredYPosition) return;
-    
-    const store = useYamdDocStore.getState();
-    // Get all requests for this node
-    const requests = store.getPreferredYPosRequests(docId, nodeId);
-    
-    // Update result for each requesting container
-    Object.keys(requests).forEach(containerClassName => {
-      // Get preferred Y position from YamdRichText
-      const result = richTextRef.current.getPreferredYPosition(containerClassName);
-      
-      // Update result in the Zustand store
-      store.updateRequestResult(docId, nodeId, containerClassName, result);
-      // Increment response counter in store
-      store.incResponseCounter(docId, nodeId, containerClassName);
-    });
-  }, [nodeId, docId]);
-  
+
+  // console.log('noteId:', nodeId, 'YamdNodeText docId:', docId);
   // Subscribe to request counter changes with custom equality function
   useEffect(() => {
-    if (!nodeId) return;
-    
+    if (!nodeId || !docId){
+      console.warn('noteId:', nodeId, 'docId:', docId, 'YamdNodeText useEffect subscribe skipped');
+      return;
+    }
+    console.log('noteId:', nodeId, 'docId:', docId, 'YamdNodeText useEffect subscribe');
     const unsubscribe = useYamdDocStore.subscribe(
       (state) => state.listBulletPreferredYPosRequests[docId]?.[nodeId] || {},
       (requests) => {
+        console.log('noteId:', nodeId, 'YamdNodeText useEffect subscribe triggered with requests:', requests);
         // This will only fire if equalityFn returns false
-        providePreferredYPosition();
+        calcPreferredBulletYPos(nodeId, docId, nodeRef, richTextRef);
       },
       {
         equalityFn: (prev, next) => {
-          // Only skip if all counters are the same or decreased
+          console.log("noteId:", nodeId, "YamdNodeText equalityFn prev:", prev, "next:", next);
+          // Only trigger if requestCounter has increased (ignore responseCounter changes)
           const keys = new Set([...Object.keys(prev), ...Object.keys(next)]);
-          return Array.from(keys).every((key) => (next[key]?.requestCounter || 0) <= (prev[key]?.requestCounter || 0));
+          const hasNewRequests = Array.from(keys).some((key) => 
+            (next[key]?.requestCounter || 0) > (prev[key]?.requestCounter || 0)
+          );
+          const shouldSkip = !hasNewRequests; // Skip if no new requests
+          console.log("noteId:", nodeId, "YamdNodeText equalityFn hasNewRequests:", hasNewRequests, "shouldSkip:", shouldSkip);
+          return shouldSkip;
         },
       }
     );
     
+    // immediately check for existing requests
+    calcPreferredBulletYPos(nodeId, docId, nodeRef, richTextRef);
     return unsubscribe;
-  }, [nodeId, docId, providePreferredYPosition]);
+  }, [nodeId, docId, richTextRef]);
   // ===== END ZUSTAND LOGIC =====
 
   if (!globalInfo?.getNodeDataById) {
@@ -93,28 +86,20 @@ const YamdNodeText = React.memo(({ nodeId, parentInfo, globalInfo }) => {
     <div ref={nodeRef} className="yamd-node-text">
       {/* self content */}
       {selfPlainText && !selfRichText && (
-        <AddListBulletBeforeYamdText
-          childNode={
-            <YamdPlainText 
-              text={selfPlainText}
-              className={nodeClass}
-              parentInfo={parentInfo}
-            />
-          }
+        <YamdPlainText 
+          text={selfPlainText}
+          className={nodeClass}
+          parentInfo={parentInfo}
         />
       )}
       {selfRichText && (
-        <AddListBulletBeforeYamdText
-          childNode={
-            <YamdRichText 
-              ref={richTextRef}
-              text={selfPlainText}
-              textRich={selfRichText}
-              className={nodeClass}
-              parentInfo={parentInfo}
-              globalInfo={globalInfo}
-            />
-          }
+        <YamdRichText 
+          ref={richTextRef}
+          text={selfPlainText}
+          textRich={selfRichText}
+          className={nodeClass}
+          parentInfo={parentInfo}
+          globalInfo={globalInfo}
         />
       )}
 
@@ -134,5 +119,27 @@ const YamdNodeText = React.memo(({ nodeId, parentInfo, globalInfo }) => {
     </div>
   );
 });
+
+
+
+  // function to calculate and provide preferred Y position
+const calcPreferredBulletYPos = (nodeId, docId, nodeRef, richTextRef) => {
+  if (!nodeRef.current || !richTextRef.current?.calcPreferredBulletYPose) return;
+  const store = useYamdDocStore.getState();
+  // get all requests for this node
+  const requests = store.getPreferredYPosRequests(docId, nodeId);
+  console.log('noteId:', nodeId, 'YamdNodeText calcPreferredBulletYPos requests:', requests);
+  // Update result for each requesting container
+  Object.keys(requests).forEach(containerClassName => {
+    // Get preferred Y position from YamdRichText
+    const result = richTextRef.current.calcPreferredBulletYPose(containerClassName);
+    
+    // Update result in the Zustand store
+    store.updateRequestResult(docId, nodeId, containerClassName, result);
+    // Increment response counter in store
+    store.incResponseCounter(docId, nodeId, containerClassName);
+  });
+};
+
 
 export default YamdNodeText;

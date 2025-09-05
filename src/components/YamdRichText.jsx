@@ -1,9 +1,9 @@
-import React, { useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
+import React, { useRef, forwardRef, useImperativeHandle } from 'react';
 import YamdPlainText from './YamdPlainText.jsx';
 import YamdRichTextLaTeXInline from './YamdRichTextLaTeXInline.jsx';
 import YamdRichTextRef from './YamdRichTextRef.jsx';
 import YamdRichTextBib from './YamdRichTextBib.jsx';
-import { calculatePreferredYPosition } from './YamdRichText.js';
+import { calcPreferredBulletYPose as _calcPreferredBulletYPose} from './YamdRichText.js';
 
 /**
  * Rich text renderer with inline LaTeX math support
@@ -11,141 +11,18 @@ import { calculatePreferredYPosition } from './YamdRichText.js';
  * Also handles bullet positioning like YamdPlainText
  */
 const YamdRichText = forwardRef(({ text, className, parentInfo, textRich = null, globalInfo = null }, ref) => {
-  // Ref to measure text for bullet positioning
+  // ref to measure text for bullet positioning (used by Zustand system)
   const textRef = useRef(null);
-  // Ref to track if we've already notified parent to prevent infinite loops
-  const hasNotifiedRef = useRef(false);
 
-  // Expose methods to parent via ref
+  // expose methods to parent via ref
   useImperativeHandle(ref, () => ({
-    getPreferredYPosition: (containerClassName) => {
-      return calculatePreferredYPosition(textRef.current, textRich, containerClassName);
+    calcPreferredBulletYPose: (containerClassName) => {
+      return _calcPreferredBulletYPose(textRef.current, textRich, containerClassName);
     }
   }), [textRich]);
 
-  // Notify parent about preferred bullet Y position if there's a bullet to the left
-  useEffect(() => {
-    if (parentInfo?.hasBulletToLeft && parentInfo?.notifyPreferredBulletYPos && textRef.current && !hasNotifiedRef.current) {
-      const preferredBulletYPosOffset = 0;
-      const textElement = textRef.current;
-      
-      // Use textRich data to determine the first segment type and get its element
-      if (textRich && Array.isArray(textRich) && textRich.length > 0) {
-        const firstSegment = textRich[0];
-
-        if(parentInfo.childIndex !== 0){
-          console.log('YamdRichText text:', text, 'childIndex:', parentInfo.childIndex, 'not 0, returning');
-          return; 
-        }
-        
-        // handle different segment types based on textRich data
-        if (firstSegment.type === 'latex') {
-          // First segment is LaTeX - get the LaTeX component element
-          const firstSegmentElement = textElement.children[0]; // Should be the LaTeX component
-          
-          if (firstSegmentElement) {
-            const firstSegmentRect = firstSegmentElement.getBoundingClientRect();
-            
-            // Find the bullet container using dynamic class name from parentInfo
-            const bulletContainerClass = parentInfo?.bulletContainerClassName || '.yamd-bullet-container';
-            if (parentInfo?.bulletContainerClassName) {
-              console.log('Child found bullet container class from parentInfo:', parentInfo.bulletContainerClassName);
-            }
-            const bulletContainer = textElement.closest(bulletContainerClass);
-            console.log('YamdRichText nodeId:', nodeId, 'bulletContainer:', bulletContainer);
-            console.log('YamdRichText parentInfo?.bulletContainerClassName:', parentInfo?.bulletContainerClassName)
-            console.log('YamdRichText bulletContainer:', bulletContainer);
-
-            if (bulletContainer && firstSegmentRect.height > 0) {
-              // Use the midline of the LaTeX element relative to bullet container
-              const containerRect = bulletContainer.getBoundingClientRect();
-              const segmentRelativeTop = firstSegmentRect.top - containerRect.top;
-              const preferredBulletYPos = segmentRelativeTop + (firstSegmentRect.height / 2) - 3;
-              console.log('YamdRichText nodeId:', nodeId, 'calculated bullet position:', preferredBulletYPos, 'px from container top');
-              parentInfo.notifyPreferredBulletYPos(preferredBulletYPos);
-              hasNotifiedRef.current = true;
-              return;
-            } else if (firstSegmentRect.height > 0) {
-              // Fallback: use textElement itself as reference
-              const containerRect = textElement.getBoundingClientRect();
-              const segmentRelativeTop = firstSegmentRect.top - containerRect.top;
-              const preferredBulletYPos = segmentRelativeTop + (firstSegmentRect.height / 2) - 3;
-              console.log('YamdRichText nodeId:', nodeId, 'calculated bullet position:', preferredBulletYPos, 'px from container top');
-              parentInfo.notifyPreferredBulletYPos(preferredBulletYPos);
-              hasNotifiedRef.current = true;
-              return;
-            }
-          }
-        } else {
-          // First segment is text - use simple midline of the segment
-          const firstSegmentElement = textElement.children[0]; // Should be the text span
-          
-          if (firstSegmentElement) {
-            const firstSegmentRect = firstSegmentElement.getBoundingClientRect();
-            
-            // Find the bullet container using dynamic class name from parentInfo
-            const bulletContainerClass = parentInfo?.bulletContainerClassName || '.yamd-bullet-container';
-            if (parentInfo?.bulletContainerClassName) {
-              // console.warn('Child found bullet container class from parentInfo:', parentInfo.bulletContainerClassName);
-            }
-            const bulletContainer = textElement.closest(bulletContainerClass);
-            console.log('YamdRichText text:', text, 'bulletContainer:', bulletContainer);
-            console.log('YamdRichText parentInfo?.bulletContainerClassName:', parentInfo?.bulletContainerClassName)
-            console.log('YamdRichText bulletContainer:', bulletContainer);
-            console.log('firstSegmentRect.height', firstSegmentRect.height);
-            let preferredBulletYPos = -1;
-            let segmentRelativeTop = -1;
-            if (bulletContainer && firstSegmentRect.height > 0) {
-              // Use the simple midline of the text segment relative to bullet container
-              const containerRect = bulletContainer.getBoundingClientRect();
-              segmentRelativeTop = firstSegmentRect.top - containerRect.top;
-              preferredBulletYPos = segmentRelativeTop + (firstSegmentRect.height * 0.5) - preferredBulletYPosOffset;
-              parentInfo.notifyPreferredBulletYPos(preferredBulletYPos);
-              hasNotifiedRef.current = true;
-            } else if (firstSegmentRect.height > 0) {
-              // Fallback: use textElement itself as reference
-              const containerRect = textElement.getBoundingClientRect();
-              segmentRelativeTop = firstSegmentRect.top - containerRect.top;
-              preferredBulletYPos = segmentRelativeTop + (firstSegmentRect.height * 0.5) - preferredBulletYPosOffset;
-              // console.log('YamdRichText calculated bullet position (fallback):', preferredBulletYPos, 'px from container top');
-              parentInfo.notifyPreferredBulletYPos(preferredBulletYPos);
-              hasNotifiedRef.current = true;
-            }
-            console.log('YamdRichText segmentRelativeTop:', segmentRelativeTop);
-            console.log('YamdRichText preferredBulletYPos:', preferredBulletYPos);
-          }
-        }
-      }
-      // console.warn('textRich is not an array or is empty');
-      // Fallback for non-rich text or if first segment element not found
-      // Try to get the first child element
-      const firstChild = textElement.firstElementChild || textElement.firstChild;
-      
-      if (firstChild) {
-        if (firstChild.nodeType === Node.ELEMENT_NODE) {
-          // First child is an element
-          const firstSegmentRect = firstChild.getBoundingClientRect();
-          const containerRect = textElement.getBoundingClientRect();
-          
-          if (firstSegmentRect.height > 0) {
-            const segmentRelativeTop = firstSegmentRect.top - containerRect.top;
-            const preferredBulletYPos = segmentRelativeTop + (firstSegmentRect.height / 2) - preferredBulletYPosOffset;
-            parentInfo.notifyPreferredBulletYPos(preferredBulletYPos);
-            return;
-          }
-        }
-      }
-      
-      // Final fallback: use line height estimation
-      const computedStyle = window.getComputedStyle(textElement);
-      const lineHeight = parseFloat(computedStyle.lineHeight);
-      const fontSize = parseFloat(computedStyle.fontSize);
-      const actualLineHeight = isNaN(lineHeight) ? fontSize * 1.2 : lineHeight;
-      const preferredBulletYPos = actualLineHeight / 2 - preferredBulletYPosOffset;
-      parentInfo.notifyPreferredBulletYPos(preferredBulletYPos);
-      hasNotifiedRef.current = true;
-    }
-  }, [parentInfo?.hasBulletToLeft, parentInfo?.notifyPreferredBulletYPos, parentInfo?.bulletContainerClassName, text, textRich]);
+  // Note: Bullet positioning is now handled entirely by Zustand store in YamdNodeText
+  // All positioning logic moved to calcPreferredBulletYPose in YamdRichText.js
   // If textRich segments are provided, render them
   if (textRich && Array.isArray(textRich)) {
     return (

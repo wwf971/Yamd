@@ -179,10 +179,15 @@ const YamdNode = React.memo(({ nodeId, parentInfo = null, globalInfo = null }) =
           - bb
           - cc
         */
-        <YamdNodeText 
-          nodeId={nodeId} 
-          parentInfo={parentInfo}
-          globalInfo={globalInfo} 
+        <AddListBulletBeforeYamdNode
+          childNode={
+            <YamdNodeText 
+              nodeId={nodeId} 
+              parentInfo={parentInfo}
+              globalInfo={globalInfo} 
+            />
+          }
+          alignBullet='flex-start'
         />
       );
     }

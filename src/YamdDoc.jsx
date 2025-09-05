@@ -14,21 +14,21 @@ const YamdDoc = ({ flattenedData, disableRefJump = false, disableBibsList = fals
   const actualDocId = useMemo(() => docId || generateDocId(), [docId]);
   
   // return <div>Hello</div>;
-  // Initialize document data in store (example usage)
+  // initialize document data in store (example usage)
   useEffect(() => {
     useYamdDocStore.getState().setDocData(actualDocId, {
       docId: actualDocId,
       createdAt: new Date().toISOString(),
       flattenedData: flattenedData,
-      // Add any other document-specific data here
-      // Examples:
+      // add any other document-specific data here
+      // examples:
       // userPreferences: { theme: 'light', fontSize: 'medium' },
       // viewState: { scrollPosition: 0, expandedPanels: [] },
       // annotations: [],
       // bookmarks: []
     });
   }, [actualDocId, flattenedData]);
-  
+
   const containerRef = useRef(null);
   const nodeRefsMap = useRef(new Map()); // Map from nodeId to DOM element reference
   const [refState, setRefState] = useState({
@@ -40,26 +40,26 @@ const YamdDoc = ({ flattenedData, disableRefJump = false, disableBibsList = fals
     sourceElement: null
   });
 
-  // Handle reference click from YamdRichTextRef components
+  // handle reference click from YamdRichTextRef components
   const handleRefClickCallback = useCallback((refData) => {
     handleRefClick(refData, containerRef, setRefState);
   }, []);
 
-  // Handle bibliography click from YamdRichTextBib components
+  // handle bibliography click from YamdRichTextBib components
   const handleBibClickCallback = useCallback((bibData) => {
     handleBibClick(bibData, containerRef, setRefState, disableRefJump, disableBibsList);
   }, [disableRefJump, disableBibsList]);
 
-  // Handle going back to source
+  // handle going back to source
   const handleBackToSourceCallback = useCallback(() => {
     handleBackToSource(setRefState);
   }, []);
 
-  // Register node reference - called by components after they finish rendering
+  // register node reference - called by components after they finish rendering
   const registerNodeRef = useCallback((nodeId, nodeRef) => {
     if (nodeId && nodeRef) {
       nodeRefsMap.current.set(nodeId, nodeRef);
-      console.log(`📌 Registered node ref for ${nodeId}:`, nodeRef);
+      // console.log(`📌 Registered node ref for ${nodeId}:`, nodeRef);
     }
   }, []);
 
@@ -72,8 +72,9 @@ const YamdDoc = ({ flattenedData, disableRefJump = false, disableBibsList = fals
 
   // Create stable globalInfo object to prevent infinite re-renders
   const globalInfo = useMemo(() => 
-    createGlobalInfo(flattenedData, handleRefClickCallback, handleBibClickCallback, registerNodeRef, getNodeRefById),
-    [flattenedData, handleRefClickCallback, handleBibClickCallback, registerNodeRef, getNodeRefById]
+    createGlobalInfo(
+      flattenedData, handleRefClickCallback, handleBibClickCallback, registerNodeRef, getNodeRefById, actualDocId),
+    [flattenedData, handleRefClickCallback, handleBibClickCallback, registerNodeRef, getNodeRefById, actualDocId]
   );
 
   if (!flattenedData || !flattenedData.rootNodeId) {
