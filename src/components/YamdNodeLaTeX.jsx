@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef, useEffect } from 'react';
 import { getNodeClass } from '../YamdNode.jsx';
 import { LATEX_SETTINGS } from '../YamdRenderSettings.js';
 import { getAlignmentStrategy } from '../YamdRenderUtils.js';
@@ -7,6 +7,15 @@ import { getAlignmentStrategy } from '../YamdRenderUtils.js';
  * LaTeX block node renderer - displays standalone LaTeX equations
  */
 const YamdNodeLaTeX = ({ nodeId, parentInfo, globalInfo }) => {
+  const nodeRef = useRef(null);
+
+  // Register the node reference after the component finishes rendering
+  useEffect(() => {
+    if (nodeRef.current) {
+      globalInfo?.registerNodeRef?.(nodeId, nodeRef.current);
+    }
+  }, [nodeId, globalInfo]);
+
   if (!globalInfo?.getNodeDataById || !globalInfo?.getAssetById) {
     return <div className="yamd-error">Missing globalInfo functions</div>;
   }
@@ -19,7 +28,7 @@ const YamdNodeLaTeX = ({ nodeId, parentInfo, globalInfo }) => {
 
   if (!nodeData.assetId) {
     return (
-      <div className="yamd-latex-block yamd-latex-raw" id={nodeData.htmlId}>
+      <div ref={nodeRef} className="yamd-latex-block yamd-latex-raw" id={nodeData.htmlId}>
         <div className="yamd-latex-content">
           ${nodeData.textRaw || 'LaTeX content'}$
         </div>
@@ -45,7 +54,7 @@ const YamdNodeLaTeX = ({ nodeId, parentInfo, globalInfo }) => {
   if (!asset) {
     console.warn(`LaTeX block asset not found: ${nodeData.assetId}`);
     return (
-      <div className="yamd-latex-block yamd-latex-missing">
+      <div ref={nodeRef} className="yamd-latex-block yamd-latex-missing">
         <div className="yamd-latex-content">
           ${nodeData.textRaw || 'LaTeX content'}$
         </div>
@@ -66,6 +75,7 @@ const YamdNodeLaTeX = ({ nodeId, parentInfo, globalInfo }) => {
 
   return (
     <div 
+      ref={nodeRef}
       className={`yamd-latex-block ${nodeClass}`} 
       id={nodeData.htmlId}
       style={{ alignSelf: alignmentStrategy }}

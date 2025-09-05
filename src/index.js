@@ -24,12 +24,15 @@ export {
   renderYamdListBullet,
   getChildrenDisplay,
   getChildrenDefaultDisplay,
-  AddListBulletBeforeYamdNode,
   AddListBulletBeforeYamdText,
   getAlignmentStrategy,
   renderYamdTimelineBullet,
   AddTimelineBulletBeforeYamdNode
 } from './YamdRenderUtils.js';
+
+export {
+  AddListBulletBeforeYamdNode,
+} from './components/AddBullet.jsx';
 
 // export render settings
 export {

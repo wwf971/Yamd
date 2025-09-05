@@ -29,7 +29,7 @@ const YamdRichTextBib = ({ segment, globalInfo }) => {
     }
   };
 
-  // If multiple keys, render as separate clickable spans
+  // if multiple keys, render as separate clickable spans
   if (bibKeys.length > 1) {
     return (
       <span className="yamd-bib-group">
@@ -56,7 +56,7 @@ const YamdRichTextBib = ({ segment, globalInfo }) => {
     );
   }
 
-  // Single key - use the same handler
+  // single key - use the same handler
   const singleBibKey = bibKeys[0];
   const singleBibId = bibIds[0];
 

@@ -130,9 +130,11 @@ export const handleBackToSource = (setRefState) => {
  * @param {object} flattenedData - Flattened document data
  * @param {function} handleRefClick - Reference click handler
  * @param {function} handleBibClick - Bibliography click handler
+ * @param {function} registerNodeRef - Node reference registration function
+ * @param {function} getNodeRefById - Node reference retrieval function
  * @returns {object} Global info object
  */
-export const createGlobalInfo = (flattenedData, handleRefClick, handleBibClick) => {
+export const createGlobalInfo = (flattenedData, handleRefClick, handleBibClick, registerNodeRef, getNodeRefById) => {
   console.log('🔍 globalInfo re-created');
   return { 
     getNodeDataById: (nodeId) => flattenedData.nodes[nodeId],
@@ -140,6 +142,8 @@ export const createGlobalInfo = (flattenedData, handleRefClick, handleBibClick) 
     getRefById: (refId) => flattenedData.refs?.[refId],
     onRefClick: handleRefClick, // Function for reference handling
     onBibClick: handleBibClick, // Function for bibliography handling
+    registerNodeRef: registerNodeRef, // Function for registering node DOM references
+    getNodeRefById: getNodeRefById, // Function for retrieving node DOM references
     getBibText: (bibKey) => {
       // For now, always return fallback (user can override this)
       return {
@@ -149,7 +153,7 @@ export const createGlobalInfo = (flattenedData, handleRefClick, handleBibClick) 
       };
     },
     fetchExternalData: (nodeData) => {
-      // console.log('🌐 fetchExternalData called with:', nodeData);
+      console.log('🌐 fetchExternalData called with:', nodeData);
       return {
         code: 1, // Component should handle data fetching itself
         message: 'Component should handle data fetching directly',

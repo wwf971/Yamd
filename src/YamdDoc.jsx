@@ -1,15 +1,36 @@
-import React, { useState, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useRef, useCallback, useMemo, useEffect } from 'react';
 import YamdNode from './YamdNode.jsx';
 import YamdRefHandler from './components/YamdRefHandler.jsx';
 import YamdBibsList from './components/YamdBibsList.jsx';
 import { handleRefClick, handleBibClick, handleBackToSource, createGlobalInfo } from './YamdDoc.js';
+import { useYamdDocStore, generateDocId } from './YamdDocStore.js';
 
 /**
  * YamdDoc - Document container that manages global reference handling
  * Renders the root YamdNode and provides reference navigation functionality
  */
-const YamdDoc = ({ flattenedData, disableRefJump = false, disableBibsList = false }) => {
+const YamdDoc = ({ flattenedData, disableRefJump = false, disableBibsList = false, docId }) => {
+  // Generate docId if not provided
+  const actualDocId = useMemo(() => docId || generateDocId(), [docId]);
+  
+  // return <div>Hello</div>;
+  // Initialize document data in store (example usage)
+  useEffect(() => {
+    useYamdDocStore.getState().setDocData(actualDocId, {
+      docId: actualDocId,
+      createdAt: new Date().toISOString(),
+      flattenedData: flattenedData,
+      // Add any other document-specific data here
+      // Examples:
+      // userPreferences: { theme: 'light', fontSize: 'medium' },
+      // viewState: { scrollPosition: 0, expandedPanels: [] },
+      // annotations: [],
+      // bookmarks: []
+    });
+  }, [actualDocId, flattenedData]);
+  
   const containerRef = useRef(null);
+  const nodeRefsMap = useRef(new Map()); // Map from nodeId to DOM element reference
   const [refState, setRefState] = useState({
     isVisible: false,
     type: null, // 'ref' or 'bib'
@@ -34,10 +55,25 @@ const YamdDoc = ({ flattenedData, disableRefJump = false, disableBibsList = fals
     handleBackToSource(setRefState);
   }, []);
 
+  // Register node reference - called by components after they finish rendering
+  const registerNodeRef = useCallback((nodeId, nodeRef) => {
+    if (nodeId && nodeRef) {
+      nodeRefsMap.current.set(nodeId, nodeRef);
+      console.log(`📌 Registered node ref for ${nodeId}:`, nodeRef);
+    }
+  }, []);
+
+  // Get node reference by ID
+  const getNodeRefById = useCallback((nodeId) => {
+    const nodeRef = nodeRefsMap.current.get(nodeId);
+    console.log(`🔍 Retrieved node ref for ${nodeId}:`, nodeRef);
+    return nodeRef;
+  }, []);
+
   // Create stable globalInfo object to prevent infinite re-renders
   const globalInfo = useMemo(() => 
-    createGlobalInfo(flattenedData, handleRefClickCallback, handleBibClickCallback),
-    [flattenedData, handleRefClickCallback, handleBibClickCallback]
+    createGlobalInfo(flattenedData, handleRefClickCallback, handleBibClickCallback, registerNodeRef, getNodeRefById),
+    [flattenedData, handleRefClickCallback, handleBibClickCallback, registerNodeRef, getNodeRefById]
   );
 
   if (!flattenedData || !flattenedData.rootNodeId) {
@@ -45,7 +81,7 @@ const YamdDoc = ({ flattenedData, disableRefJump = false, disableBibsList = fals
   }
 
   return (
-    <div ref={containerRef} style={{ position: 'relative' }}>
+    <div ref={containerRef} style={{ position: 'relative' }} data-doc-id={actualDocId}>
       
       {/* main document, rendering start from root node*/}
       <YamdNode

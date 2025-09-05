@@ -7,6 +7,15 @@ import { getChildrenDisplay } from '../YamdRenderUtils.js';
  * Panel node renderer - displays collapsible panel with show/hide functionality
  */
 const YamdPanel = ({ nodeId, parentInfo, globalInfo }) => {
+  const nodeRef = useRef(null);
+
+  // Register the node reference after the component finishes rendering
+  useEffect(() => {
+    if (nodeRef.current) {
+      globalInfo?.registerNodeRef?.(nodeId, nodeRef.current);
+    }
+  }, [nodeId, globalInfo]);
+
   if (!globalInfo?.getNodeDataById) {
     return <div className="yamd-error">Missing globalInfo.getNodeDataById</div>;
   }
@@ -59,7 +68,7 @@ const YamdPanel = ({ nodeId, parentInfo, globalInfo }) => {
   }, [parentInfo, title, isExpanded]); // re-calculate when content might change
 
   return (
-    <div className="yamd-panel">
+    <div ref={nodeRef} className="yamd-panel">
       <div 
         className="yamd-panel-header" 
         onClick={toggleExpanded}

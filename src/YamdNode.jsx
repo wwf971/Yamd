@@ -12,7 +12,8 @@ import YamdNodeVideo from './components/YamdNodeVideo.jsx';
 import YamdImageList from './components/YamdImageList.jsx';
 import YamdVideoList from './components/YamdVideoList.jsx';
 import YamdChildrenNodes from './YamdChildrenNodes.jsx';
-import { AddListBulletBeforeYamdNode, getChildrenDisplay } from './YamdRenderUtils.js';
+import { AddListBulletBeforeYamdNode } from './components/AddBullet.jsx';
+import { getChildrenDisplay } from './YamdRenderUtils.js';
 
 /**
  * Main YamdNode component for rendering flattened Yamd data
@@ -35,11 +36,11 @@ const YamdNode = React.memo(({ nodeId, parentInfo = null, globalInfo = null }) =
 
   // assign default values if missing
   const selfDisplay = nodeData.attr?.selfDisplay || 
-    (nodeData.textRaw ? 'default' : 'none');
+    (nodeData.textRaw && nodeData.textRaw !== '' ? 'default' : 'none');
   const childDisplay = getChildrenDisplay(nodeData, false, parentInfo);
-  
+  console.log('YamdNode rendering node:', nodeId, 'nodeData.type:', nodeData.type, 'selfDisplay:', selfDisplay, 'childDisplay:', childDisplay);
   const getNodeContent = () => {
-        // Handle special leaf node types first
+    // Handle special leaf node types first
     if (nodeData.type === 'latex') {
       return (
         <AddListBulletBeforeYamdNode 
@@ -118,7 +119,7 @@ const YamdNode = React.memo(({ nodeId, parentInfo = null, globalInfo = null }) =
     switch (selfDisplay) {
     case 'panel':
       return (
-        <AddListBulletBeforeYamdNode 
+        <AddListBulletBeforeYamdNode
           childNode={
             <YamdPanel 
               nodeId={nodeId} 

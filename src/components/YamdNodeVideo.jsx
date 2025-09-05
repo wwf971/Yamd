@@ -7,12 +7,21 @@ import { getAlignmentStrategy } from '../YamdRenderUtils.js';
  * Video node renderer - displays videos with captions
  */
 const YamdNodeVideo = ({ nodeId, parentInfo, globalInfo }) => {
+  const nodeRef = useRef(null);
+  const videoRef = useRef(null);
+
+  // Register the node reference after the component finishes rendering
+  useEffect(() => {
+    if (nodeRef.current) {
+      globalInfo?.registerNodeRef?.(nodeId, nodeRef.current);
+    }
+  }, [nodeId, globalInfo]);
+
   if (!globalInfo?.getNodeDataById) {
     return <div className="yamd-error">Missing globalInfo.getNodeDataById</div>;
   }
   
   const nodeData = globalInfo.getNodeDataById(nodeId);
-  const videoRef = useRef(null);
   
   if (!nodeData) {
     return <div className="yamd-error">Video node not found: {nodeId}</div>;
@@ -28,7 +37,7 @@ const YamdNodeVideo = ({ nodeId, parentInfo, globalInfo }) => {
     } else if (result.code === -1) {
       // Error - display error message
       return (
-        <div className="yamd-video-block yamd-video-error" id={nodeData.htmlId}>
+        <div ref={nodeRef} className="yamd-video-block yamd-video-error" id={nodeData.htmlId}>
           <div className="yamd-video-content">
             <div className="yamd-error">
               Failed to load video: {result.message}
@@ -54,7 +63,7 @@ const YamdNodeVideo = ({ nodeId, parentInfo, globalInfo }) => {
   
   if (!videoSrc) {
     return (
-      <div className="yamd-video-block yamd-video-error" id={nodeData.htmlId}>
+      <div ref={nodeRef} className="yamd-video-block yamd-video-error" id={nodeData.htmlId}>
         <div className="yamd-video-content">
           <div className="yamd-error">
             Video source not found
@@ -135,7 +144,7 @@ const YamdNodeVideo = ({ nodeId, parentInfo, globalInfo }) => {
   }, [playOnLoad]);
 
   return (
-    <div className={`yamd-video-block ${nodeClass}`} id={nodeData.htmlId} style={blockStyle}>
+    <div ref={nodeRef} className={`yamd-video-block ${nodeClass}`} id={nodeData.htmlId} style={blockStyle}>
       <div className="yamd-video-content" style={containerStyle}>
         <video 
           ref={videoRef}

@@ -706,13 +706,17 @@ function processNode(node) {
       return handleAlternativeYamdGrammarForLeafNode(node, leafNodeKeyWithNullValue);
     }
     
-    // Check if this object contains an image-list key that needs to consume all entries
+    // Check if this object contains an image-list or video-list key that needs to consume all entries
     let imageListKey = null;
+    let videoListKey = null;
     for (const [key, value] of Object.entries(node)) {
       const { attr } = extractSquareBracketAttr(key);
       const nodeType = determineNodeType(attr);
       if (nodeType === 'image-list') {
         imageListKey = key;
+        break;
+      } else if (nodeType === 'video-list') {
+        videoListKey = key;
         break;
       }
     }
@@ -742,6 +746,31 @@ function processNode(node) {
       return processedObj; // Return early since we consumed all entries
     }
     
+    // special handling for video-list: consume ALL entries in this object
+    if (videoListKey) {
+      const { textRaw, attr, textOriginal } = extractSquareBracketAttr(videoListKey);
+      const videoListValue = node[videoListKey];
+      
+      // Collect all other entries as attributes for the video-list
+      const allEntries = {};
+      for (const [key, value] of Object.entries(node)) {
+        if (key !== videoListKey) {
+          allEntries[key] = value;
+        }
+      }
+      
+      // Add the main value to the entries
+      if (Array.isArray(videoListValue)) {
+        allEntries.children = videoListValue;
+      } else {
+        allEntries.main = videoListValue;
+      }
+      
+      const processedNode = processVideoListNode(attr, textRaw, textOriginal, allEntries);
+      processedObj[textOriginal] = processedNode;
+      return processedObj; // Return early since we consumed all entries
+    }
+    
     for (const [key, value] of Object.entries(node)) {
       // extract attributes from the key
       const { textRaw, attr, textOriginal } = extractSquareBracketAttr(key);
@@ -766,6 +795,11 @@ function processNode(node) {
       
       // process the value recursively for non-LaTeX nodes
       const processedValue = Array.isArray(value) ? value.map(item => processNode(item)) : processNode(value);
+      
+      // Set selfDisplay to 'none' if textRaw is empty (for timeline items with no text)
+      // if (textRaw === null && !attr.selfDisplay) {
+      //   attr.selfDisplay = 'none';
+      // }
       
       // create processed node
       const processedNode = {

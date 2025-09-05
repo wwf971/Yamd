@@ -148,7 +148,7 @@ export function extractSquareBracketAttr(nodeStr) {
   }
 
   // Extract text content (everything except the selected bracket)
-  const textRaw = (trimmed.substring(0, selectedMatch.start) + trimmed.substring(selectedMatch.end)).trim() || null;
+  const textRaw = (trimmed.substring(0, selectedMatch.start) + trimmed.substring(selectedMatch.end)).trim();
 
   // Parse attributes from bracket content
   const attrString = selectedMatch.content.trim();

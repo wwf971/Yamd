@@ -11,6 +11,8 @@ const YamdRefHandler = React.memo(({
   containerRef 
 }) => {
   const elHighlightCurrent = useRef(null);
+  
+  // return <div>Hello</div>;
 
   console.log('🔍 YamdRefHandler rendering');
   // Remove highlight from currently highlighted element

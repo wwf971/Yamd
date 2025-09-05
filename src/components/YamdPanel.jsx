@@ -63,7 +63,11 @@ const YamdPanel = ({ nodeId, parentInfo, globalInfo }) => {
         parentInfo.notifyPreferredBulletYPos(preferredBulletYPos);
       }
     }
-  }, [parentInfo, title, isExpanded]); // re-calculate when content might change
+  }, [
+    parentInfo?.hasBulletToLeft,
+    parentInfo?.notifyPreferredBulletYPos,
+    parentInfo?.bulletContainerClassName, title, isExpanded
+  ]); // Only depend on specific properties
 
   return (
     <div className="yamd-panel">

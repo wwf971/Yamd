@@ -178,6 +178,9 @@
   border: 1px solid #f0f0f0;
   border-radius: 2px;
   text-align: center;
+  display: flex;
+  flex-direction: column;
+
 }
 
 .yamd-video-content {
@@ -672,7 +675,7 @@
 }
 
 .yamd-timeline-bullet-wrapper {
-  position: relative;
+  /* position: relative; */
   width: 20px;
   height: 20px;
   display: flex;
@@ -684,7 +687,13 @@
   position: absolute;
   top: 50%;
   left: 50%;
-  transform: translate(-50%, -50%);
+}
+
+.yamd-timeline-bullet-svg {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  translate: -50% -50%;
 }
 
 .yamd-image-list-scroll-container {
@@ -814,14 +823,6 @@
 }
 
 .yamd-timeline-bullet-check {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: #22c55e;
-  border: 2px solid #16a34a;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   z-index: 2;
 }
 
@@ -871,7 +872,7 @@
 
 .yamd-timeline-content {
   flex: 1;
-  padding-top: 1px;
+  padding-top: 0px;
 }
 
 .yamd-timeline-title {

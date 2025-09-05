@@ -3,191 +3,195 @@
  */
 export function getSampleYaml() {
   return `# Sample Yamd Document
-Introduction: Welcome to Yamd
-Features[divider,childDisplay=ul]:
-  - Flexible styling with square bracket grammar
-  - "Support for various display types[selfDisplay=panel]":
-    - Panels with expand/collapse
-    - Timeline views 
-    - Lists and tags
-  - Easy to write and read
+  Introduction: Welcome to Yamd
+  Features[divider,childDisplay=ul]:
+    - Flexible styling with square bracket grammar
+    - "Support for various display types[selfDisplay=panel]":
+      - Panels with expand/collapse
+      - Timeline views 
+      - Lists and tags
+    - Easy to write and read`
 
-# Inline LaTeX Math Examples
-Math Examples[panel,panelDefault=expand]:
-  - "Basic equations[child=ul]": "The famous equation $E = mc^2$ revolutionized physics"
-  - "Complex formulas": "For quadratic equations $ax^2 + bx + c = 0$, the solution is $x = \\\\frac{-b \\\\pm \\\\sqrt{b^2-4ac}}{2a}$"
-  - "Mixed content": "Temperature conversion: $C = \\\\frac{5}{9}(F - 32)$ where C is Celsius and F is Fahrenheit"
-  - "Greek letters": "The area of a circle is $A = \\\\pi r^2$ and circumference is $C = 2\\\\pi r$"
+// # Inline LaTeX Math Examples
+// Math Examples[panel,panelDefault=expand]:
+//   - "Basic equations[child=ul]": "The famous equation $E = mc^2$ revolutionized physics"
+//   - "Complex formulas": "For quadratic equations $ax^2 + bx + c = 0$, the solution is $x = \\\\frac{-b \\\\pm \\\\sqrt{b^2-4ac}}{2a}$"
+//   - "Mixed content": "Temperature conversion: $C = \\\\frac{5}{9}(F - 32)$ where C is Celsius and F is Fahrenheit"
+//   - "Greek letters": "The area of a circle is $A = \\\\pi r^2$ and circumference is $C = 2\\\\pi r$"
 
-Timeline Example[timeline]:
-  - "Project Started[bullet=Check]": Initial planning phase
-  - "Development[bullet=Dash]": Core features implementation  
-  - "Testing[bullet=Question]": Quality assurance
-  - "Release[bullet=UpArrow]": Production deployment
+// Timeline Example[timeline]:
+//   - "Project Started[bullet=Check]": Initial planning phase
+//   - "Development[bullet=Dash]": Core features implementation  
+//   - "Testing[bullet=Question]":
+//       - "[panel]Quality assurance":
+//         - Aa
+//         - bB
+//   - "[bullet=UpArrow]":
+//       - "Release[panel]": Production deployment
 
-Key Features[key,valueNum=2]:
-  - Fast parsing
-  - React components
-  - Modern UI
-  - Extensible architecture
-  - Custom styling
-  - Type safety
+// Key Features[key,valueNum=2]:
+//   - Fast parsing
+//   - React components
+//   - Modern UI
+//   - Extensible architecture
+//   - Custom styling
+//   - Type safety
 
-Technical Stack[panel,panelDefault=expand]:
-  - "Frontend[childDisplay=ul]":
-    - React 18
-    - Modern CSS
-    - Component architecture
-  - "Backend[childDisplay=ul]":  
-    - Node.js
-    - Express
-    - Database integration
+// Technical Stack[panel,panelDefault=expand]:
+//   - "Frontend[childDisplay=ul]":
+//     - React 18
+//     - Modern CSS
+//     - Component architecture
+//   - "Backend[childDisplay=ul]":  
+//     - Node.js
+//     - Express
+//     - Database integration
 
-# LaTeX Block Examples
-LaTeX Blocks[panel,panelDefault=expand]:
-  - "[latex,alignX=center]\\\\boldsymbol{\\\\theta}":
-    caption: "Parameter vector in bold notation (centered)"
+// # LaTeX Block Examples
+// LaTeX Blocks[panel,panelDefault=expand]:
+//   - "[latex,alignX=center]\\\\boldsymbol{\\\\theta}":
+//     caption: "Parameter vector in bold notation (centered)"
   
-  - "[latex,alignX=left]E = mc^2":
-    caption: "Left-aligned equation example"
+//   - "[latex,alignX=left]E = mc^2":
+//     caption: "Left-aligned equation example"
   
-  - "[latex,alignX=right]\\\\sum_{i=1}^{n} x_i":
-    caption: "Right-aligned summation example"
-    height: "100px"
+//   - "[latex,alignX=right]\\\\sum_{i=1}^{n} x_i":
+//     caption: "Right-aligned summation example"
+//     height: "100px"
   
-  - test latex block in list[child=ul]:
-    # Test no_index attribute - won't be numbered
-    - "[latex]x = y":
-      no_index: true
-      caption: "Simple equation without numbering"
+//   - test latex block in list[child=ul]:
+//     # Test no_index attribute - won't be numbered
+//     - "[latex]x = y":
+//       no_index: true
+//       caption: "Simple equation without numbering"
     
-    # Test custom caption title and user-defined ID
-    - "[latex]\\\\sum_{i=1}^n x_i":
-      caption_title: "Formula"
-      caption: "Summation notation example"
-      id: "summation-formula"
+//     # Test custom caption title and user-defined ID
+//     - "[latex]\\\\sum_{i=1}^n x_i":
+//       caption_title: "Formula"
+//       caption: "Summation notation example"
+//       id: "summation-formula"
     
-    # LaTeX indentation mistake tolerance is handled in code
-    # When users write wrong indentation, system auto-corrects it
-    # Wrong: [latex]xxx: followed by unindented attributes
-    # Right: [latex]xxx: followed by properly indented attributes
-    - "[latex]":
-        content: "\\\\frac{\\\\partial L}{\\\\partial \\\\theta} = \\\\nabla_{\\\\theta} L(\\\\theta)"
-        caption: "Gradient of loss function"
-    - "[latex]\\\\mathbf{X} = \\\\begin{bmatrix} x_1 & x_2 \\\\\\\\ x_3 & x_4 \\\\end{bmatrix}":
-        caption: "Matrix notation example"
+//     # LaTeX indentation mistake tolerance is handled in code
+//     # When users write wrong indentation, system auto-corrects it
+//     # Wrong: [latex]xxx: followed by unindented attributes
+//     # Right: [latex]xxx: followed by properly indented attributes
+//     - "[latex]":
+//         content: "\\\\frac{\\\\partial L}{\\\\partial \\\\theta} = \\\\nabla_{\\\\theta} L(\\\\theta)"
+//         caption: "Gradient of loss function"
+//     - "[latex]\\\\mathbf{X} = \\\\begin{bmatrix} x_1 & x_2 \\\\\\\\ x_3 & x_4 \\\\end{bmatrix}":
+//         caption: "Matrix notation example"
 
-# Image Block Examples  
-Image Examples[panel,panelDefault=expand]:
-  - "[image,alignX=center]https://picsum.photos/400/200":
-    caption: "A sample placeholder image from Picsum (centered)"
-    alt: "Sample placeholder image"
-    width: "300px"
-    id: "sample-image"
+// # Image Block Examples  
+// Image Examples[panel,panelDefault=expand]:
+//   - "[image,alignX=center]https://picsum.photos/400/200":
+//     caption: "A sample placeholder image from Picsum (centered)"
+//     alt: "Sample placeholder image"
+//     width: "300px"
+//     id: "sample-image"
   
-  - "[image,alignX=left]https://picsum.photos/300/150":
-    caption: "Left-aligned image example"
-    alt: "Left-aligned image"
-    width: "200px"
+//   - "[image,alignX=left]https://picsum.photos/300/150":
+//     caption: "Left-aligned image example"
+//     alt: "Left-aligned image"
+//     width: "200px"
   
-  - "[img]":
-    src: "https://httpbin.org/image/jpeg"
-    caption: "Another sample image using img shorthand"
-    height: "120px"
+//   - "[img]":
+//     src: "https://httpbin.org/image/jpeg"
+//     caption: "Another sample image using img shorthand"
+//     height: "120px"
   
-  # Test image indentation mistake tolerance
-  - "[image]https://picsum.photos/seed/green/250/125":
-    caption: "Image with alternative grammar (indentation mistake tolerance)"
-    alt: "Green sample image"
+//   # Test image indentation mistake tolerance
+//   - "[image]https://picsum.photos/seed/green/250/125":
+//     caption: "Image with alternative grammar (indentation mistake tolerance)"
+//     alt: "Green sample image"
 
-# Video Block Examples
-Video Examples[panel,panelDefault=expand]:
-  - "[video]https://sample-videos.com/zip/10/mp4/SampleVideo_360x240_1mb.mp4":
-    caption: "Sample video with default controls"
-    width: "300px"
-    id: "sample-video"
+// # Video Block Examples
+// Video Examples[panel,panelDefault=expand]:
+//   - "[video]https://sample-videos.com/zip/10/mp4/SampleVideo_360x240_1mb.mp4":
+//     caption: "Sample video with default controls"
+//     width: "300px"
+//     id: "sample-video"
   
-  - "[vid]":
-    # src: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
-    src: "aaa"
-    caption: "Big Buck Bunny sample video with playOnLoad"
-    playOnLoad: true
-    muted: true
-    height: "200px"
+//   - "[vid]":
+//     # src: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
+//     src: "aaa"
+//     caption: "Big Buck Bunny sample video with playOnLoad"
+//     playOnLoad: true
+//     muted: true
+//     height: "200px"
   
-  # Test video with loop
-  - "[video]https://sample-videos.com/zip/10/mp4/SampleVideo_640x360_1mb.mp4":
-    caption: "Looping video example"
-    loop: true
-    controls: true
+//   # Test video with loop
+//   - "[video]https://sample-videos.com/zip/10/mp4/SampleVideo_640x360_1mb.mp4":
+//     caption: "Looping video example"
+//     loop: true
+//     controls: true
 
-  - "[video,alignX=center]https://sample-videos.com/zip/10/mp4/SampleVideo_360x240_1mb.mp4":
-    caption: "Centered video example"
-    controls: true
-    width: "400px"
+//   - "[video,alignX=center]https://sample-videos.com/zip/10/mp4/SampleVideo_360x240_1mb.mp4":
+//     caption: "Centered video example"
+//     controls: true
+//     width: "400px"
 
-# Image List Examples
-Image Lists[panel,panelDefault=expand]:
-  - "[image-list,subindex='abc',alignX=center]Multiple images in one line":
-    - "src": "https://picsum.photos/400/200"
-      "caption": "First image caption"
-    - "src": "https://picsum.photos/400/200"
-      "caption": "Second image caption"
-    - "src": "https://picsum.photos/400/200"
-      "caption": "Third image caption"
-    "height": "300px"
+// # Image List Examples
+// Image Lists[panel,panelDefault=expand]:
+//   - "[image-list,subindex='abc',alignX=center]Multiple images in one line":
+//     - "src": "https://picsum.photos/400/200"
+//       "caption": "First image caption"
+//     - "src": "https://picsum.photos/400/200"
+//       "caption": "Second image caption"
+//     - "src": "https://picsum.photos/400/200"
+//       "caption": "Third image caption"
+//     "height": "300px"
 
-  - "Testing image-list subindex references: Please refer to image [ref,5a] for the first item."
+//   - "Testing image-list subindex references: Please refer to image [ref,5a] for the first item."
 
-  - "[image-list,subindex='LR',alignX=left]Paired comparison images":
-    - "[image]": 
-       "src": "https://picsum.photos/400/200"
-       "caption": "Before image"
-    - "[image]":
-       "src": "https://picsum.photos/400/200"
-       "caption": "After image"
-    "height": "200px"
+//   - "[image-list,subindex='LR',alignX=left]Paired comparison images":
+//     - "[image]": 
+//        "src": "https://picsum.photos/400/200"
+//        "caption": "Before image"
+//     - "[image]":
+//        "src": "https://picsum.photos/400/200"
+//        "caption": "After image"
+//     "height": "200px"
 
-  - "[image-list,subindex='123',alignX=right]Numbered sequence":
-    - "https://picsum.photos/400/200"
-    - "https://picsum.photos/400/200" 
-    - "https://picsum.photos/400/200"
-    "height": "100px"
+//   - "[image-list,subindex='123',alignX=right]Numbered sequence":
+//     - "https://picsum.photos/400/200"
+//     - "https://picsum.photos/400/200" 
+//     - "https://picsum.photos/400/200"
+//     "height": "100px"
 
-# Video Lists
-Video Lists[panel,panelDefault=expand]:
-  - "[video-list,subindex='abc',alignX=center]Multiple videos in one line":
-    - "src": "https://sample-videos.com/zip/10/mp4/SampleVideo_360x240_1mb.mp4"
-      "caption": "First video caption"
-    - "src": "https://sample-videos.com/zip/10/mp4/SampleVideo_1280x720_1mb.mp4"
-      "caption": "Second video caption"
-    - "src": "https://sample-videos.com/zip/10/mp4/SampleVideo_640x360_1mb.mp4"
-      "caption": "Third video caption"
-    "height": "250px"
+// # Video Lists
+// Video Lists[panel,panelDefault=expand]:
+//   - "[video-list,subindex='abc',alignX=center]Multiple videos in one line":
+//     - "src": "https://sample-videos.com/zip/10/mp4/SampleVideo_360x240_1mb.mp4"
+//       "caption": "First video caption"
+//     - "src": "https://sample-videos.com/zip/10/mp4/SampleVideo_1280x720_1mb.mp4"
+//       "caption": "Second video caption"
+//     - "src": "https://sample-videos.com/zip/10/mp4/SampleVideo_640x360_1mb.mp4"
+//       "caption": "Third video caption"
+//     "height": "250px"
 
-  - "[video-list,subindex='LR',alignX=left]Paired comparison videos":
-    - "[video]": 
-       "src": "https://sample-videos.com/zip/10/mp4/SampleVideo_360x240_1mb.mp4"
-       "caption": "Before video"
-    - "[video]":
-       "src": "https://sample-videos.com/zip/10/mp4/SampleVideo_640x360_1mb.mp4"
-       "caption": "After video"
-    "height": "180px"
+//   - "[video-list,subindex='LR',alignX=left]Paired comparison videos":
+//     - "[video]": 
+//        "src": "https://sample-videos.com/zip/10/mp4/SampleVideo_360x240_1mb.mp4"
+//        "caption": "Before video"
+//     - "[video]":
+//        "src": "https://sample-videos.com/zip/10/mp4/SampleVideo_640x360_1mb.mp4"
+//        "caption": "After video"
+//     "height": "180px"
 
-  - "[video-list,subindex='123',alignX=right]Numbered video sequence":
-    - "https://sample-videos.com/zip/10/mp4/SampleVideo_360x240_1mb.mp4"
-    - "https://sample-videos.com/zip/10/mp4/SampleVideo_640x360_1mb.mp4" 
-    - "https://sample-videos.com/zip/10/mp4/SampleVideo_1280x720_1mb.mp4"
-    "height": "150px"
+//   - "[video-list,subindex='123',alignX=right]Numbered video sequence":
+//     - "https://sample-videos.com/zip/10/mp4/SampleVideo_360x240_1mb.mp4"
+//     - "https://sample-videos.com/zip/10/mp4/SampleVideo_640x360_1mb.mp4" 
+//     - "https://sample-videos.com/zip/10/mp4/SampleVideo_1280x720_1mb.mp4"
+//     "height": "150px"
 
-  # Reference System Examples
-  - "Reference Examples[panel,panelDefault=expand]":
-    - "Text with references": "As shown in \\\\ref{}{summation-formula}, the mathematical relationship is clear. See also \\\\ref{Figure 1}{sample-image} for visual representation."
-    - "Auto-generated references": "The equation \\\\ref{}{summation-formula} demonstrates the concept, while \\\\ref{}{sample-video} provides additional context."
-    - "Bibliography citations": "This research builds on previous work \\\\bib{smith2020,jones2019}. The methodology follows \\\\bib{brown2021} and extends the findings of \\\\bib{davis2018,wilson2020}."
-    - "Mixed references": "The formula \\\\ref{}{summation-formula} is derived from \\\\bib{einstein1905}, as discussed in \\\\ref{Figure 1}{sample-image}."
-  - "Mixed content": "Einstein's famous equation $E = mc^2$ is referenced as \\\\ref{}{summation-formula}, and you can see \\\\ref{Visual example}{sample-image} for more details."
-  - "Complex example": "The study shows that \\\\ref{Equation 2}{summation-formula} correlates with the data in \\\\ref{}{sample-image}. For a demonstration, watch \\\\ref{}{sample-video}."`;
+//   # Reference System Examples
+//   - "Reference Examples[panel,panelDefault=expand]":
+//     - "Text with references": "As shown in \\\\ref{}{summation-formula}, the mathematical relationship is clear. See also \\\\ref{Figure 1}{sample-image} for visual representation."
+//     - "Auto-generated references": "The equation \\\\ref{}{summation-formula} demonstrates the concept, while \\\\ref{}{sample-video} provides additional context."
+//     - "Bibliography citations": "This research builds on previous work \\\\bib{smith2020,jones2019}. The methodology follows \\\\bib{brown2021} and extends the findings of \\\\bib{davis2018,wilson2020}."
+//     - "Mixed references": "The formula \\\\ref{}{summation-formula} is derived from \\\\bib{einstein1905}, as discussed in \\\\ref{Figure 1}{sample-image}."
+//   - "Mixed content": "Einstein's famous equation $E = mc^2$ is referenced as \\\\ref{}{summation-formula}, and you can see \\\\ref{Visual example}{sample-image} for more details."
+//   - "Complex example": "The study shows that \\\\ref{Equation 2}{summation-formula} correlates with the data in \\\\ref{}{sample-image}. For a demonstration, watch \\\\ref{}{sample-video}."`;
 }
 
 /**

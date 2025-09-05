@@ -76,6 +76,23 @@ export function flattenJson(processedData) {
         children: []
       };
       
+      // Timeline-specific logic: set selfDisplay to 'none' for empty timeline children
+      if (node.textRaw === '' && !nodeData.attr.selfDisplay && parentId) {
+        // Walk up the parent chain to find a timeline ancestor
+        let currentParentId = parentId;
+        let foundTimeline = false;
+        while (currentParentId && !foundTimeline) {
+          const parentNode = flattened[currentParentId];
+          if (parentNode && parentNode.attr && parentNode.attr.selfDisplay === 'timeline') {
+            foundTimeline = true;
+            nodeData.attr.selfDisplay = 'none';
+            console.log(`✅ Set selfDisplay='none' for timeline child ${nodeId} (${node.textOriginal})`);
+            break;
+          }
+          currentParentId = parentNode?.parentId;
+        }
+      }
+      
       // Preserve special node attributes
       if (node.type === 'latex' || node.type === 'image' || node.type === 'video') {
         if (node.caption !== undefined) {

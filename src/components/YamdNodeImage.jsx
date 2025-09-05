@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef, useEffect } from 'react';
 import { getNodeClass } from '../YamdNode.jsx';
 import { IMAGE_SETTINGS } from '../YamdRenderSettings.js';
 import { getAlignmentStrategy } from '../YamdRenderUtils.js';
@@ -7,6 +7,15 @@ import { getAlignmentStrategy } from '../YamdRenderUtils.js';
  * Image node renderer - displays images with captions
  */
 const YamdNodeImage = ({ nodeId, parentInfo, globalInfo }) => {
+  const nodeRef = useRef(null);
+
+  // Register the node reference after the component finishes rendering
+  useEffect(() => {
+    if (nodeRef.current) {
+      globalInfo?.registerNodeRef?.(nodeId, nodeRef.current);
+    }
+  }, [nodeId, globalInfo]);
+
   if (!globalInfo?.getNodeDataById) {
     return <div className="yamd-error">Missing globalInfo.getNodeDataById</div>;
   }
@@ -25,7 +34,7 @@ const YamdNodeImage = ({ nodeId, parentInfo, globalInfo }) => {
     } else if (result.code === -1) {
       // Error - display error message
       return (
-        <div className="yamd-image-block yamd-image-error" id={nodeData.htmlId}>
+        <div ref={nodeRef} className="yamd-image-block yamd-image-error" id={nodeData.htmlId}>
           <div className="yamd-image-content">
             <div className="yamd-error">
               Failed to load image: {result.message}
@@ -51,7 +60,7 @@ const YamdNodeImage = ({ nodeId, parentInfo, globalInfo }) => {
   
   if (!imageSrc) {
     return (
-      <div className="yamd-image-block yamd-image-error" id={nodeData.htmlId}>
+      <div ref={nodeRef} className="yamd-image-block yamd-image-error" id={nodeData.htmlId}>
         <div className="yamd-image-content">
           <div className="yamd-error">
             Image source not found
@@ -120,7 +129,7 @@ const YamdNodeImage = ({ nodeId, parentInfo, globalInfo }) => {
   };
 
   return (
-    <div className={`yamd-image-block ${nodeClass}`} id={nodeData.htmlId} style={blockStyle}>
+    <div ref={nodeRef} className={`yamd-image-block ${nodeClass}`} id={nodeData.htmlId} style={blockStyle}>
       <div className="yamd-image-content" style={containerStyle}>
         <img 
           src={imageSrc}
