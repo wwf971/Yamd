@@ -5,7 +5,7 @@ import { cloneDeep } from 'lodash';
 
 import { parseNodeStyle } from './markdown-yaml/ParseUtils.js';
 
-// node Parse Store for handling JSON data parsing similar to ProjectStore.js
+// node Parse Store for handling JSON data parsing
 export const useNodeParseStore = create(
   immer((set, get) => ({
     // parsed data storage by data ID

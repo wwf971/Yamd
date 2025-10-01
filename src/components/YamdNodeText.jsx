@@ -5,9 +5,10 @@ import { getChildrenDisplay } from '../YamdRenderUtils.js';
 import YamdRichText from './YamdRichText.jsx';
 import YamdPlainText from './YamdPlainText.jsx';
 import { useYamdDocStore } from '../YamdDocStore.js';
+import { createBulletEqualityFn } from '../YamdRenderUtils.js';
 
 /**
- * Text node renderer - displays plain text content and children in vertical layout
+ * render a text node, and then render its children nodes.
  */
 const YamdNodeText = React.memo(({ nodeId, parentInfo, globalInfo }) => {
   const nodeRef = useRef(null);
@@ -36,24 +37,14 @@ const YamdNodeText = React.memo(({ nodeId, parentInfo, globalInfo }) => {
     }
     console.log('noteId:', nodeId, 'docId:', docId, 'YamdNodeText useEffect subscribe');
     const unsubscribe = useYamdDocStore.subscribe(
-      (state) => state.listBulletPreferredYPosRequests[docId]?.[nodeId] || {},
+      (state) => state.bulletPreferredYPosRequests[docId]?.[nodeId] || {},
       (requests) => {
         console.log('noteId:', nodeId, 'YamdNodeText useEffect subscribe triggered with requests:', requests);
         // This will only fire if equalityFn returns false
         calcPreferredBulletYPos(nodeId, docId, nodeRef, richTextRef);
       },
       {
-        equalityFn: (prev, next) => {
-          console.log("noteId:", nodeId, "YamdNodeText equalityFn prev:", prev, "next:", next);
-          // Only trigger if requestCounter has increased (ignore responseCounter changes)
-          const keys = new Set([...Object.keys(prev), ...Object.keys(next)]);
-          const hasNewRequests = Array.from(keys).some((key) => 
-            (next[key]?.requestCounter || 0) > (prev[key]?.requestCounter || 0)
-          );
-          const shouldSkip = !hasNewRequests; // Skip if no new requests
-          console.log("noteId:", nodeId, "YamdNodeText equalityFn hasNewRequests:", hasNewRequests, "shouldSkip:", shouldSkip);
-          return shouldSkip;
-        },
+        equalityFn: createBulletEqualityFn(nodeId, 'YamdNodeText'),
       }
     );
     
@@ -81,6 +72,7 @@ const YamdNodeText = React.memo(({ nodeId, parentInfo, globalInfo }) => {
   
   // Use the utility function to get appropriate CSS class
   const nodeClass = getNodeClass(nodeData, parentInfo) || 'yamd-title-default';
+  // console.log("selfRichText:", selfRichText);
 
   return (
     <div ref={nodeRef} className="yamd-node-text">
@@ -129,14 +121,14 @@ const calcPreferredBulletYPos = (nodeId, docId, nodeRef, richTextRef) => {
   // get all requests for this node
   const requests = store.getPreferredYPosRequests(docId, nodeId);
   console.log('noteId:', nodeId, 'YamdNodeText calcPreferredBulletYPos requests:', requests);
-  // Update result for each requesting container
+  // update result for each requesting container
   Object.keys(requests).forEach(containerClassName => {
-    // Get preferred Y position from YamdRichText
+    // get preferred Y position from YamdRichText
     const result = richTextRef.current.calcPreferredBulletYPose(containerClassName);
     
-    // Update result in the Zustand store
+    // update result in the Zustand store
     store.updateRequestResult(docId, nodeId, containerClassName, result);
-    // Increment response counter in store
+    // increment response counter in store
     store.incResponseCounter(docId, nodeId, containerClassName);
   });
 };

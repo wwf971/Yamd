@@ -1,35 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import YamdNode from '../YamdNode.jsx';
-import { AddTimelineBulletBeforeYamdNode } from '../YamdRenderUtils.js';
-import { TIMELINE_BULLET_DIMENSIONS } from '../YamdRenderSettings.js';
-
-/**
- * Component for rendering vertical lines between timeline bullets
- * @param {Array} lineHeights - Array of calculated line heights
- * @param {object} bulletRefs - Ref object containing bullet element references
- * @returns {JSX.Element} - Vertical lines component
- */
-const TimelineVerticalLines = ({ lineHeights, bulletRefs }) => {
-  return (
-    <div className="yamd-timeline-lines">
-      {lineHeights.map((height, index) => {
-        const currentBullet = bulletRefs.current[index];
-        if (!currentBullet) return null;
-        
-        return (
-          <div 
-            key={index}
-            className="yamd-timeline-connect-line"
-            style={{
-              top: `calc(50% + ${parseInt(TIMELINE_BULLET_DIMENSIONS.bullet_height) / 2}px + ${TIMELINE_BULLET_DIMENSIONS.connect_line_gap})`,
-              height: height ? `${height}px` : '20px'
-            }}
-          />
-        );
-      })}
-    </div>
-  );
-};
+import { TIMELINE_BULLET_SETTINGS } from '../YamdRenderSettings.js';
+import { calcConnectLineHeights, AddTimelineBulletBeforeYamdNode } from './YamdTimeline.js';
 
 /**
  * Main YamdTimeline component - renders timeline with bullets and vertical lines
@@ -44,121 +16,117 @@ const YamdTimeline = ({ childIds, globalInfo, parentInfo }) => {
   const bulletRefs = useRef([]);
   
   // calculate connecting line heights after DOM updates
-  const calculateLineHeights = React.useCallback(() => {
-    /*
-      bullet 1
-          <-- connect_line_gap
-        |
-        |
-        |
-          <-- connect_line_gap
-      bullet 2
-    */
-    if (bulletRefs.current.length > 0) {
-      const heights = [];
-      for (let i = 0; i < bulletRefs.current.length - 1; i++) {
-        const currentBullet = bulletRefs.current[i];
-        const nextBullet = bulletRefs.current[i + 1];
-        
-        if (currentBullet && nextBullet) {
-          // console.log(`Line ${i}: currentBullet=`, currentBullet, 'nextBullet=', nextBullet);
-          const rectCurrent = currentBullet.getBoundingClientRect();
-          const rectNext = nextBullet.getBoundingClientRect();
-          // console.log(`Line ${i}: rectCurrent=`, rectCurrent, 'rectNext=', rectNext);
-          
-                      // Check if bounding rects are valid
-            if (rectCurrent.width > 0 && rectNext.width > 0) {
-              // Calculate the distance from bottom of current bullet + gap to top of next bullet - gap
-              const connectLineGap = TIMELINE_BULLET_DIMENSIONS.connect_line_gap 
-                ? parseFloat(TIMELINE_BULLET_DIMENSIONS.connect_line_gap) 
-                : 2; // Fallback to 2px if undefined or NaN
-              // console.log(`Line ${i}: connectLineGap=${connectLineGap}`);
-              
-              // Calculate bottom manually if it's NaN
-              const currentBottom = isNaN(rectCurrent.bottom) ? rectCurrent.top + rectCurrent.height : rectCurrent.bottom;
-              const nextTop = isNaN(rectNext.top) ? rectNext.top : rectNext.top;
-              
-              // console.log(`Line ${i}: currentBottom=${currentBottom}, nextTop=${nextTop}`);
-              
-              const lineStartY = currentBottom + connectLineGap;
-              const lineEndY = nextTop - connectLineGap;
-              const lineHeight = lineEndY - lineStartY;
-              
-              // Adjust line height to account for CSS positioning
-              // CSS positions line from: bulletCenter + bullet_height/2 + gap
-              // We want line to end at: nextBulletCenter - bullet_height/2 - gap
-              const bulletCenterY = rectCurrent.top + (rectCurrent.height / 2);
-              const nextBulletCenterY = rectNext.top + (rectNext.height / 2);
-              const cssLineStartY = bulletCenterY + (parseInt(TIMELINE_BULLET_DIMENSIONS.bullet_height) / 2) + connectLineGap;
-              const cssLineEndY = nextBulletCenterY - (parseInt(TIMELINE_BULLET_DIMENSIONS.bullet_height) / 2) - connectLineGap;
-              const adjustedLineHeight = cssLineEndY - cssLineStartY;
-              
-              // console.log(`Line ${i}: lineHeight=${lineHeight}, adjustedLineHeight=${adjustedLineHeight}`);
-              // console.log(`Line ${i}: cssLineStartY=${cssLineStartY}, cssLineEndY=${cssLineEndY}`);
-              heights.push(Math.max(adjustedLineHeight, 8)); // Use same minimum as NodeRoot (8px)
-            } else {
-              // console.log(`Line ${i}: Invalid bounding rects - using fallback height`);
-              heights.push(20); // Fallback height
-            }
-        } else {
-          console.log(`Line ${i}: Missing refs - currentBullet=`, currentBullet, 'nextBullet=', nextBullet);
-        }
-      }
-      setLineHeights(heights);
-    }
+  // Helper function to recalculate line heights
+  const recalcConnectLineHeights = React.useCallback(() => {
+    const heights = calcConnectLineHeights(bulletRefs);
+    setLineHeights(heights);
   }, []); // Remove childIds dependency to prevent infinite re-renders
 
   useEffect(() => {
     // Use setTimeout to ensure DOM has updated
-    setTimeout(calculateLineHeights, 100);
+    setTimeout(recalcConnectLineHeights, 100);
     
     // Recalculate on window resize
-    window.addEventListener('resize', calculateLineHeights);
-    return () => window.removeEventListener('resize', calculateLineHeights);
-  }, [childIds, calculateLineHeights]);
+    window.addEventListener('resize', recalcConnectLineHeights);
+    return () => window.removeEventListener('resize', recalcConnectLineHeights);
+  }, [childIds, recalcConnectLineHeights]);
 
   if (!childIds || !Array.isArray(childIds)) {
     return null;
   }
 
+  // Create explicit childrenNodes array for better readability
+  const childrenNodes = childIds.map((childId, index) => {
+    return (
+      <YamdNode
+        key={childId}
+        nodeId={childId} 
+        parentInfo={{ 
+          ...parentInfo,
+          // parentInfo.childDisplay is 'timeline' for YamdTimelineNode. we need to avoid further passing it down.
+          childDisplay: 'plian-list'
+        }}
+        globalInfo={globalInfo}
+      />
+    );
+  });
+
   // Render children similar to YamdChildrenNodes but with timeline bullets
   const renderChildList = () => (
-    <div className="yamd-timeline">
-      {childIds.map((childId, index) => {
+    <div className="yamd-timeline" style={{ position: 'relative' }}>
+      {/* Render timeline items */}
+      {childrenNodes.map((childNode, index) => {
         const isLast = index === childIds.length - 1;
-        
-        // create the child node
-        // override childDisplay to prevent nested timelines
-        const childNode = (
-          <YamdNode
-            nodeId={childId} 
-            parentInfo={{ 
-              ...parentInfo, 
-              childDisplay: 'timeline' // Force plain list to prevent nested timeline
-            }}
-            globalInfo={globalInfo}
-          />
-        );
 
         // wrap with timeline bullet
         return (
           <AddTimelineBulletBeforeYamdNode
-            key={childId}
+            key={childNode.props.nodeId}
             childNode={childNode}
             globalInfo={globalInfo}
             itemIndex={index}
             isLast={isLast}
             bulletRefs={bulletRefs}
             lineHeights={lineHeights}
-            onBulletPositionChange={calculateLineHeights}
+            onBulletYPosChange={recalcConnectLineHeights}
           />
         );
       })}
       
+      {/* Render vertical connecting lines using TimelineVerticalLines component */}
+      <TimelineVerticalLines lineHeights={lineHeights} bulletRefs={bulletRefs} />
     </div>
   );
 
   return renderChildList();
+};
+
+
+/**
+ * Component for rendering vertical lines between timeline bullets
+ * @param {Array} lineHeights - Array of calculated line heights
+ * @param {object} bulletRefs - Ref object containing bullet element references
+ * @returns {JSX.Element} - Vertical lines component
+ */
+const TimelineVerticalLines = ({ lineHeights, bulletRefs }) => {
+  return (
+    <div className="yamd-timeline-lines" style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none' }}>
+      {lineHeights.map((height, index) => {
+        const currentBulletSvg = bulletRefs.current[index]; // Now this is the SVG element
+        if (!currentBulletSvg) return null;
+        
+        // Calculate absolute positioning for this line
+        const svgRect = currentBulletSvg.getBoundingClientRect();
+        const timelineContainer = currentBulletSvg.closest('.yamd-timeline');
+        const timelineRect = timelineContainer?.getBoundingClientRect();
+        
+        if (!timelineRect) return null;
+        
+        // Position line relative to timeline container, starting from bottom of SVG
+        const svgBottomY = svgRect.bottom - timelineRect.top;
+        const lineStartY = svgBottomY + parseInt(TIMELINE_BULLET_SETTINGS.connect_line_gap);
+        
+        // Center line horizontally with the SVG
+        const svgCenterX = svgRect.left + (svgRect.width / 2) - timelineRect.left;
+        
+        return (
+          <div 
+            key={index}
+            className="yamd-timeline-connect-line"
+            style={{
+              position: 'absolute',
+              top: `${lineStartY}px`,
+              left: `${svgCenterX}px`,
+              transform: 'translateX(-50%)',
+              width: '2px',
+              height: height ? `${height}px` : '20px',
+              backgroundColor: '#ccc'
+            }}
+          />
+        );
+      })}
+    </div>
+  );
 };
 
 export default YamdTimeline;

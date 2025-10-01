@@ -1,6 +1,7 @@
 import React from 'react';
 import { useYamdDocStore } from '../YamdDocStore.js';
-import { BULLET_DIMENSIONS } from '../YamdRenderSettings.js';
+import { BULLET_DIMENSIONS, LIST_SETTINGS } from '../YamdRenderSettings.js';
+import { formatYPosition } from '../YamdRenderUtils.js';
 
 /**
  * Utility function to render bullet inline for components that need precise control
@@ -76,8 +77,8 @@ export const AddListBulletBeforeYamdNode = React.memo(({ childNode, alignBullet 
   if(parentInfo?.childDisplay === 'timeline') {
     // AddTimelineBulletBeforeYamdNode --> YamdNodeText (now wrapped by AddListBulletBeforeYamdNode in YamdNode.jsx)
     shouldRenderBullet = false; // already rendered by AddTimelineBulletBeforeYamdNode
-    // For timeline children, just pass through without adding list bullets
-    // The timeline bullet is already handled by AddTimelineBulletBeforeYamdNode
+    // for timeline children, just pass through without adding list bullets
+    // the timeline bullet is already handled by AddTimelineBulletBeforeYamdNode
     return childNode; // Just render childNode without bullet
   }
 
@@ -99,8 +100,8 @@ export const AddListBulletBeforeYamdNode = React.memo(({ childNode, alignBullet 
     }
     const store = useYamdDocStore.getState();
     // add request to store
-    store.addListBulletPreferredYPosRequest(docId, nodeId, containerClassName);
-    // console.log('noteId:', nodeId, 'AddListBulletBeforeYamdNode useEffect addListBulletPreferredYPosRequest');
+    store.addBulletPreferredYPosRequest(docId, nodeId, containerClassName);
+    // console.log('noteId:', nodeId, 'AddListBulletBeforeYamdNode useEffect addBulletPreferredYPosRequest');
     // increment request counter to notify the node
     store.incRequestCounter(docId, nodeId, containerClassName);
     // console.log('noteId:', nodeId, 'AddListBincRequestCounter request:', store.getPreferredYPosRequests(docId, nodeId)[containerClassName]);
@@ -113,7 +114,7 @@ export const AddListBulletBeforeYamdNode = React.memo(({ childNode, alignBullet 
     if (!nodeId || !docId) return;
     // subscribe to changes in the result with proper equality function
     const unsubscribe = useYamdDocStore.subscribe(
-      (state) => state.listBulletPreferredYPosRequests[docId]?.[nodeId]?.[containerClassName]?.responseCounter,
+      (state) => state.bulletPreferredYPosRequests[docId]?.[nodeId]?.[containerClassName]?.responseCounter,
       (responseCounter) => {
         const result = store.getPreferredYPosRequests(docId, nodeId)[containerClassName];
         console.log('noteId:', nodeId, 'AddListBulletBeforeYamdNode useEffect responseCounter:', responseCounter, 'result:', result);
@@ -136,58 +137,46 @@ export const AddListBulletBeforeYamdNode = React.memo(({ childNode, alignBullet 
     bulletContainerClassName: '.yamd-bullet-container'
   }), [parentInfo]);
 
-  // Clone childNode with enhanced parentInfo
+  // clone childNode with enhanced parentInfo
   const enhancedChildNode = React.cloneElement(childNode, {
     ...childNode.props,
     parentInfo: childParentInfo,
   });
 
-  // Use only Zustand store result for positioning
+  // Use Zustand result for positioning, fallback to default if no result
   const hasResult = result?.code === 0;
-  const finalPreferredYPos = result?.data || 0;
+  const finalPreferredYPos = hasResult ? result.data : LIST_SETTINGS.bullet_y_pos_default;
 
-  if (!hasResult) {
-    // Default positioning - bullet aligned normally
-    const bulletElement = renderYamdListBullet({parentInfo, alignBullet});
-
-    return (
-      <div className="yamd-bullet-container" style={{ display: 'flex', alignItems: 'flex-start' }}>
-        {bulletElement}
-        <div className="yamd-child-container">
-          {enhancedChildNode}
-        </div>
-      </div>
-    );
-  } else {
-    // Custom positioning based on Zustand result
-    const bulletElement = renderYamdListBullet({parentInfo, alignBullet: 'flex-start'});
-    
-    return (
-      <div className="yamd-bullet-container" style={{ display: 'flex', alignItems: 'flex-start' }}>
-        <div style={{ 
-          position: 'relative',
-          width: BULLET_DIMENSIONS.width, // same width as normal bullet
-          height: BULLET_DIMENSIONS.height, // same height as normal bullet for layout calculation
-          display: 'flex',
-          flexShrink: 0,
-          justifyContent: 'center',
+  // Always use positioned rendering - simplified single branch
+  const bulletElement = renderYamdListBullet({parentInfo, alignBullet: 'flex-start'});
+  
+  return (
+    <div className="yamd-bullet-container" style={{ display: 'flex', alignItems: 'flex-start' }}>
+      <div style={{ 
+        position: 'relative',
+        width: BULLET_DIMENSIONS.width, // same width as normal bullet
+        height: BULLET_DIMENSIONS.height, // same height as normal bullet for layout calculation
+        display: 'flex',
+        flexShrink: 0,
+        justifyContent: 'center',
+      }}>
+        <div style={{
+          position: 'absolute',
+          top: formatYPosition(finalPreferredYPos),
+          left: '50%',
+          transform: 'translate(-50%, -50%)' // center both horizontally and vertically on preferred position
         }}>
-          <div style={{
-            position: 'absolute',
-            top: `${finalPreferredYPos}px`,
-            left: '50%',
-            transform: 'translate(-50%, -50%)' // center both horizontally and vertically on preferred position
-          }}>
-            {bulletElement}
-          </div>
+          {bulletElement}
         </div>
-        <div
-          style={{ flex: 1, display: 'flex', maxWidth: '100%'}}
-        >
+      </div>
+      <div
+        style={{ flex: 1, display: 'flex', maxWidth: '100%'}}
+      >
+        <div style={{ marginLeft: BULLET_DIMENSIONS.content_offset_x }}>
           {enhancedChildNode}
         </div>
       </div>
-    );
-  }
+    </div>
+  );
 });
 

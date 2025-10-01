@@ -2,18 +2,37 @@
  * Sample YAML data for testing Yamd parsing
  */
 export function getSampleYaml() {
+
+  // return `# Sample Yamd Document
+  // - "[self=none,child=ul]":
+  //   - "AA[child=ul]":
+  //     - 啊啊啊
+  //     - cc
+  // `
   return `# Sample Yamd Document
 
   - "[self=none,child=ul]":
+    - "Support for various display types[selfDisplay=panel]":
+      - Panels with expand/collapse
+      - Timeline views 
+      - Lists and tags
+    - Easy to write and read
+
     - Introduction: Welcome to Yamd
     - Features[divider,childDisplay=ul]:
       - Flexible styling with square bracket grammar
-      - "Support for various display types[selfDisplay=panel]":
-        - Panels with expand/collapse
-        - Timeline views 
-        - Lists and tags
-      - Easy to write and read`
 
+    - Timeline Example[timeline]:
+      - "Project Started[bullet=Check]": Initial planning phase
+      - "Development[bullet=Dash,panel]": Core features implementation  
+      - "Testing[bullet=Question,divider]":
+          - "[panel]Quality assurance":
+            - Aa
+            - bB
+      - "[bullet=UpArrow]":
+          - "Release[panel]": Production deployment
+
+    `
 // # Inline LaTeX Math Examples
 // Math Examples[panel,panelDefault=expand]:
 //   - "Basic equations[child=ul]": "The famous equation $E = mc^2$ revolutionized physics"
@@ -21,15 +40,7 @@ export function getSampleYaml() {
 //   - "Mixed content": "Temperature conversion: $C = \\\\frac{5}{9}(F - 32)$ where C is Celsius and F is Fahrenheit"
 //   - "Greek letters": "The area of a circle is $A = \\\\pi r^2$ and circumference is $C = 2\\\\pi r$"
 
-// Timeline Example[timeline]:
-//   - "Project Started[bullet=Check]": Initial planning phase
-//   - "Development[bullet=Dash]": Core features implementation  
-//   - "Testing[bullet=Question]":
-//       - "[panel]Quality assurance":
-//         - Aa
-//         - bB
-//   - "[bullet=UpArrow]":
-//       - "Release[panel]": Production deployment
+
 
 // Key Features[key,valueNum=2]:
 //   - Fast parsing

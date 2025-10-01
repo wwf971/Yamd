@@ -25,7 +25,7 @@ function NodeRoot({
   // Calculate connecting line heights after data loads and DOM updates
   useEffect(() => {
     if (processedData && tagRefs.current.length > 0) {
-      const calculateLineHeights = () => {
+      const calcConnectLineHeights = () => {
         const heights = [];
         for (let i = 0; i < tagRefs.current.length - 1; i++) {
           const tagCurrent = tagRefs.current[i];
@@ -44,11 +44,11 @@ function NodeRoot({
       };
 
       // Use setTimeout to ensure DOM has updated
-      setTimeout(calculateLineHeights, 100);
+      setTimeout(calcConnectLineHeights, 100);
       
       // Recalculate on window resize
-      window.addEventListener('resize', calculateLineHeights);
-      return () => window.removeEventListener('resize', calculateLineHeights);
+      window.addEventListener('resize', calcConnectLineHeights);
+      return () => window.removeEventListener('resize', calcConnectLineHeights);
     }
   }, [processedData]);
 

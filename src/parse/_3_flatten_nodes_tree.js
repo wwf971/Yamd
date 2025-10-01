@@ -78,18 +78,11 @@ export function flattenJson(processedData) {
       
       // Timeline-specific logic: set selfDisplay to 'none' for empty timeline children
       if (node.textRaw === '' && !nodeData.attr.selfDisplay && parentId) {
-        // Walk up the parent chain to find a timeline ancestor
-        let currentParentId = parentId;
-        let foundTimeline = false;
-        while (currentParentId && !foundTimeline) {
-          const parentNode = flattened[currentParentId];
-          if (parentNode && parentNode.attr && parentNode.attr.selfDisplay === 'timeline') {
-            foundTimeline = true;
-            nodeData.attr.selfDisplay = 'none';
-            console.log(`✅ Set selfDisplay='none' for timeline child ${nodeId} (${node.textOriginal})`);
-            break;
-          }
-          currentParentId = parentNode?.parentId;
+        // Check if the immediate parent has childDisplay='timeline'
+        const parentNode = flattened[parentId];
+        if (parentNode && parentNode.attr && parentNode.attr.childDisplay === 'timeline') {
+          nodeData.attr.selfDisplay = 'none';
+          console.log(`✅ Set selfDisplay='none' for timeline child ${nodeId} (${node.textOriginal})`);
         }
       }
       

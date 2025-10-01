@@ -14,6 +14,7 @@ const YamdRichText = forwardRef(({ text, className, parentInfo, textRich = null,
   // ref to measure text for bullet positioning (used by Zustand system)
   const textRef = useRef(null);
 
+  // console.log("YamdRichText textRich:", textRich);
   // expose methods to parent via ref
   useImperativeHandle(ref, () => ({
     calcPreferredBulletYPose: (containerClassName) => {
@@ -67,14 +68,14 @@ const YamdRichText = forwardRef(({ text, className, parentInfo, textRich = null,
       </span>
     );
   }
+
+  console.log("ERROR: textRich is missing or invalid:", textRich);
   
-  // Fallback to plain text renderer if no textRich segments
+  // Error: textRich should always exist
   return (
-    <YamdPlainText 
-      text={text} 
-      className={className} 
-      parentInfo={parentInfo} 
-    />
+    <span ref={textRef} className={`${className} yamd-error`} style={{color: 'red', border: '1px solid red'}}>
+      ERROR: textRich missing or invalid. text="{text}", textRich={JSON.stringify(textRich)}
+    </span>
   );
 });
 

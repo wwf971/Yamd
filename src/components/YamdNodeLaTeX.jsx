@@ -35,7 +35,7 @@ const YamdNodeLaTeX = ({ nodeId, parentInfo, globalInfo }) => {
         <div className="yamd-latex-caption">
           <span className="yamd-latex-label">
             {/* Use default caption title when no asset */}
-            {LATEX_SETTINGS.captionTitleDefault}.
+            {LATEX_SETTINGS.caption_title_default}.
           </span>
           {/* Show caption text if provided */}
           {nodeData.caption && (
@@ -102,7 +102,7 @@ const YamdNodeLaTeX = ({ nodeId, parentInfo, globalInfo }) => {
       <div className="yamd-latex-caption">
         <span className="yamd-latex-label">
           {/* Use custom caption title or default from settings */}
-          {asset?.captionTitle || LATEX_SETTINGS.captionTitleDefault}
+          {asset?.captionTitle || LATEX_SETTINGS.caption_title_default}
           {/* Show index number only if not no_index */}
           {!asset?.no_index && asset?.indexOfSameType ? ` ${asset.indexOfSameType}` : ''}
           .

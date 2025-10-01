@@ -29,7 +29,7 @@ function YamdVideoList({ nodeId, globalInfo, parentInfo }) {
   // Extract attributes
   const alignX = attr.alignX || 'center';
   const subindex = attr.subindex || 'abc';
-  const height = attr.height || VIDEO_LIST_SETTINGS.defaultHeight;
+  const height = attr.height || VIDEO_LIST_SETTINGS.height_default;
   
   // Get alignment strategy
   const alignmentStrategy = getAlignmentStrategy(nodeData, parentInfo);

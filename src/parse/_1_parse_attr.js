@@ -31,6 +31,9 @@ const ATTR_WHITELIST = {
   // Content attributes
   'valueNum': true,      // Numeric value for ordered lists, etc.
   
+  // Bullet and visual attributes
+  'bullet': true,        // Bullet type for timeline and list items
+  
   // Media attributes (images, videos)
   'alt': true,           // Alt text for images
   'width': true,         // Width specification
@@ -159,7 +162,14 @@ export function extractSquareBracketAttr(nodeStr) {
   // Check if it's a shorthand attribute (no = sign)
   if (!attrString.includes('=')) {
     const shorthandAttr = parseShorthandAttribute(attrString);
-    return { textRaw, attr: shorthandAttr, textOriginal: trimmed };
+    // Filter shorthand attributes through whitelist
+    const filteredAttr = {};
+    for (const [key, value] of Object.entries(shorthandAttr)) {
+      if (shouldStoreInAttr(key)) {
+        filteredAttr[key] = value;
+      }
+    }
+    return { textRaw, attr: filteredAttr, textOriginal: trimmed };
   }
 
   // Parse key=value pairs
@@ -177,20 +187,28 @@ export function extractSquareBracketAttr(nodeStr) {
         const normalizedKey = normalizeAttrKey(rawKey);
         const normalizedValue = normalizeAttributeValue(normalizedKey, rawValue);
         
-        // Handle quoted values
-        const cleanValue = normalizedValue.replace(/^["']|["']$/g, '');
-        
-        // Handle numeric values
-        if (normalizedKey === 'valueNum' && !isNaN(cleanValue)) {
-          attr[normalizedKey] = parseInt(cleanValue, 10);
-        } else {
-          attr[normalizedKey] = cleanValue;
+        // Only store if the key is in the whitelist
+        if (shouldStoreInAttr(normalizedKey)) {
+          // Handle quoted values
+          const cleanValue = normalizedValue.replace(/^["']|["']$/g, '');
+          
+          // Handle numeric values
+          if (normalizedKey === 'valueNum' && !isNaN(cleanValue)) {
+            attr[normalizedKey] = parseInt(cleanValue, 10);
+          } else {
+            attr[normalizedKey] = cleanValue;
+          }
         }
       }
     } else {
       // Handle shorthand mixed with key=value pairs
       const shorthandAttr = parseShorthandAttribute(pair);
-      Object.assign(attr, shorthandAttr);
+      // Filter shorthand attributes through whitelist
+      for (const [key, value] of Object.entries(shorthandAttr)) {
+        if (shouldStoreInAttr(key)) {
+          attr[key] = value;
+        }
+      }
     }
   }
 

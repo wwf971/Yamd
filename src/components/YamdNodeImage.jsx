@@ -152,7 +152,7 @@ const YamdNodeImage = ({ nodeId, parentInfo, globalInfo }) => {
       <div className="yamd-image-caption">
         <span className="yamd-image-label">
           {/* Use IMAGE_SETTINGS for default caption title */}
-          {IMAGE_SETTINGS.captionTitleDefault}
+          {IMAGE_SETTINGS.caption_title_default}
           {/* Show index number if available from asset */}
           {(() => {
             if (nodeData.assetId && globalInfo?.getAssetById) {

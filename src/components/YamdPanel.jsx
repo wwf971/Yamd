@@ -3,6 +3,7 @@ import { getNodeClass } from '../YamdNode.jsx';
 import YamdChildrenNodes from '../YamdChildrenNodes.jsx';
 import { getChildrenDisplay } from '../YamdRenderUtils.js';
 import { useYamdDocStore } from '../YamdDocStore.js';
+import { createBulletEqualityFn } from '../YamdRenderUtils.js';
 
 /**
  * Panel node renderer - displays collapsible panel with show/hide functionality
@@ -17,7 +18,7 @@ const YamdPanel = forwardRef(({ nodeId, parentInfo, globalInfo }, ref) => {
     }
   }, [nodeId, globalInfo]);
 
-  // Expose calcPreferredBulletYPos to parent via ref
+  // expose calcPreferredBulletYPos to parent via ref
   useImperativeHandle(ref, () => ({
     calcPreferredBulletYPos: () => {
       const docId = globalInfo?.docId;
@@ -34,18 +35,14 @@ const YamdPanel = forwardRef(({ nodeId, parentInfo, globalInfo }, ref) => {
     if (!nodeId || !docId) return;
     console.log('YamdPanel noteId:', nodeId, 'useEffect subscribe');
     const unsubscribe = useYamdDocStore.subscribe(
-      (state) => state.listBulletPreferredYPosRequests[docId]?.[nodeId] || {},
+      (state) => state.bulletPreferredYPosRequests[docId]?.[nodeId] || {},
       (requests) => {
         console.log('noteId:', nodeId, 'YamdPanel useEffect subscribe triggered with requests:', requests);
         // This will only fire if equalityFn returns false
         calcPreferredBulletYPos(nodeId, docId, nodeRef, buttonRef);
       },
       {
-        equalityFn: (prev, next) => {
-          // Only skip if all counters are the same or decreased
-          const keys = new Set([...Object.keys(prev), ...Object.keys(next)]);
-          return Array.from(keys).every((key) => (next[key]?.requestCounter || 0) <= (prev[key]?.requestCounter || 0));
-        },
+        equalityFn: createBulletEqualityFn(nodeId, 'YamdPanel'),
       }
     );
     

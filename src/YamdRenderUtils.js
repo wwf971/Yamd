@@ -4,10 +4,10 @@ import React from 'react';
  * Centralized bullet dimensions configuration
  * These values are used directly in inline styles for guaranteed consistency
  */
-import { BULLET_DIMENSIONS, LIST_INDENT, TIMELINE_BULLET_DIMENSIONS } from './YamdRenderSettings.js';
+import { BULLET_DIMENSIONS, LIST_SETTINGS, TIMELINE_BULLET_SETTINGS } from './YamdRenderSettings.js';
 
 // Re-export for backward compatibility
-export { BULLET_DIMENSIONS, LIST_INDENT };
+export { BULLET_DIMENSIONS, LIST_SETTINGS };
 export {
   AddListBulletBeforeYamdNode,
   renderYamdListBullet,
@@ -102,272 +102,44 @@ export const getAlignmentStrategy = (nodeData, parentInfo) => {
   return 'center';
 };
 
+
 /**
- * Bullet component registry for timeline
+ * Format Y position value for CSS - handles both numbers and CSS values with units
+ * @param {number|string} value - Y position value (number or CSS string like '1.2rem')
+ * @returns {string} - Properly formatted CSS value
  */
-const TIMELINE_BULLET_COMPONENTS = {
-  'Check': () => (
-    <div 
-      className="yamd-timeline-bullet-check yamd-timeline-bullet-svg-container"
-      style={{
-        width: TIMELINE_BULLET_DIMENSIONS.bullet_width,
-        height: TIMELINE_BULLET_DIMENSIONS.bullet_height,
-        transform: `translate(-50%, -50%) scale(${parseInt(TIMELINE_BULLET_DIMENSIONS.bullet_width) / 12}, ${parseInt(TIMELINE_BULLET_DIMENSIONS.bullet_height) / 12})`
-      }}
-    >
-      <svg className="yamd-timeline-bullet-svg" width="12px" height="12px"
-        viewBox="0 0 12 12" fill="none">
-
-        <circle cx="6" cy="6" r="5" fill="#4CAF50" stroke="#388E3C" strokeWidth="1"/>
-        
-
-        <path d="M3.5 6 L5.2 7.7 L8.5 4.2" 
-              stroke="white" 
-              strokeWidth="1.2" 
-              strokeLinecap="round" 
-              strokeLinejoin="round"/>
-      </svg>
-    </div>
-  ),
-  'Question': () => (
-    <div 
-      className="yamd-timeline-bullet-question yamd-timeline-bullet-svg-container"
-      style={{
-        width: TIMELINE_BULLET_DIMENSIONS.bullet_width,
-        height: TIMELINE_BULLET_DIMENSIONS.bullet_height,
-        transform: `translate(-50%, -50%) scale(${parseInt(TIMELINE_BULLET_DIMENSIONS.bullet_width) / 12}, ${parseInt(TIMELINE_BULLET_DIMENSIONS.bullet_height) / 12})`
-      }}
-    >
-      <svg className="yamd-timeline-bullet-svg" width="12px" height="12px"
-      viewBox="0 0 12 12" fill="none">
-        <circle cx="6" cy="6" r="5" fill="#dc2626" stroke="#b91c1c" strokeWidth="1"/>
-        <text x="6" y="8.5" fontSize="8" fontWeight="bold" textAnchor="middle" fill="white">?</text>
-      </svg>
-    </div>
-  ),
-  'Dash': () => (
-    <div 
-      className="yamd-timeline-bullet-dash yamd-timeline-bullet-svg-container"
-      style={{
-        width: TIMELINE_BULLET_DIMENSIONS.bullet_width,
-        height: TIMELINE_BULLET_DIMENSIONS.bullet_height,
-        transform: `translate(-50%, -50%) scale(${parseInt(TIMELINE_BULLET_DIMENSIONS.bullet_width) / 12}, ${parseInt(TIMELINE_BULLET_DIMENSIONS.bullet_height) / 12})`
-      }}
-    >
-      <svg className="yamd-timeline-bullet-svg" width="12px" height="12px"
-      viewBox="0 0 12 12" fill="none">
-        <circle cx="6" cy="6" r="5" fill="#666" stroke="#555" strokeWidth="1"/>
-        <line x1="3" y1="6" x2="9" y2="6" stroke="white" strokeWidth="1.5" strokeLinecap="round"/>
-      </svg>
-    </div>
-  ),
-  'Screw': () => (
-    <div 
-      className="yamd-timeline-bullet-screw yamd-timeline-bullet-svg-container"
-      style={{
-        width: TIMELINE_BULLET_DIMENSIONS.bullet_width,
-        height: TIMELINE_BULLET_DIMENSIONS.bullet_height,
-        transform: `translate(-50%, -50%) scale(${parseInt(TIMELINE_BULLET_DIMENSIONS.bullet_width) / 12}, ${parseInt(TIMELINE_BULLET_DIMENSIONS.bullet_height) / 12})`
-      }}
-    >
-      <svg className="yamd-timeline-bullet-svg" width="12px" height="12px"
-      viewBox="0 0 12 12" fill="none" stroke="#555" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M7.35 3.15a0.5 0.5 0 0 0 0 0.7l0.8 0.8a0.5 0.5 0 0 0 0.7 0l1.885-1.885a3 3 0 0 1-3.97 3.97l-3.455 3.455a1.06 1.06 0 0 1-1.5-1.5l3.455-3.455a3 3 0 0 1 3.97-3.97l-1.88 1.88z"/>
-      </svg>
-    </div>
-  ),
-  'UpArrow': () => (
-    <div 
-      className="yamd-timeline-bullet-up-arrow yamd-timeline-bullet-svg-container"
-      style={{
-        width: TIMELINE_BULLET_DIMENSIONS.bullet_width,
-        height: TIMELINE_BULLET_DIMENSIONS.bullet_height,
-        transform: `translate(-50%, -50%) scale(${parseInt(TIMELINE_BULLET_DIMENSIONS.bullet_width) / 12}, ${parseInt(TIMELINE_BULLET_DIMENSIONS.bullet_height) / 12})`
-      }}
-    >
-      <svg className="yamd-timeline-bullet-svg" width="12px" height="12px" viewBox="0 0 12 12" fill="none" stroke="#555" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M6 1.8 L2.4 5.4 L4.2 5.4 L4.2 10.2 L7.8 10.2 L7.8 5.4 L9.6 5.4 Z"/>
-      </svg>
-    </div>
-  ),
-  'default': () => (
-    <div className="yamd-timeline-bullet-default"></div>
-  )
+export const formatYPosition = (value) => {
+  // If it's a number, append 'px'
+  if (typeof value === 'number') {
+    return `${value}px`;
+  }
+  // If it's already a string with units, use as-is
+  if (typeof value === 'string') {
+    return value;
+  }
+  // Fallback
+  return '0px';
 };
 
 /**
- * Render timeline bullet with proper dimensions
- * @param {string} bulletType - Type of bullet to render
- * @returns {JSX.Element} - Bullet element
+ * Equality function for Zustand subscriptions that only triggers when requestCounter increases
+ * @param {string} nodeId - Node ID for debugging
+ * @param {string} componentName - Component name for debugging
+ * @returns {function} Equality function for Zustand subscribe
  */
-export const renderYamdTimelineBullet = (bulletType = 'default') => {
-  const BulletComponent = TIMELINE_BULLET_COMPONENTS[bulletType] || TIMELINE_BULLET_COMPONENTS['default'];
-  
-  return (
-    <div style={{
-      width: TIMELINE_BULLET_DIMENSIONS.container_width,
-      height: TIMELINE_BULLET_DIMENSIONS.container_height,
-      display: 'flex',
-      justifyContent: 'center',
-      alignItems: 'center',
-      flexShrink: 0
-    }}>
-      <BulletComponent />
-    </div>
-  );
+export const createBulletEqualityFn = (nodeId, componentName) => {
+  return (prev, next) => {
+    // console.log(`noteId: ${nodeId} ${componentName} equalityFn prev:`, prev, "next:", next);
+
+    // Only trigger if requestCounter has increased (ignore responseCounter changes)
+    const keys = new Set([...Object.keys(prev), ...Object.keys(next)]);
+    const hasNewRequests = Array.from(keys).some((key) => 
+      (next[key]?.requestCounter || 0) > (prev[key]?.requestCounter || 0)
+    );
+    
+    const shouldSkip = !hasNewRequests; // skip if no new requests
+    // console.log(`noteId: ${nodeId} ${componentName} equalityFn hasNewRequests:`, hasNewRequests, "shouldSkip:", shouldSkip);
+    
+    return shouldSkip;
+  };
 };
-
-/**
- * Component to add timeline bullet before a YamdNode with vertical line drawing
- * @param {React.ReactNode} childNode - The single YamdNode component to wrap
- * @param {string} bulletType - Type of bullet to render
- * @param {object} globalInfo - Global context information
- * @param {number} itemIndex - Index of this item in the timeline
- * @param {boolean} isLast - Whether this is the last item
- * @param {object} bulletRefs - Ref object to store bullet element references
- * @param {Array} lineHeights - Array of calculated line heights
- * @param {function} onBulletPositionChange - Callback to trigger line recalculation
- * @returns {JSX.Element} - Wrapped component with timeline bullet and line
- */
-export const AddTimelineBulletBeforeYamdNode = React.memo(({ 
-  childNode, 
-  bulletType = 'default', 
-  globalInfo, 
-  itemIndex, 
-  isLast, 
-  bulletRefs, 
-  lineHeights,
-  onBulletPositionChange
-}) => {
-  // Extract parentInfo from childNode props
-  const parentInfo = childNode.props.parentInfo;
-  
-  // Get bullet type from child node data if not specified
-  let actualBulletType = bulletType;
-  if (globalInfo?.getNodeDataById && childNode.props.nodeId) {
-    const childNodeData = globalInfo.getNodeDataById(childNode.props.nodeId);
-    if (childNodeData?.attr?.bullet) {
-      actualBulletType = childNodeData.attr.bullet;
-    }
-  }
-
-  // State to track if child has notified preferred bullet Y position
-  const [hasFirstChildNotifiedPreferredBulletYPos, setHasFirstChildNotifiedPreferredBulletYPos] = React.useState(false);
-  const [preferredBulletYPos, setPreferredBulletYPos] = React.useState(0);
-
-  // Callback function for child to notify preferred bullet Y position
-  const notifyPreferredBulletYPos = React.useCallback((yPos) => {
-    const bulletHeight = parseInt(TIMELINE_BULLET_DIMENSIONS.bullet_height);
-    const calculatedTop = yPos - (bulletHeight / 2);
-    setPreferredBulletYPos(prev => {
-      // Only update if the value actually changed to prevent unnecessary re-renders
-      if (prev !== yPos) {
-        setHasFirstChildNotifiedPreferredBulletYPos(true);
-        return yPos;
-      }
-      return prev;
-    });
-  }, []); // Empty dependency array is correct - we use functional updates
-
-  // Create enhanced parentInfo with bullet notification callback
-  const childParentInfo = React.useMemo(() => ({
-    ...parentInfo,
-    hasBulletToLeft: true,
-    notifyPreferredBulletYPos,
-    bulletContainerClassName: '.yamd-timeline-item' // don't forget beginning with a dot
-  }), [parentInfo, notifyPreferredBulletYPos]);
-
-  // Clone childNode and inject enhanced parentInfo
-  const enhancedChildNode = React.cloneElement(childNode, {
-    parentInfo: childParentInfo
-  });
-
-  // Default positioning branch (put first)
-  if (!hasFirstChildNotifiedPreferredBulletYPos) {
-    return (
-      <div className="yamd-timeline-item">
-        
-        {/* bullet container */}
-        <div className="yamd-timeline-bullet-container">
-          <div 
-            ref={el => bulletRefs.current[itemIndex] = el}
-            className="yamd-timeline-bullet-wrapper"
-            style={{
-              position: 'relative',
-            }}
-          >
-            {renderYamdTimelineBullet(actualBulletType)}
-            {!isLast && (
-              <div 
-                className="yamd-timeline-connect-line"
-                style={{
-                  top: `calc(50% + ${parseInt(TIMELINE_BULLET_DIMENSIONS.bullet_height) / 2}px + ${TIMELINE_BULLET_DIMENSIONS.connect_line_gap})`,
-                  height: lineHeights[itemIndex] ? `${lineHeights[itemIndex]}px` : '20px'
-                }}
-              ></div>
-            )}
-          </div>
-        </div>
-
-        {/* content container */}
-        <div className="yamd-timeline-content">
-          {enhancedChildNode}
-        </div>
-      </div>
-    );
-  } else {
-    console.log('childId:', childNode.props.nodeId);
-    console.log('preferredBulletYPos', preferredBulletYPos);
-    console.log('TIMELINE_BULLET_DIMENSIONS.container_height', TIMELINE_BULLET_DIMENSIONS.container_height);
-    // Custom positioning branch - allow child node to notify its preferred bullet Y position
-    return (
-      <div className="yamd-timeline-item" style={{position: 'relative'}}>
-        
-        {/* bullet container */}
-        <div className="yamd-timeline-bullet-container"
-          style={{
-          }}
-        >
-          <div 
-            ref={el => bulletRefs.current[itemIndex] = el}
-            className="yamd-timeline-bullet-wrapper"
-            style={{ 
-              position: 'relative',
-              width: TIMELINE_BULLET_DIMENSIONS.container_width,
-              height: TIMELINE_BULLET_DIMENSIONS.container_height,
-              // top: `${preferredBulletYPos - (parseInt(TIMELINE_BULLET_DIMENSIONS.container_height) / 2)}px`,
-              top: `${preferredBulletYPos - (parseInt(TIMELINE_BULLET_DIMENSIONS.container_height) / 2)}px`,
-              display: 'flex',
-              flexShrink: 0,
-              justifyContent: 'center',
-            }}
-          >
-            <div style={{
-              position: 'absolute',
-              top: '50%',
-              left: '50%',
-              // transform: 'translateX(-50%)' // Only center horizontally
-              transform: 'translate(-50%, -50%)'
-            }}>
-              {renderYamdTimelineBullet(actualBulletType)}
-            </div>
-            {!isLast && (
-              <div 
-                className="yamd-timeline-connect-line"
-                style={{
-                  top: `calc(50% + ${parseInt(TIMELINE_BULLET_DIMENSIONS.bullet_height) / 2}px + ${TIMELINE_BULLET_DIMENSIONS.connect_line_gap})`,
-                  height: lineHeights[itemIndex] ? `${lineHeights[itemIndex]}px` : '20px'
-                }}
-              ></div>
-            )}
-          </div>
-        </div>
-
-        {/* content container */}
-        <div className="yamd-timeline-content">
-          {enhancedChildNode}
-        </div>
-      </div>
-    );
-  }
-});

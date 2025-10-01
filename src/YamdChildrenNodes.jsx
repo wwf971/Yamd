@@ -1,6 +1,6 @@
 import React from 'react';
 import YamdTimeline from './components/YamdTimeline.jsx';
-import { LIST_INDENT } from './YamdRenderSettings.js';
+import { LIST_SETTINGS } from './YamdRenderSettings.js';
 import YamdNode from './YamdNode.jsx';
 
 /**
@@ -52,7 +52,7 @@ import YamdNode from './YamdNode.jsx';
   
   // Helper to get container style with conditional indentation
   const getContainerStyle = () => ({
-    paddingLeft: shouldAddIndent ? LIST_INDENT.childIndent : '0px',
+    paddingLeft: shouldAddIndent ? LIST_SETTINGS.child_indent_x : '0px',
     width: '100%'
   });
 
@@ -101,7 +101,7 @@ import YamdNode from './YamdNode.jsx';
     case 'p':
       return (
         <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'flex-start', maxWidth: '100%'}}>
-          <div style={{ width: shouldAddIndent ? LIST_INDENT.childIndent : '0px', height: '0px' }} />
+          <div style={{ width: shouldAddIndent ? LIST_SETTINGS.child_indent_x : '0px', height: '0px' }} />
           <div className="yamd-paragraphs">
             {childIds.map(childId => (
               <div key={childId} className="yamd-paragraph">

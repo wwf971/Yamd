@@ -25,8 +25,7 @@ export {
   getChildrenDisplay,
   getChildrenDefaultDisplay,
   getAlignmentStrategy,
-  renderYamdTimelineBullet,
-  AddTimelineBulletBeforeYamdNode
+  createBulletEqualityFn
 } from './YamdRenderUtils.js';
 
 export {
@@ -36,7 +35,7 @@ export {
 // export render settings
 export {
   BULLET_DIMENSIONS,
-  LIST_INDENT,
+  LIST_SETTINGS,
   LATEX_SETTINGS,
   PANEL_SETTINGS,
   TIMELINE_SETTINGS,
@@ -44,7 +43,7 @@ export {
   VIDEO_SETTINGS,
   IMAGE_LIST_SETTINGS,
   VIDEO_LIST_SETTINGS,
-  TIMELINE_BULLET_DIMENSIONS
+  TIMELINE_BULLET_SETTINGS
 } from './YamdRenderSettings.js';
 
 // export MathJax utilities

@@ -859,14 +859,6 @@
 }
 
 .yamd-timeline-bullet-up-arrow {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: #dbeafe;
-  border: 2px solid #93c5fd;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   z-index: 2;
 }
 
@@ -918,4 +910,20 @@
   font-size: 0.9rem;
   color: #374151;
   line-height: 1.4;
+}
+
+.yamd-divider-container {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  margin: 0px 0;
+}
+
+/* Divider text span styles */
+.yamd-divider-text-span {
+  padding: 0 3px;
+  font-size: 0.9em;
+  font-weight: 500;
+  color: inherit;
+  white-space: nowrap;
 }
