@@ -1,19 +1,18 @@
 import React from 'react';
 import './YamdNode.css';
-import YamdPanel from './components/YamdPanel.jsx';
-import YamdNodeDivider from './components/YamdNodeDivider.jsx';
-import YamdNodeKey from './components/YamdNodeKey.jsx';
-import YamdNodeTopRight from './components/YamdNodeTopRight.jsx';
-import YamdNodeAnonym from './components/YamdNodeAnonym.jsx';
-import YamdNodeText from './components/YamdNodeText.jsx';
-import YamdNodeLaTeX from './components/YamdNodeLaTeX.jsx';
-import YamdNodeImage from './components/YamdNodeImage.jsx';
-import YamdNodeVideo from './components/YamdNodeVideo.jsx';
-import YamdImageList from './components/YamdImageList.jsx';
-import YamdVideoList from './components/YamdVideoList.jsx';
-import YamdChildrenNodes from './YamdChildrenNodes.jsx';
-import { AddListBulletBeforeYamdNode } from './components/AddBullet.jsx';
-import { getChildrenDisplay } from './YamdRenderUtils.js';
+import YamdPanel from '@/components/NodePanel.jsx';
+import YamdNodeDivider from '@/components/NodeDivider.jsx';
+import YamdNodeKey from '@/components/NodeKey.jsx';
+import YamdNodeTopRight from '@/components/NodeTopRight.jsx';
+import YamdNodeAnonym from '@/components/NodeAnonym.jsx';
+import YamdNodeText from '@/components/NodeText.jsx';
+import YamdNodeLaTeX from '@/components/NodeLaTeX.jsx';
+import NodeImage from '@/components/NodeImage.jsx';
+import NodeVideo from '@/components/NodeVideo.jsx';
+import YamdImageList from '@/components/NodeImageList.jsx';
+import YamdVideoList from '@/components/NodeVideoList.jsx';
+import { AddListBulletBeforeYamdNode } from '@/core/AddBullet.jsx';
+import { getChildrenDisplay } from '@/YamdRenderUtils.js';
 
 /**
  * Main YamdNode component for rendering flattened Yamd data
@@ -22,16 +21,13 @@ import { getChildrenDisplay } from './YamdRenderUtils.js';
  * @param {object} globalInfo - Global context with getNodeDataById, getAssetById, getRefById, and fetchExternalData methods (default: null)
  */
 const YamdNode = React.memo(({ nodeId, parentInfo = null, globalInfo = null }) => {
-
   // console.log('🔍 YamdNode rendering node:', nodeId);
   if (!globalInfo?.getNodeDataById) {
     return <div className="yamd-error">Missing globalInfo.getNodeDataById</div>;
   }
-  
   const nodeData = globalInfo.getNodeDataById(nodeId);
-  
   if (!nodeData) {
-    return <div className="yamd-error">Node not found: {nodeId}</div>;
+    return <div className="yamd-error">Node not found. noedId: {nodeId}</div>;
   }
 
   // assign default values if missing
@@ -60,7 +56,7 @@ const YamdNode = React.memo(({ nodeId, parentInfo = null, globalInfo = null }) =
       return (
         <AddListBulletBeforeYamdNode 
           childNode={
-            <YamdNodeImage
+            <NodeImage
               nodeId={nodeId}
               parentInfo={parentInfo}
               globalInfo={globalInfo}
@@ -75,7 +71,7 @@ const YamdNode = React.memo(({ nodeId, parentInfo = null, globalInfo = null }) =
       return (
         <AddListBulletBeforeYamdNode 
           childNode={
-            <YamdNodeVideo
+            <NodeVideo
               nodeId={nodeId}
               parentInfo={parentInfo}
               globalInfo={globalInfo}
@@ -111,6 +107,15 @@ const YamdNode = React.memo(({ nodeId, parentInfo = null, globalInfo = null }) =
               globalInfo={globalInfo}
             />
           }
+          alignBullet='flex-start'
+        />
+      );
+    }
+
+    if (nodeData.type === 'custom') {
+      return (
+        <AddListBulletBeforeYamdNode
+          childNode={globalInfo.renderCustomNode(nodeData, parentInfo)}
           alignBullet='flex-start'
         />
       );

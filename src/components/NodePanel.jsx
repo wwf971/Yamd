@@ -1,8 +1,7 @@
 import React, { useState, useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
-import { getNodeClass } from '../YamdNode.jsx';
-import YamdChildrenNodes from '../YamdChildrenNodes.jsx';
+import { getNodeClass } from '@/core/YamdNode.jsx';
 import { getChildrenDisplay } from '../YamdRenderUtils.js';
-import { useYamdDocStore } from '../YamdDocStore.js';
+import { useYamdDocStore } from '@/core/YamdDocStore.js';
 import { createBulletEqualityFn } from '../YamdRenderUtils.js';
 
 /**
@@ -18,11 +17,11 @@ const YamdPanel = forwardRef(({ nodeId, parentInfo, globalInfo }, ref) => {
     }
   }, [nodeId, globalInfo]);
 
-  // expose calcPreferredBulletYPos to parent via ref
+  // expose calcBulletYPos to parent via ref
   useImperativeHandle(ref, () => ({
-    calcPreferredBulletYPos: () => {
+    calcBulletYPos: () => {
       const docId = globalInfo?.docId;
-      calcPreferredBulletYPos(nodeId, docId, nodeRef, buttonRef);
+      calcBulletYPos(nodeId, docId, nodeRef, buttonRef);
     }
   }), [nodeId, globalInfo]);
 
@@ -35,11 +34,11 @@ const YamdPanel = forwardRef(({ nodeId, parentInfo, globalInfo }, ref) => {
     if (!nodeId || !docId) return;
     console.log('YamdPanel noteId:', nodeId, 'useEffect subscribe');
     const unsubscribe = useYamdDocStore.subscribe(
-      (state) => state.bulletPreferredYPosRequests[docId]?.[nodeId] || {},
+      (state) => state.bulletPreferredYPosReq[docId]?.[nodeId] || {},
       (requests) => {
         console.log('noteId:', nodeId, 'YamdPanel useEffect subscribe triggered with requests:', requests);
         // This will only fire if equalityFn returns false
-        calcPreferredBulletYPos(nodeId, docId, nodeRef, buttonRef);
+        calcBulletYPos(nodeId, docId, nodeRef, buttonRef);
       },
       {
         equalityFn: createBulletEqualityFn(nodeId, 'YamdPanel'),
@@ -47,7 +46,7 @@ const YamdPanel = forwardRef(({ nodeId, parentInfo, globalInfo }, ref) => {
     );
     
     // Immediately check for existing requests
-    calcPreferredBulletYPos(nodeId, docId, nodeRef, buttonRef);
+    calcBulletYPos(nodeId, docId, nodeRef, buttonRef);
     return unsubscribe;
   }, [nodeId, docId]);
   // ===== END ZUSTAND LOGIC =====
@@ -103,16 +102,14 @@ const YamdPanel = forwardRef(({ nodeId, parentInfo, globalInfo }, ref) => {
       {isExpanded && (
         <div className="yamd-panel-content">
           {nodeData.children && nodeData.children.length > 0 && (
-          <YamdChildrenNodes
-            childIds={nodeData.children}
-            shouldAddIndent={false}
-            parentInfo={{ 
-              ...parentInfo, 
-              ...(childDisplay && { childDisplay }),
-              ...(childClass && { childClass })
-            }}
-            globalInfo={globalInfo}
-          />
+            globalInfo.renderChildNodes(nodeData.children, {
+              shouldAddIndent: false,
+              parentInfo: { 
+                ...parentInfo, 
+                ...(childDisplay && { childDisplay }),
+                ...(childClass && { childClass })
+              }
+            })
           )}
         </div>
       )}
@@ -128,13 +125,13 @@ const YamdPanel = forwardRef(({ nodeId, parentInfo, globalInfo }, ref) => {
  * @param {React.RefObject} buttonRef - Button DOM reference
  * @returns {void}
  */
-const calcPreferredBulletYPos = (nodeId, docId, nodeRef, buttonRef) => {
+const calcBulletYPos = (nodeId, docId, nodeRef, buttonRef) => {
   if (!nodeRef.current || !buttonRef.current) return;
   
   const store = useYamdDocStore.getState();
   // Get all requests for this node
-  const requests = store.getPreferredYPosRequests(docId, nodeId);
-  console.log('noteId:', nodeId, 'YamdPanel calcPreferredBulletYPos requests:', requests);
+  const requests = store.getBulletYPosReqs(docId, nodeId);
+  console.log('noteId:', nodeId, 'YamdPanel calcBulletYPos requests:', requests);
   
   // Update result for each requesting container
   Object.keys(requests).forEach(containerClassName => {
@@ -145,8 +142,8 @@ const calcPreferredBulletYPos = (nodeId, docId, nodeRef, buttonRef) => {
       
       if (!bulletContainer) {
         const result = { code: -1, message: `Panel: bullet container ${containerClassName} not found`, data: null };
-        store.updateRequestResult(docId, nodeId, containerClassName, result);
-        store.incResponseCounter(docId, nodeId, containerClassName);
+        store.updateReqResult(docId, nodeId, containerClassName, result);
+        store.incRespCounter(docId, nodeId, containerClassName);
         return;
       }
       
@@ -159,13 +156,13 @@ const calcPreferredBulletYPos = (nodeId, docId, nodeRef, buttonRef) => {
       const result = { code: 0, message: 'Panel button position', data: preferredYPos };
       
       // Update result in the Zustand store
-      store.updateRequestResult(docId, nodeId, containerClassName, result);
+      store.updateReqResult(docId, nodeId, containerClassName, result);
       // Increment response counter in store
-      store.incResponseCounter(docId, nodeId, containerClassName);
+      store.incRespCounter(docId, nodeId, containerClassName);
     } catch (error) {
       const result = { code: -1, message: `Panel positioning error: ${error.message}`, data: null };
-      store.updateRequestResult(docId, nodeId, containerClassName, result);
-      store.incResponseCounter(docId, nodeId, containerClassName);
+      store.updateReqResult(docId, nodeId, containerClassName, result);
+      store.incRespCounter(docId, nodeId, containerClassName);
     }
   });
 };

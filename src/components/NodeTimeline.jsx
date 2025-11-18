@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import YamdNode from '../YamdNode.jsx';
-import { TIMELINE_BULLET_SETTINGS } from '../YamdRenderSettings.js';
-import { calcConnectLineHeights, AddTimelineBulletBeforeYamdNode } from './YamdTimeline.js';
+import YamdNode from '@/core/YamdNode.jsx';
+import { TIMELINE_BULLET_SETTINGS } from '@/config/RenderConfig.js';
+import { calcConnectLineHeights, AddTimelineBulletBeforeYamdNode } from '@/components/NodeTimeline.js';
 
 /**
  * Main YamdTimeline component - renders timeline with bullets and vertical lines
@@ -21,6 +21,14 @@ const YamdTimeline = ({ childIds, globalInfo, parentInfo }) => {
     const heights = calcConnectLineHeights(bulletRefs);
     setLineHeights(heights);
   }, []); // Remove childIds dependency to prevent infinite re-renders
+
+  // handle content height changes from individual timeline items
+  const onContentHeightChange = React.useCallback((itemIndex, newHeight) => {
+    // console.log(`Timeline container received height change for item ${itemIndex}:`, newHeight);
+    
+    // Debounce the line recalculation to avoid excessive updates
+    setTimeout(recalcConnectLineHeights, 10);
+  }, [recalcConnectLineHeights]);
 
   useEffect(() => {
     // Use setTimeout to ensure DOM has updated
@@ -52,7 +60,7 @@ const YamdTimeline = ({ childIds, globalInfo, parentInfo }) => {
   });
 
   // Render children similar to YamdChildrenNodes but with timeline bullets
-  const renderChildList = () => (
+  const renderChildNodes = () => (
     <div className="yamd-timeline" style={{ position: 'relative' }}>
       {/* Render timeline items */}
       {childrenNodes.map((childNode, index) => {
@@ -69,6 +77,7 @@ const YamdTimeline = ({ childIds, globalInfo, parentInfo }) => {
             bulletRefs={bulletRefs}
             lineHeights={lineHeights}
             onBulletYPosChange={recalcConnectLineHeights}
+            onContentHeightChange={onContentHeightChange}
           />
         );
       })}
@@ -78,7 +87,7 @@ const YamdTimeline = ({ childIds, globalInfo, parentInfo }) => {
     </div>
   );
 
-  return renderChildList();
+  return renderChildNodes();
 };
 
 

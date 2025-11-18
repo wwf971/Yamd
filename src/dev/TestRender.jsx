@@ -1,18 +1,23 @@
-import React, { useState } from 'react';
-import YamdDoc from './YamdDoc.jsx';
-import { loadMathJax } from './mathjax/MathJaxLoad.js';
+import React, { useState, useEffect } from 'react';
+import YamdDoc from '@/core/YamdDoc.jsx';
+import { loadMathJax } from '@/mathjax/MathJaxLoad.js';
 import { 
   parseYamlToJson, 
   formatJson, 
-  getSampleYaml, 
+  getSampleYaml,
+  getSampleYamlNames,
   getCornerCaseYaml,
   processNodes, 
   flattenJson,
   processAllTextSegments
-} from './ParseYamd.js';
+} from '@/parse/ParseYamd.js';
+import './TestRender.css';
 
-const TestYamd = () => {
-  const [yamlInput, setYamlInput] = useState(getSampleYaml());
+const TestRender = () => {
+  const sampleNames = getSampleYamlNames();
+  const defaultSample = "rich-text";
+  const [selectedSample, setSelectedSample] = useState(defaultSample);
+  const [yamlInput, setYamlInput] = useState(getSampleYaml(defaultSample));
   const [jsonOutput, setJsonOutput] = useState('');
   const [processedOutput, setProcessedOutput] = useState('');
   const [flattenedOutput, setFlattenedOutput] = useState('');
@@ -22,9 +27,9 @@ const TestYamd = () => {
 
   // initialize mathjax
   React.useEffect(() => {
-    console.log("🔧 Loading MathJax for TestYamd...");
+    console.log("🔧 Loading MathJax for TestRender...");
     loadMathJax().catch(err => {
-      console.error('Failed to load MathJax in TestYamd:', err);
+      console.error('Failed to load MathJax in TestRender:', err);
     });
   }, []);
 
@@ -89,7 +94,17 @@ const TestYamd = () => {
   };
 
   const handleLoadSample = () => {
-    setYamlInput(getSampleYaml());
+    setYamlInput(getSampleYaml(selectedSample));
+    setJsonOutput('');
+    setProcessedOutput('');
+    setFlattenedOutput('');
+    setFlattenedData(null);
+    setParseError('');
+  };
+
+  const handleSampleChange = (sampleName) => {
+    setSelectedSample(sampleName);
+    setYamlInput(getSampleYaml(sampleName));
     setJsonOutput('');
     setProcessedOutput('');
     setFlattenedOutput('');
@@ -106,110 +121,93 @@ const TestYamd = () => {
     setParseError('');
   };
 
+  useEffect(() => {
+    // click parse button automatically after 1 second
+    setTimeout(() => {
+      const parseButton = document.getElementById('parse-button');
+      if (parseButton) {
+        parseButton.click();
+      }
+    }, 1000);
+  }, [yamlInput]);
+
   return (
-    <div style={{ padding: '20px' }}>
-      <h2>Yamd Parser - Complete Processing Pipeline</h2>
-      <p>Complete Yamd processing: YAML → Raw JSON → Processed Nodes → Flattened Structure</p>
+    <div className="test-render-container">
+      <div className="test-render-header">
+        <h2 className="test-render-title">Yamd Parser - Complete Processing Pipeline</h2>
+        <p className="test-render-description">Complete Yamd processing: YAML → Raw JSON → Processed Nodes → Flattened Structure</p>
+      </div>
       
-      <div style={{ marginBottom: '15px', display: 'flex', gap: '10px', alignItems: 'center' }}>
+      <div className="button-controls">
         <button 
+          id="parse-button"
           onClick={handleParse} 
           disabled={isLoading}
-          style={{
-            padding: '8px 16px',
-            backgroundColor: '#007acc',
-            color: 'white',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: isLoading ? 'not-allowed' : 'pointer',
-            opacity: isLoading ? 0.6 : 1
-          }}
+          className="btn btn-parse"
         >
-          {isLoading ? 'Processing...' : 'Parse Complete Pipeline'}
+          {isLoading ? 'Processing...' : 'Parse'}
         </button>
         
         <button 
           onClick={handleClear}
-          style={{
-            padding: '8px 16px',
-            backgroundColor: '#6c757d',
-            color: 'white',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: 'pointer'
-          }}
+          className="btn btn-clear"
         >
           Clear
         </button>
         
         <button 
           onClick={handleLoadSample}
-          style={{
-            padding: '8px 16px',
-            backgroundColor: '#28a745',
-            color: 'white',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: 'pointer'
-          }}
+          className="btn btn-sample"
         >
-          Load Sample
+          Reload Sample
         </button>
         
         <button 
           onClick={handleLoadCornerCases}
-          style={{
-            padding: '8px 16px',
-            backgroundColor: '#17a2b8',
-            color: 'white',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: 'pointer'
-          }}
+          className="btn btn-corner-cases"
         >
           Corner Cases
         </button>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gridTemplateRows: 'auto auto', gap: '15px' }}>
+      {/* Sample Selection Radio Buttons */}
+      <div className="sample-selection">
+        <span className="sample-selection-label">Select Sample:</span>
+        {sampleNames.map(name => (
+          <label key={name} className="sample-radio-label">
+            <input
+              type="radio"
+              name="sample"
+              value={name}
+              checked={selectedSample === name}
+              onChange={(e) => handleSampleChange(e.target.value)}
+              className="sample-radio-input"
+            />
+            <span className="sample-radio-text">{name}</span>
+          </label>
+        ))}
+      </div>
+
+      <div className="panels-grid">
         {/* Panel 1: YAML Input */}
-        <div style={{ display: 'flex', flexDirection: 'column' }}>
-          <h3 style={{ margin: '0 0 10px 0', color: '#333', fontSize: '1rem' }}>1. YAML Input</h3>
+        <div className="panel">
+          <h3 className="panel-title">1. YAML Input</h3>
           <textarea
             value={yamlInput}
             onChange={(e) => setYamlInput(e.target.value)}
             placeholder="Enter your YAML here..."
-            style={{
-              height: '300px',
-              padding: '8px',
-              border: '1px solid #ccc',
-              borderRadius: '4px',
-              fontFamily: 'Monaco, Consolas, "Lucida Console", monospace',
-              fontSize: '12px',
-              resize: 'none',
-              outline: 'none'
-            }}
+            className="panel-textarea panel-textarea-input"
           />
-          <div style={{ marginTop: '3px', fontSize: '11px', color: '#666' }}>
+          <div className="panel-info">
             Lines: {yamlInput.split('\n').length} | Chars: {yamlInput.length}
           </div>
         </div>
 
         {/* Panel 2: Raw JSON */}
-        <div style={{ display: 'flex', flexDirection: 'column' }}>
-          <h3 style={{ margin: '0 0 10px 0', color: '#333', fontSize: '1rem' }}>2. Raw JSON</h3>
+        <div className="panel">
+          <h3 className="panel-title">2. Raw JSON</h3>
           {parseError ? (
-            <div style={{
-              height: '300px',
-              padding: '8px',
-              border: '1px solid #dc3545',
-              borderRadius: '4px',
-              backgroundColor: '#f8d7da',
-              color: '#721c24',
-              fontFamily: 'Monaco, Consolas, "Lucida Console", monospace',
-              fontSize: '11px',
-              overflow: 'auto'
-            }}>
+            <div className="panel-error">
               <strong>Error:</strong><br />
               {parseError}
             </div>
@@ -218,68 +216,38 @@ const TestYamd = () => {
               value={jsonOutput}
               readOnly
               placeholder="Raw JSON from YAML..."
-              style={{
-                height: '300px',
-                padding: '8px',
-                border: '1px solid #007acc',
-                borderRadius: '4px',
-                fontFamily: 'Monaco, Consolas, "Lucida Console", monospace',
-                fontSize: '11px',
-                resize: 'none',
-                outline: 'none',
-                backgroundColor: '#f0f8ff'
-              }}
+              className="panel-textarea panel-textarea-raw-json"
             />
           )}
-          <div style={{ marginTop: '3px', fontSize: '11px', color: '#666' }}>
+          <div className="panel-info">
             {parseError ? '❌ Failed' : jsonOutput ? `${jsonOutput.length} chars` : 'Ready'}
           </div>
         </div>
 
         {/* Panel 3: Processed Nodes */}
-        <div style={{ display: 'flex', flexDirection: 'column' }}>
-          <h3 style={{ margin: '0 0 10px 0', color: '#333', fontSize: '1rem' }}>3. Processed Nodes</h3>
+        <div className="panel">
+          <h3 className="panel-title">3. Processed Nodes</h3>
           <textarea
             value={processedOutput}
             readOnly
             placeholder="Processed nodes with parsed attributes..."
-            style={{
-              height: '300px',
-              padding: '8px',
-              border: '1px solid #28a745',
-              borderRadius: '4px',
-              fontFamily: 'Monaco, Consolas, "Lucida Console", monospace',
-              fontSize: '11px',
-              resize: 'none',
-              outline: 'none',
-              backgroundColor: '#f0fff0'
-            }}
+            className="panel-textarea panel-textarea-processed"
           />
-          <div style={{ marginTop: '3px', fontSize: '11px', color: '#666' }}>
+          <div className="panel-info">
             {processedOutput ? `${processedOutput.length} chars` : 'Awaiting processing'}
           </div>
         </div>
 
         {/* Panel 4: Flattened Structure */}
-        <div style={{ display: 'flex', flexDirection: 'column' }}>
-          <h3 style={{ margin: '0 0 10px 0', color: '#333', fontSize: '1rem' }}>4. Flattened Structure</h3>
+        <div className="panel">
+          <h3 className="panel-title">4. Flattened Structure</h3>
           <textarea
             value={flattenedOutput}
             readOnly
             placeholder="Flattened ID-based structure..."
-            style={{
-              height: '300px',
-              padding: '8px',
-              border: '1px solid #ffc107',
-              borderRadius: '4px',
-              fontFamily: 'Monaco, Consolas, "Lucida Console", monospace',
-              fontSize: '11px',
-              resize: 'none',
-              outline: 'none',
-              backgroundColor: '#fffbf0'
-            }}
+            className="panel-textarea panel-textarea-flattened"
           />
-          <div style={{ marginTop: '3px', fontSize: '11px', color: '#666' }}>
+          <div className="panel-info">
             {flattenedOutput ? `${flattenedOutput.length} chars` : 'Awaiting flattening'}
           </div>
         </div>
@@ -287,30 +255,24 @@ const TestYamd = () => {
 
       {/* Full-width Rendering Panel */}
       {flattenedData && (
-        <div style={{ marginTop: '20px' }}>
-          <h3 style={{ margin: '0 0 15px 0', color: '#333', fontSize: '1.1rem' }}>5. Rendered Document</h3>
-          <div style={{
-            border: '2px solid #28a745',
-            borderRadius: '8px',
-            padding: '20px',
-            backgroundColor: '#f8fff8',
-            minHeight: '200px'
-          }}>
-        <YamdDoc flattenedData={flattenedData} disableRefJump={false} />
+        <div className="rendered-document-section">
+          <h3 className="rendered-document-title">5. Rendered Document</h3>
+          <div className="rendered-document-container">
+        <YamdDoc docData={flattenedData} disableRefJump={false} />
           </div>
         </div>
       )}
 
-      <div style={{ marginTop: '20px', padding: '15px', backgroundColor: '#e9ecef', borderRadius: '4px' }}>
-        <h4 style={{ margin: '0 0 10px 0' }}>Processing Pipeline:</h4>
-        <ol style={{ margin: 0, paddingLeft: '20px' }}>
+      <div className="pipeline-info">
+        <h4 className="pipeline-title">Processing Pipeline:</h4>
+        <ol className="pipeline-list">
           <li><strong>YAML Input:</strong> Enter YAML with square bracket grammar like <code>[self=panel, child=ul]</code> and inline LaTeX like <code>$E = mc^2$</code></li>
           <li><strong>Raw JSON:</strong> Direct YAML-to-JSON conversion without processing</li>
           <li><strong>Processed Nodes:</strong> Square bracket attributes parsed, nodes typed, children remain nested objects</li>
           <li><strong>Flattened Structure:</strong> ID-based flat dictionary with parent-child references</li>
           <li><strong>LaTeX Processing:</strong> Inline LaTeX patterns detected, registered in assets, and converted to clean HTML (NO MathJax fallback)</li>
         </ol>
-        <div style={{ marginTop: '10px', fontSize: '0.9em', color: '#555' }}>
+        <div className="pipeline-examples">
           <strong>Grammar Examples:</strong> <code>name[self=panel]</code>, <code>[self=divider,child=ul]</code>, <code>item[selfClass=highlight]</code>
         </div>
       </div>
@@ -318,4 +280,4 @@ const TestYamd = () => {
   );
 };
 
-export default TestYamd;
+export default TestRender;

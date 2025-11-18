@@ -1,6 +1,5 @@
 import React from 'react';
-import { useYamdDocStore } from '../YamdDocStore.js';
-import { BULLET_DIMENSIONS, LIST_SETTINGS } from '../YamdRenderSettings.js';
+import { BULLET_DIMENSIONS, LIST_SETTINGS } from '@/config/RenderConfig.js';
 import { formatYPosition } from '../YamdRenderUtils.js';
 
 /**
@@ -71,19 +70,16 @@ export const AddListBulletBeforeYamdNode = React.memo(({ childNode, alignBullet 
   const parentInfo = childNode?.props?.parentInfo;
   const globalInfo = childNode?.props?.globalInfo;
   const childId = childNode?.props?.nodeId;
+  
+  console.log('🔍 AddBullet rendering nodeId:', childId, 'parentInfo.childDisplay:', parentInfo?.childDisplay);
+  
   // Check if we should render bullet
   let shouldRenderBullet = parentInfo?.childDisplay === 'ul' || parentInfo?.childDisplay === 'ol';
   
-  if(parentInfo?.childDisplay === 'timeline') {
-    // AddTimelineBulletBeforeYamdNode --> YamdNodeText (now wrapped by AddListBulletBeforeYamdNode in YamdNode.jsx)
-    shouldRenderBullet = false; // already rendered by AddTimelineBulletBeforeYamdNode
-    // for timeline children, just pass through without adding list bullets
-    // the timeline bullet is already handled by AddTimelineBulletBeforeYamdNode
-    return childNode; // Just render childNode without bullet
-  }
-
-  if (!shouldRenderBullet) {
-    return childNode; // Just render childNode without bullet
+  // Timeline check
+  const isTimeline = parentInfo?.childDisplay === 'timeline';
+  if(isTimeline) {
+    shouldRenderBullet = false;
   }
 
   // Get docId from globalInfo (not parentInfo)
@@ -91,45 +87,62 @@ export const AddListBulletBeforeYamdNode = React.memo(({ childNode, alignBullet 
   const nodeId = childId;
   const containerClassName = '.yamd-bullet-container';
   
-  // set up request when component mounts
-  React.useEffect(() => {
-    // console.log('noteId:', nodeId, 'AddListBulletBeforeYamdNode useEffect docId:', docId);
+  // Get width attribute from child node data
+  let listItemWidth = 'max'; // default value
+  if (globalInfo?.getNodeDataById && nodeId) {
+    const childNodeData = globalInfo.getNodeDataById(nodeId);
+    if (childNodeData?.attr?.width) {
+      listItemWidth = childNodeData.attr.width;
+    }
+  }
+  
+  // IMPORTANT: All hooks must be called before any conditional returns!
+  // Set up request when component mounts
+  // Use useLayoutEffect to ensure request is added before sibling useEffect hooks run
+  React.useLayoutEffect(() => {
+    console.log('🔍 AddBullet useLayoutEffect nodeId:', nodeId, 'shouldRenderBullet:', shouldRenderBullet, 'docId:', docId);
+    // Only add request if we should render bullet
+    if (!shouldRenderBullet) return;
+    // console.log('noteId:', nodeId, 'AddListBulletBeforeYamdNode useLayoutEffect docId:', docId);
     if (!nodeId || !docId) {
-      console.warn('noteId:', nodeId, 'docId:', docId, 'AddListBulletBeforeYamdNode useEffect skipped');
+      console.warn('noteId:', nodeId, 'docId:', docId, 'AddListBulletBeforeYamdNode useLayoutEffect skipped');
       return; 
     }
-    const store = useYamdDocStore.getState();
+    console.log('✅ AddBullet ADDING REQUEST nodeId:', nodeId);
+    const store = globalInfo.getDocStore().getState();
     // add request to store
-    store.addBulletPreferredYPosRequest(docId, nodeId, containerClassName);
-    // console.log('noteId:', nodeId, 'AddListBulletBeforeYamdNode useEffect addBulletPreferredYPosRequest');
+    store.addBulletYPosReq(docId, nodeId, containerClassName);
+    // console.log('noteId:', nodeId, 'AddListBulletBeforeYamdNode useLayoutEffect addBulletYPosReq');
     // increment request counter to notify the node
-    store.incRequestCounter(docId, nodeId, containerClassName);
-    // console.log('noteId:', nodeId, 'AddListBincRequestCounter request:', store.getPreferredYPosRequests(docId, nodeId)[containerClassName]);
-  }, [nodeId, docId, containerClassName]);
+    store.incReqCounter(docId, nodeId, containerClassName);
+    // console.log('noteId:', nodeId, 'AddListBincReqCounter request:', store.getBulletYPosReqs(docId, nodeId)[containerClassName]);
+  }, [shouldRenderBullet, nodeId, docId, containerClassName, globalInfo]);
 
   // subscribe to result changes with custom equality function
   const [result, setResult] = React.useState(null);
   
   React.useEffect(() => {
-    if (!nodeId || !docId) return;
+    // Only subscribe if we should render bullet
+    if (!shouldRenderBullet || !nodeId || !docId) return;
     // subscribe to changes in the result with proper equality function
-    const unsubscribe = useYamdDocStore.subscribe(
-      (state) => state.bulletPreferredYPosRequests[docId]?.[nodeId]?.[containerClassName]?.responseCounter,
+    const unsubscribe = globalInfo.getDocStore().subscribe(
+      (state) => state.bulletPreferredYPosReq[docId]?.[nodeId]?.[containerClassName]?.responseCounter,
       (responseCounter) => {
-        const result = store.getPreferredYPosRequests(docId, nodeId)[containerClassName];
+        const store = globalInfo.getDocStore().getState();
+        const result = store.getBulletYPosReqs(docId, nodeId)[containerClassName];
         console.log('noteId:', nodeId, 'AddListBulletBeforeYamdNode useEffect responseCounter:', responseCounter, 'result:', result);
         setResult(result);
       }
     );
 
     // get initial value
-    const store = useYamdDocStore.getState();
-    const initialRequests = store.getPreferredYPosRequests(docId, nodeId);
+    const store = globalInfo.getDocStore().getState();
+    const initialRequests = store.getBulletYPosReqs(docId, nodeId);
     const initialRequest = initialRequests[containerClassName];
     setResult(initialRequest?.result || null);
     
     return unsubscribe;
-  }, [nodeId, docId, containerClassName]);
+  }, [shouldRenderBullet, nodeId, docId, containerClassName, globalInfo]);
 
   // create enhanced parentInfo with bullet info (no callback needed for Zustand-only approach)
   const childParentInfo = React.useMemo(() => injectIntoParentInfo(parentInfo, {
@@ -142,6 +155,11 @@ export const AddListBulletBeforeYamdNode = React.memo(({ childNode, alignBullet 
     ...childNode.props,
     parentInfo: childParentInfo,
   });
+
+  // AFTER all hooks, check if we should render bullet
+  if (!shouldRenderBullet) {
+    return childNode; // Just render childNode without bullet
+  }
 
   // Use Zustand result for positioning, fallback to default if no result
   const hasResult = result?.code === 0;
@@ -172,7 +190,11 @@ export const AddListBulletBeforeYamdNode = React.memo(({ childNode, alignBullet 
       <div
         style={{ flex: 1, display: 'flex', maxWidth: '100%'}}
       >
-        <div style={{ marginLeft: BULLET_DIMENSIONS.content_offset_x }}>
+        <div style={{ 
+          marginLeft: BULLET_DIMENSIONS.content_offset_x,
+          ...(listItemWidth === 'max' ? { width: '100%' } : {}),
+          ...(listItemWidth === 'min' ? { width: 'fit-content' } : {})
+        }}>
           {enhancedChildNode}
         </div>
       </div>

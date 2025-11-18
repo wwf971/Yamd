@@ -25,7 +25,8 @@ const ATTR_WHITELIST = {
   'panelDefault': true,  // 'expand', 'collapse'
   
   // Node type and identification
-  'type': true,          // Node type: 'latex', 'image', 'video', etc.
+  'type': true,          // Node type: 'latex', 'image', 'video', 'custom', etc.
+  'customType': true,    // Custom node subtype
   'id': false,           // User-defined ID goes to htmlId, not attr
   
   // Content attributes
@@ -303,6 +304,8 @@ export function parseShorthandAttribute(shorthand) {
     return { type: 'image-list', selfDisplay: 'image-list' };
   } else if (trimmed === 'video-list' || trimmed === 'videolist') {
     return { type: 'video-list', selfDisplay: 'video-list' };
+  } else if (trimmed === 'custom') {
+    return { type: 'custom', selfDisplay: 'custom' };
   }
   
   // Determine if it's selfDisplay or childDisplay based on the value

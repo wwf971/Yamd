@@ -1,0 +1,38 @@
+.yamd-custom-box {
+  border: 2px solid #4a90e2;
+  border-radius: 8px;
+  margin: 16px 0;
+  overflow: hidden;
+  background: linear-gradient(135deg, #f5f7fa 0%, #e8f0fe 100%);
+  box-shadow: 0 2px 8px rgba(74, 144, 226, 0.2);
+}
+
+.yamd-custom-box-header {
+  display: flex;
+  align-items: center;
+  padding: 12px 16px;
+  background: #4a90e2;
+  color: white;
+  font-weight: 600;
+  font-size: 16px;
+}
+
+.yamd-custom-box-icon {
+  margin-right: 8px;
+  font-size: 20px;
+}
+
+.yamd-custom-box-title {
+  flex: 1;
+}
+
+.yamd-custom-box-content {
+  padding: 16px;
+  background: white;
+}
+
+.yamd-custom-box-item {
+  color: #333;
+  padding: 4px 0;
+}
+

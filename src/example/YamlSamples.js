@@ -1,7 +1,23 @@
+
+export function getSampleYamlNames(series='normal'){
+  if(series === 'normal') {
+    return [
+      'timeline',
+      'latex',
+      'rich-text',
+    ];
+  }
+  if(series === 'custom') {
+    return [
+      'custom-box',
+      'custom-mixed',
+    ];
+  }
+}
 /**
  * Sample YAML data for testing Yamd parsing
  */
-export function getSampleYaml() {
+export function getSampleYaml(name) {
 
   // return `# Sample Yamd Document
   // - "[self=none,child=ul]":
@@ -9,13 +25,19 @@ export function getSampleYaml() {
   //     - 啊啊啊
   //     - cc
   // `
+  if(!name) {
+    name = getSampleYamlNames()[0];
+  }
+
+  if(name === 'timeline') {
   return `# Sample Yamd Document
 
   - "[self=none,child=ul]":
-    - "Support for various display types[selfDisplay=panel]":
+    - "Support for various display types[selfDisplay=panel,width=max]":
       - Panels with expand/collapse
       - Timeline views 
       - Lists and tags
+    - "Compact item[width=min]": Takes minimal space
     - Easy to write and read
 
     - Introduction: Welcome to Yamd
@@ -24,8 +46,8 @@ export function getSampleYaml() {
 
     - Timeline Example[timeline]:
       - "Project Started[bullet=Check]": Initial planning phase
-      - "Development[bullet=Dash,panel]": Core features implementation  
-      - "Testing[bullet=Question,divider]":
+      - "Development[bullet=Dash,panel,width=max]": Core features implementation  
+      - "Testing[bullet=Question,divider,width=min]":
           - "[panel]Quality assurance":
             - Aa
             - bB
@@ -33,15 +55,53 @@ export function getSampleYaml() {
           - "Release[panel]": Production deployment
 
     `
-// # Inline LaTeX Math Examples
-// Math Examples[panel,panelDefault=expand]:
-//   - "Basic equations[child=ul]": "The famous equation $E = mc^2$ revolutionized physics"
-//   - "Complex formulas": "For quadratic equations $ax^2 + bx + c = 0$, the solution is $x = \\\\frac{-b \\\\pm \\\\sqrt{b^2-4ac}}{2a}$"
-//   - "Mixed content": "Temperature conversion: $C = \\\\frac{5}{9}(F - 32)$ where C is Celsius and F is Fahrenheit"
-//   - "Greek letters": "The area of a circle is $A = \\\\pi r^2$ and circumference is $C = 2\\\\pi r$"
+  }
+  if(name === 'latex') {
+    return `
+      # Inline LaTeX Math Examples
+      - Math Examples[panel,panelDefault=expand]:
+        - "Basic equations[child=ul]": "The famous equation $E = mc^2$ revolutionized physics"
+        - "Complex formulas": "For quadratic equations $ax^2 + bx + c = 0$, the solution is $x = \\\\frac{-b \\\\pm \\\\sqrt{b^2-4ac}}{2a}$"
+        - "Mixed content": "Temperature conversion: $C = \\\\frac{5}{9}(F - 32)$ where C is Celsius and F is Fahrenheit"
+        - "Greek letters": "The area of a circle is $A = \\\\pi r^2$ and circumference is $C = 2\\\\pi r$"
+      - test latex block in list[child=ul]:
+        # Test no_index attribute - won't be numbered
+        - "[latex]x = y":
+          no_index: true
+          caption: "Simple equation without numbering"
 
+    `
+  }
 
+  if(name === 'rich-text') {
+    return `
+      # Rich Text Examples
+      - "Basic text: This is a basic text example"
+      - "Rich text: This is a rich text example with \\\\ref{1a} and \\\\bib{1b}[child=ul]":
+        - "Child 1"
+        - "Child 2"
+    `
+  }
 
+  if(name === 'custom-box') {
+    return `
+      # Custom Node Examples
+      - custom components[child=ul]:
+        - "My Custom Box[custom,customType=box]"
+        - "Another Box[custom,customType=box]"
+    `
+  }
+  
+  if(name === 'custom-mixed') {
+    return `
+      # Custom with Children
+      - "Box with children[custom,customType=box]":
+        - Child item 1
+        - Child item 2
+        - Child item 3
+    `
+  }
+}
 // Key Features[key,valueNum=2]:
 //   - Fast parsing
 //   - React components
@@ -72,11 +132,7 @@ export function getSampleYaml() {
 //     caption: "Right-aligned summation example"
 //     height: "100px"
   
-//   - test latex block in list[child=ul]:
-//     # Test no_index attribute - won't be numbered
-//     - "[latex]x = y":
-//       no_index: true
-//       caption: "Simple equation without numbering"
+
     
 //     # Test custom caption title and user-defined ID
 //     - "[latex]\\\\sum_{i=1}^n x_i":
@@ -205,7 +261,7 @@ export function getSampleYaml() {
 //     - "Mixed references": "The formula \\\\ref{}{summation-formula} is derived from \\\\bib{einstein1905}, as discussed in \\\\ref{Figure 1}{sample-image}."
 //   - "Mixed content": "Einstein's famous equation $E = mc^2$ is referenced as \\\\ref{}{summation-formula}, and you can see \\\\ref{Visual example}{sample-image} for more details."
 //   - "Complex example": "The study shows that \\\\ref{Equation 2}{summation-formula} correlates with the data in \\\\ref{}{sample-image}. For a demonstration, watch \\\\ref{}{sample-video}."`;
-}
+
 
 /**
  * Corner case YAML data for comprehensive testing

@@ -66,9 +66,20 @@ export function flattenJson(processedData) {
       
     } else if (node && typeof node === 'object' && node.type) {
       // Handle processed nodes with type
+      // Check if attr.type should override the top-level type
+      // This handles cases like "text[custom,customType=box]" where node.type is 'text' but attr.type is 'custom'
+      let finalType = node.type;
+      if (node.attr && node.attr.type) {
+        // Special types in attr should be promoted to top-level type
+        const specialTypes = ['custom', 'latex', 'image', 'video', 'image-list', 'video-list'];
+        if (specialTypes.includes(node.attr.type)) {
+          finalType = node.attr.type;
+        }
+      }
+      
       const nodeData = {
         id: nodeId,
-        type: node.type,
+        type: finalType,
         parentId,
         textRaw: node.textRaw,
         textOriginal: node.textOriginal,

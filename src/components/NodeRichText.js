@@ -10,8 +10,8 @@
  * @param {string} containerClassName - CSS class name of the requesting container
  * @returns {object} Result object with {code, message, data}
  */
-export const calcPreferredBulletYPose = (textEl, textRich, containerClassName) => {
-  console.log('calcPreferredBulletYPose called:', { textEl, textRich, containerClassName });
+export const calcBulletYPos = (textEl, textRich, containerClassName) => {
+  console.log('calcBulletYPos called:', { textEl, textRich, containerClassName });
   try {
     if (!textEl) {
       console.log('ERROR: Text element not found');
@@ -33,14 +33,14 @@ export const calcPreferredBulletYPose = (textEl, textRich, containerClassName) =
   
     // first segment is text segment
     if (firstSegment.type === 'text') {
-      console.log('calcPreferredBulletYPose: Processing text segment, textEl:', textEl);
+      console.log('calcBulletYPos: Processing text segment, textEl:', textEl);
       // For plain text segments, first try to find yamd-text-segment spans
       const textSegments = textEl.querySelectorAll('.yamd-text-segment');
       // console.log('Found textSegments:', textSegments.length, textSegments);
       if (textSegments.length > 0) {
         const firstTextSegment = textSegments[0];
         const rect = firstTextSegment.getBoundingClientRect();
-        console.log('calcPreferredBulletYPose: Text segment measurement:', { firstTextSegment, rect });
+        console.log('calcBulletYPos: Text segment measurement:', { firstTextSegment, rect });
 
         const bulletContainer = textEl.closest(containerClassName);
         // console.log('bulletContainer search result:', { containerClassName, bulletContainer });
@@ -55,7 +55,7 @@ export const calcPreferredBulletYPose = (textEl, textRich, containerClassName) =
         // console.log('position calculation result:', { relativeY, rectTop: rect.top, containerTop: containerRect.top });
         return { code: 0, message: 'Success', data: relativeY };
       } else {
-        console.warn('calcPreferredBulletYPose: ERROR: No .yamd-text-segment elements found for text segment');
+        console.warn('calcBulletYPos: ERROR: No .yamd-text-segment elements found for text segment');
         return { code: -1, message: 'ERROR: No .yamd-text-segment elements found for text segment', data: null };
       }
     }

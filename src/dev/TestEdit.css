@@ -1,0 +1,195 @@
+/* TestEdit.css - Styling for YAMD Document Editor */
+
+.test-edit-container {
+  padding: 20px;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  background-color: #f9f9f9;
+  overflow: hidden;
+}
+
+/* Header Section */
+.test-edit-header {
+  flex-shrink: 0;
+}
+
+.test-edit-title {
+  margin: 0 0 8px 0;
+  color: #2c3e50;
+  font-size: 24px;
+}
+
+.test-edit-description {
+  margin: 0;
+  color: #7f8c8d;
+  font-size: 14px;
+}
+
+/* Sample Selection */
+.sample-selection {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  padding: 10px 15px;
+  background-color: white;
+  border-radius: 6px;
+  border: 1px solid #ddd;
+  flex-shrink: 0;
+}
+
+.sample-selection-label {
+  font-weight: 600;
+  color: #34495e;
+  font-size: 14px;
+}
+
+.sample-radio-label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.sample-radio-input {
+  cursor: pointer;
+}
+
+.sample-radio-text {
+  color: #2c3e50;
+}
+
+/* YAML Display Section */
+.yaml-display-section {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  height: 30%;
+  min-height: 200px;
+}
+
+.yaml-display-title {
+  margin: 0 0 10px 0;
+  color: #2c3e50;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.yaml-display-textarea {
+  flex: 1;
+  font-family: 'Courier New', Consolas, monospace;
+  font-size: 13px;
+  padding: 12px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  background-color: #fff;
+  resize: none;
+  overflow: auto;
+}
+
+/* Split View Section */
+.split-view-section {
+  flex: 1;
+  display: flex;
+  gap: 15px;
+  overflow: hidden;
+  min-height: 0;
+}
+
+/* Left Panel - Rendered Document */
+.rendered-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background-color: white;
+  border-radius: 6px;
+  border: 1px solid #ddd;
+  overflow: hidden;
+}
+
+.rendered-panel-title {
+  margin: 0;
+  padding: 12px 15px;
+  background-color: #3498db;
+  color: white;
+  font-size: 16px;
+  font-weight: 600;
+  border-bottom: 1px solid #2980b9;
+  flex-shrink: 0;
+}
+
+.rendered-panel-content {
+  flex: 1;
+  padding: 15px;
+  overflow: auto;
+  background-color: #fafafa;
+}
+
+.rendered-panel-placeholder {
+  color: #95a5a6;
+  font-style: italic;
+  text-align: center;
+  padding: 40px 20px;
+}
+
+/* Right Panel - Flattened Data */
+.flattened-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background-color: white;
+  border-radius: 6px;
+  border: 1px solid #ddd;
+  overflow: hidden;
+}
+
+.flattened-panel-title {
+  margin: 0;
+  padding: 12px 15px;
+  background-color: #27ae60;
+  color: white;
+  font-size: 16px;
+  font-weight: 600;
+  border-bottom: 1px solid #229954;
+  flex-shrink: 0;
+}
+
+.flattened-panel-textarea {
+  flex: 1;
+  font-family: 'Courier New', Consolas, monospace;
+  font-size: 12px;
+  padding: 12px;
+  border: none;
+  background-color: #f8f9fa;
+  resize: none;
+  overflow: auto;
+}
+
+.flattened-panel-info {
+  padding: 8px 15px;
+  background-color: #ecf0f1;
+  border-top: 1px solid #ddd;
+  font-size: 12px;
+  color: #7f8c8d;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+/* Loading State */
+.loading-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(255, 255, 255, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  color: #3498db;
+  z-index: 10;
+}
+

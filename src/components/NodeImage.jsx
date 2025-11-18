@@ -1,12 +1,12 @@
 import React, { useRef, useEffect } from 'react';
-import { getNodeClass } from '../YamdNode.jsx';
-import { IMAGE_SETTINGS } from '../YamdRenderSettings.js';
-import { getAlignmentStrategy } from '../YamdRenderUtils.js';
+import { getNodeClass } from '@/core/YamdNode.jsx';
+import { IMAGE_SETTINGS } from '@/config/RenderConfig.js';
+import { getAlignmentStrategy } from '@/YamdRenderUtils.js';
 
 /**
  * Image node renderer - displays images with captions
  */
-const YamdNodeImage = ({ nodeId, parentInfo, globalInfo }) => {
+const NodeImage = ({ nodeId, parentInfo, globalInfo }) => {
   const nodeRef = useRef(null);
 
   // Register the node reference after the component finishes rendering
@@ -177,4 +177,4 @@ const YamdNodeImage = ({ nodeId, parentInfo, globalInfo }) => {
   );
 };
 
-export default YamdNodeImage;
+export default NodeImage;

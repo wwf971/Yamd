@@ -1,12 +1,12 @@
 import React, { useRef, useEffect } from 'react';
-import { getNodeClass } from '../YamdNode.jsx';
-import { VIDEO_SETTINGS } from '../YamdRenderSettings.js';
-import { getAlignmentStrategy } from '../YamdRenderUtils.js';
+import { getNodeClass } from '@/core/YamdNode.jsx';
+import { VIDEO_SETTINGS } from '@/config/RenderConfig.js';
+import { getAlignmentStrategy } from '@/YamdRenderUtils.js';
 
 /**
  * Video node renderer - displays videos with captions
  */
-const YamdNodeVideo = ({ nodeId, parentInfo, globalInfo }) => {
+const NodeVideo = ({ nodeId, parentInfo, globalInfo }) => {
   const nodeRef = useRef(null);
   const videoRef = useRef(null);
 
@@ -195,4 +195,4 @@ const YamdNodeVideo = ({ nodeId, parentInfo, globalInfo }) => {
   );
 };
 
-export default YamdNodeVideo;
+export default NodeVideo;

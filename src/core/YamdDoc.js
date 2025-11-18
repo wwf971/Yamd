@@ -3,6 +3,9 @@
  * Extracted from YamdDoc.jsx for better code readability
  */
 
+import React from 'react';
+import NodeWrapper from '@/custom/NodeWrapper.jsx';
+
 /**
  * Handle reference click from YamdRichTextRef components
  * @param {object} refData - Reference data containing refId, targetId, sourceElement
@@ -127,24 +130,79 @@ export const handleBackToSource = (setRefState) => {
 
 /**
  * Create globalInfo object with utility functions
- * @param {object} flattenedData - Flattened document data
+ * @param {object} docData - Flattened document data
  * @param {function} handleRefClick - Reference click handler
  * @param {function} handleBibClick - Bibliography click handler
  * @param {function} registerNodeRef - Node reference registration function
  * @param {function} getNodeRefById - Node reference retrieval function
+ * @param {string} docId - Document ID
+ * @param {object} docStore - Zustand document store (useYamdDocStore)
+ * @param {function} _renderChildNodes - Function to render YamdChildrenNodes component
  * @returns {object} Global info object
  */
-export const createGlobalInfo = (flattenedData, handleRefClick, handleBibClick, registerNodeRef, getNodeRefById, docId) => {
+export const createGlobalInfo = (docData, handleRefClick, handleBibClick, registerNodeRef, getNodeRefById, docId, docStore, _renderChildNodes, customNodeRenderer) => {
   console.log('🔍 globalInfo re-created');
-  return { 
+  
+  // Create the globalInfo object (will be used recursively)
+  const globalInfo = { 
     docId: docId, // Include docId for Zustand positioning
-    getNodeDataById: (nodeId) => flattenedData.nodes[nodeId],
-    getAssetById: (assetId) => flattenedData.assets?.[assetId],
-    getRefById: (refId) => flattenedData.refs?.[refId],
+    getNodeDataById: (nodeId) => docData.nodes[nodeId],
+    getAssetById: (assetId) => docData.assets?.[assetId],
+    getRefById: (refId) => docData.refs?.[refId],
     onRefClick: handleRefClick, // Function for reference handling
     onBibClick: handleBibClick, // Function for bibliography handling
     registerNodeRef: registerNodeRef, // Function for registering node DOM references
     getNodeRefById: getNodeRefById, // Function for retrieving node DOM references
+    getDocStore: () => docStore, // Function to get Zustand document store
+    
+    /**
+     * Render child nodes - utility function for custom components
+     * @param {Array<string>} childIds - Array of child node IDs
+     * @param {object} options - Rendering options
+     * @param {boolean} options.shouldAddIndent - Whether to add indentation (default: false)
+     * @param {object} options.parentInfo - Parent context to pass to children
+     * @param {React.RefObject} options.firstChildRef - Ref to attach to first child (for forwarding)
+     * @returns {React.Element} Rendered children component
+     */
+    renderChildNodes: (childIds, { 
+      shouldAddIndent = false, 
+      parentInfo = null,
+      firstChildRef = null 
+    } = {}) => {
+      return _renderChildNodes(childIds, shouldAddIndent, parentInfo, globalInfo, firstChildRef);
+    },
+    
+    /**
+     * Render custom node - calls user-provided custom node renderer wrapped in NodeWrapper
+     * @param {object} nodeData - The node data with type='custom' and customType
+     * @param {object} parentInfo - Parent context information
+     * @returns {React.Element} Rendered custom node component
+     */
+    renderCustomNode: (nodeData, parentInfo) => {
+      if (!customNodeRenderer) {
+        return <div className="yamd-error">No custom node renderer provided</div>;
+      }
+      
+      const customType = nodeData.attr?.customType;
+      if (!customType) {
+        return <div className="yamd-error">Custom node missing customType attribute</div>;
+      }
+      
+      const CustomComponent = customNodeRenderer[customType];
+      if (!CustomComponent) {
+        return <div className="yamd-error">Unknown custom type: {customType}</div>;
+      }
+      
+      // Wrap the custom component with NodeWrapper to handle bullet positioning
+      return <NodeWrapper 
+        nodeId={nodeData.id} 
+        nodeData={nodeData}
+        parentInfo={parentInfo}
+        globalInfo={globalInfo}
+        CustomComponent={CustomComponent}
+      />;
+    },
+    
     getBibText: (bibKey) => {
       // For now, always return fallback (user can override this)
       return {
@@ -162,4 +220,6 @@ export const createGlobalInfo = (flattenedData, handleRefClick, handleBibClick, 
       };
     }
   };
+  
+  return globalInfo;
 };

@@ -1,17 +1,34 @@
-import React, { useState, useRef, useCallback, useMemo, useEffect } from 'react';
-import YamdNode from './YamdNode.jsx';
-import YamdRefHandler from './components/YamdRefHandler.jsx';
-import YamdBibsList from './components/YamdBibsList.jsx';
-import { handleRefClick, handleBibClick, handleBackToSource, createGlobalInfo } from './YamdDoc.js';
-import { useYamdDocStore, generateDocId } from './YamdDocStore.js';
+import React, { useState, useRef, useCallback, useMemo, useEffect, useLayoutEffect } from 'react';
+import YamdNode from '@/core/YamdNode.jsx';
+import YamdChildrenNodes from '@/core/YamdChildrenNodes.jsx';
+import YamdRefHandler from '@/components/NodeRefHandler.jsx';
+import YamdBibsList from '@/components/NodeBibsList.jsx';
+import { handleRefClick, handleBibClick, handleBackToSource, createGlobalInfo } from '@/core/YamdDoc.js';
+import { useYamdDocStore, generateDocId } from '@/core/YamdDocStore.js';
 
 /**
  * YamdDoc - Document container that manages global reference handling
  * Renders the root YamdNode and provides reference navigation functionality
  */
-const YamdDoc = ({ flattenedData, disableRefJump = false, disableBibsList = false, docId }) => {
+const YamdDoc = ({
+  docData,
+  disableRefJump = false,
+  disableBibsList = false,
+  docId = null,
+  customNodeRenderer = null,
+}) => {
   // Generate docId if not provided
   const actualDocId = useMemo(() => docId || generateDocId(), [docId]);
+  
+  // Clear bullet position data when docData changes (synchronously during render)
+  // This must happen in render phase, BEFORE children mount
+  const prevDocDataRef = useRef(null);
+  if (prevDocDataRef.current !== null && prevDocDataRef.current !== docData) {
+    // Clear any old bullet position data for this docId when docData changes
+    // This ensures children start with clean state when they mount
+    useYamdDocStore.getState().clearPreferredYPosRequestsForDoc(actualDocId);
+  }
+  prevDocDataRef.current = docData;
   
   // return <div>Hello</div>;
   // initialize document data in store (example usage)
@@ -19,7 +36,7 @@ const YamdDoc = ({ flattenedData, disableRefJump = false, disableBibsList = fals
     useYamdDocStore.getState().setDocData(actualDocId, {
       docId: actualDocId,
       createdAt: new Date().toISOString(),
-      flattenedData: flattenedData,
+      docData: docData,
       // add any other document-specific data here
       // examples:
       // userPreferences: { theme: 'light', fontSize: 'medium' },
@@ -27,7 +44,7 @@ const YamdDoc = ({ flattenedData, disableRefJump = false, disableBibsList = fals
       // annotations: [],
       // bookmarks: []
     });
-  }, [actualDocId, flattenedData]);
+  }, [actualDocId, docData]);
 
   const containerRef = useRef(null);
   const nodeRefsMap = useRef(new Map()); // Map from nodeId to DOM element reference
@@ -70,14 +87,37 @@ const YamdDoc = ({ flattenedData, disableRefJump = false, disableBibsList = fals
     return nodeRef;
   }, []);
 
+  // Create render function for children
+  const renderChildNodes = useCallback((childIds, shouldAddIndent, parentInfo, globalInfo, firstChildRef) => {
+    return (
+      <YamdChildrenNodes
+        childIds={childIds}
+        shouldAddIndent={shouldAddIndent}
+        parentInfo={parentInfo}
+        globalInfo={globalInfo}
+        firstChildRef={firstChildRef}
+      />
+    );
+  }, []);
+
   // Create stable globalInfo object to prevent infinite re-renders
   const globalInfo = useMemo(() => 
     createGlobalInfo(
-      flattenedData, handleRefClickCallback, handleBibClickCallback, registerNodeRef, getNodeRefById, actualDocId),
-    [flattenedData, handleRefClickCallback, handleBibClickCallback, registerNodeRef, getNodeRefById, actualDocId]
+      docData,
+      handleRefClickCallback,
+      handleBibClickCallback,
+      registerNodeRef,
+      getNodeRefById,
+      actualDocId,
+      useYamdDocStore,
+      renderChildNodes,
+      customNodeRenderer),
+    [docData, handleRefClickCallback, handleBibClickCallback,
+      registerNodeRef, getNodeRefById, actualDocId, renderChildNodes, customNodeRenderer
+    ]
   );
 
-  if (!flattenedData || !flattenedData.rootNodeId) {
+  if (!docData || !docData.rootNodeId) {
     return <div className="yamd-error">No document data provided</div>;
   }
 
@@ -86,7 +126,7 @@ const YamdDoc = ({ flattenedData, disableRefJump = false, disableBibsList = fals
       
       {/* main document, rendering start from root node*/}
       <YamdNode
-        nodeId={flattenedData.rootNodeId}
+        nodeId={docData.rootNodeId}
         parentInfo={null}
         globalInfo={globalInfo}
       />
@@ -94,7 +134,7 @@ const YamdDoc = ({ flattenedData, disableRefJump = false, disableBibsList = fals
       {/* bibliography list at the end of document */}
       {!disableBibsList && (
         <YamdBibsList 
-          bibs={flattenedData.bibs || {}}
+          bibs={docData.bibs || {}}
           globalInfo={globalInfo}
         />
       )}

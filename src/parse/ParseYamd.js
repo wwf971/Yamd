@@ -1,11 +1,11 @@
 // Main Yamd parser - imports decomposed modules for better readability
 
 // YAML to JSON conversion
-import { parseYamlToJson as parseYamlToJsonInternal, formatJson as formatJsonInternal } from './parse/_0_yaml_to_json.js';
-export { parseYamlToJson, formatJson } from './parse/_0_yaml_to_json.js';
+import { parseYamlToJson as parseYamlToJsonInternal, formatJson as formatJsonInternal } from '@/parse/_0_yaml_to_json.js';
+export { parseYamlToJson, formatJson } from '@/parse/_0_yaml_to_json.js';
 
 // Sample data
-export { getSampleYaml, getCornerCaseYaml } from './parse/_0_yaml_sample.js';
+export { getSampleYaml, getSampleYamlNames, getCornerCaseYaml } from '@/example/YamlSamples.js';
 
 // Attribute parsing
 export { 
@@ -13,19 +13,19 @@ export {
   normalizeAttrKey, 
   normalizeAttributeValue, 
   parseShorthandAttribute 
-} from './parse/_1_parse_attr.js';
+} from '@/parse/_1_parse_attr.js';
 
 // Tree building
-import { processNodes as processNodesInternal } from './parse/_2_build_nodes_tree.js';
-export { processNodes } from './parse/_2_build_nodes_tree.js';
+import { processNodes as processNodesInternal } from '@/parse/_2_build_nodes_tree.js';
+export { processNodes } from '@/parse/_2_build_nodes_tree.js';
 
 // Tree flattening  
-import { flattenJson as flattenJsonInternal } from './parse/_3_flatten_nodes_tree.js';
-export { flattenJson } from './parse/_3_flatten_nodes_tree.js';
+import { flattenJson as flattenJsonInternal } from '@/parse/_3_flatten_nodes_tree.js';
+export { flattenJson } from '@/parse/_3_flatten_nodes_tree.js';
 
 // Text segment processing (LaTeX, refs, bibs)
-import { processAllTextSegments as processAllTextSegmentsInternal, scanAssets as scanAssetsInternal } from './parse/_4_text_segment.js';
-export { parseLatexInline, processAllTextSegments, scanAssets } from './parse/_4_text_segment.js';
+import { processAllTextSegments as processAllTextSegmentsInternal, scanAssets as scanAssetsInternal } from '@/parse/_4_text_segment.js';
+export { parseLatexInline, processAllTextSegments, scanAssets } from '@/parse/_4_text_segment.js';
 
 /**
  * Complete Yamd processing pipeline

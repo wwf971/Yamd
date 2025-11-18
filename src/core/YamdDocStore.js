@@ -27,28 +27,28 @@ export const useYamdDocStore = create(
   //     }
   //   }
   // }
-  bulletPreferredYPosRequests: {},
+  bulletPreferredYPosReq: {},
   /**
    * Add a list bullet preferred Y position request using Immer
    * @param {string} docId - Document ID
    * @param {string} nodeId - Node ID that should provide preferred Y position
    * @param {string} containerClassName - CSS class name of the container (starting with dot)
    */
-  addBulletPreferredYPosRequest: (docId, nodeId, containerClassName) => {
+  addBulletYPosReq: (docId, nodeId, containerClassName) => {
     set((state) => {
       // Ensure the document exists in the requests structure
-      if (!state.bulletPreferredYPosRequests[docId]) {
-        state.bulletPreferredYPosRequests[docId] = {};
+      if (!state.bulletPreferredYPosReq[docId]) {
+        state.bulletPreferredYPosReq[docId] = {};
       }
       
       // Ensure the node exists in the document's requests
-      if (!state.bulletPreferredYPosRequests[docId][nodeId]) {
-        state.bulletPreferredYPosRequests[docId][nodeId] = {};
+      if (!state.bulletPreferredYPosReq[docId][nodeId]) {
+        state.bulletPreferredYPosReq[docId][nodeId] = {};
       }
       
       // Add the request using containerClassName as key
-      if (!state.bulletPreferredYPosRequests[docId][nodeId][containerClassName]) {
-        state.bulletPreferredYPosRequests[docId][nodeId][containerClassName] = {
+      if (!state.bulletPreferredYPosReq[docId][nodeId][containerClassName]) {
+        state.bulletPreferredYPosReq[docId][nodeId][containerClassName] = {
           result: null,
           requestCounter: 0,
           responseCounter: 0
@@ -65,10 +65,10 @@ export const useYamdDocStore = create(
    * @param {string} containerClassName - CSS class name of the container (starting with dot)
    * @param {any} result - The result to store
    */
-  updateRequestResult: (docId, nodeId, containerClassName, result) => {
+  updateReqResult: (docId, nodeId, containerClassName, result) => {
     set((state) => {
-      if (state.bulletPreferredYPosRequests[docId]?.[nodeId]?.[containerClassName]) {
-        state.bulletPreferredYPosRequests[docId][nodeId][containerClassName].result = result;
+      if (state.bulletPreferredYPosReq[docId]?.[nodeId]?.[containerClassName]) {
+        state.bulletPreferredYPosReq[docId][nodeId][containerClassName].result = result;
       }
     });
   },
@@ -79,10 +79,10 @@ export const useYamdDocStore = create(
    * @param {string} nodeId - Node ID
    * @param {string} containerClassName - CSS class name of the container (starting with dot)
    */
-  incRequestCounter: (docId, nodeId, containerClassName) => {
+  incReqCounter: (docId, nodeId, containerClassName) => {
     set((state) => {
-      if (state.bulletPreferredYPosRequests[docId]?.[nodeId]?.[containerClassName]) {
-        state.bulletPreferredYPosRequests[docId][nodeId][containerClassName].requestCounter++;
+      if (state.bulletPreferredYPosReq[docId]?.[nodeId]?.[containerClassName]) {
+        state.bulletPreferredYPosReq[docId][nodeId][containerClassName].requestCounter++;
       }
     });
   },
@@ -93,10 +93,10 @@ export const useYamdDocStore = create(
    * @param {string} nodeId - Node ID
    * @param {string} containerClassName - CSS class name of the container (starting with dot)
    */
-  incResponseCounter: (docId, nodeId, containerClassName) => {
+  incRespCounter: (docId, nodeId, containerClassName) => {
     set((state) => {
-      if (state.bulletPreferredYPosRequests[docId]?.[nodeId]?.[containerClassName]) {
-        state.bulletPreferredYPosRequests[docId][nodeId][containerClassName].responseCounter++;
+      if (state.bulletPreferredYPosReq[docId]?.[nodeId]?.[containerClassName]) {
+        state.bulletPreferredYPosReq[docId][nodeId][containerClassName].responseCounter++;
       }
     });
   },
@@ -107,8 +107,8 @@ export const useYamdDocStore = create(
    * @param {string} nodeId - Node ID
    * @returns {object} Object with container class names as keys and request data as values
    */
-  getPreferredYPosRequests: (docId, nodeId) => {
-    return get().bulletPreferredYPosRequests[docId]?.[nodeId] || {};
+  getBulletYPosReqs: (docId, nodeId) => {
+    return get().bulletPreferredYPosReq[docId]?.[nodeId] || {};
   },
 
   /**
@@ -119,17 +119,17 @@ export const useYamdDocStore = create(
    */
   removePreferredYPosRequest: (docId, nodeId, containerClassName) => {
     set((state) => {
-      if (state.bulletPreferredYPosRequests[docId]?.[nodeId]?.[containerClassName]) {
-        delete state.bulletPreferredYPosRequests[docId][nodeId][containerClassName];
+      if (state.bulletPreferredYPosReq[docId]?.[nodeId]?.[containerClassName]) {
+        delete state.bulletPreferredYPosReq[docId][nodeId][containerClassName];
         
         // If no more requests for this node, remove the node entry
-        if (Object.keys(state.bulletPreferredYPosRequests[docId][nodeId]).length === 0) {
-          delete state.bulletPreferredYPosRequests[docId][nodeId];
+        if (Object.keys(state.bulletPreferredYPosReq[docId][nodeId]).length === 0) {
+          delete state.bulletPreferredYPosReq[docId][nodeId];
         }
         
         // If no more nodes for this doc, remove the doc entry
-        if (Object.keys(state.bulletPreferredYPosRequests[docId]).length === 0) {
-          delete state.bulletPreferredYPosRequests[docId];
+        if (Object.keys(state.bulletPreferredYPosReq[docId]).length === 0) {
+          delete state.bulletPreferredYPosReq[docId];
         }
       }
     });
@@ -142,12 +142,12 @@ export const useYamdDocStore = create(
    */
   clearPreferredYPosRequestsForNode: (docId, nodeId) => {
     set((state) => {
-      if (state.bulletPreferredYPosRequests[docId]?.[nodeId]) {
-        delete state.bulletPreferredYPosRequests[docId][nodeId];
+      if (state.bulletPreferredYPosReq[docId]?.[nodeId]) {
+        delete state.bulletPreferredYPosReq[docId][nodeId];
         
         // If no more nodes for this doc, remove the doc entry
-        if (Object.keys(state.bulletPreferredYPosRequests[docId]).length === 0) {
-          delete state.bulletPreferredYPosRequests[docId];
+        if (Object.keys(state.bulletPreferredYPosReq[docId]).length === 0) {
+          delete state.bulletPreferredYPosReq[docId];
         }
       }
     });
@@ -159,8 +159,8 @@ export const useYamdDocStore = create(
    */
   clearPreferredYPosRequestsForDoc: (docId) => {
     set((state) => {
-      if (state.bulletPreferredYPosRequests[docId]) {
-        delete state.bulletPreferredYPosRequests[docId];
+      if (state.bulletPreferredYPosReq[docId]) {
+        delete state.bulletPreferredYPosReq[docId];
       }
     });
   },
@@ -172,7 +172,7 @@ export const useYamdDocStore = create(
    * @returns {boolean} True if there are requests for this node
    */
   hasPreferredYPosRequests: (docId, nodeId) => {
-    const requests = get().bulletPreferredYPosRequests[docId]?.[nodeId];
+    const requests = get().bulletPreferredYPosReq[docId]?.[nodeId];
     return requests && Object.keys(requests).length > 0;
   },
 

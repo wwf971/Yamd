@@ -1,7 +1,7 @@
 import React from 'react';
-import YamdTimeline from './components/YamdTimeline.jsx';
-import { LIST_SETTINGS } from './YamdRenderSettings.js';
-import YamdNode from './YamdNode.jsx';
+import YamdTimeline from '@/components/NodeTimeline.jsx';
+import { LIST_SETTINGS } from '@/config/RenderConfig.js';
+import YamdNode from '@/core/YamdNode.jsx';
 
 /**
  * Component for rendering children nodes based on childDisplay style from parentInfo
@@ -10,12 +10,12 @@ import YamdNode from './YamdNode.jsx';
  * @param {boolean} shouldAddIndent - Whether to add indentation to children (controlled by parent component type)
  * @param {object} globalInfo - Global context with getNodeDataById, getAssetById, getRefById, and fetchExternalData methods
  */
-  const YamdChildrenNodes = ({ 
-    childIds, 
-    parentInfo = null,
-    shouldAddIndent = false,
-    globalInfo = null
-  }) => {
+const YamdChildrenNodes = ({ 
+  childIds, 
+  parentInfo = null,
+  shouldAddIndent = false,
+  globalInfo = null
+}) => {
   // render children based on parentInfo.childDisplay
   if (!childIds || childIds.length === 0) return null;
   // console.log('🔍 YamdChildrenNodes rendering childIds:', childIds);
@@ -32,14 +32,14 @@ import YamdNode from './YamdNode.jsx';
   
   // common list renderer. using divs instead of ul/ol/li
   // supports multiple containerClassName and itemClassName
-  const renderChildList = (containerClassName, itemClassName, defaultChildClass = 'yamd-list-content') => (
+  const renderChildNodes = (containerClassName, itemClassName, defaultChildClass = 'yamd-list-content') => (
     <div className={joinClassNames(containerClassName)}>
       {childIds.map((childId, index) => (
         <div key={childId} className={joinClassNames(itemClassName)}>
           <YamdNode 
             nodeId={childId} 
             parentInfo={{ 
-              ...parentInfo, 
+              childDisplay: childDisplay, // Pass current childDisplay so AddBullet knows to add bullets
               childClass: childClass || defaultChildClass,
               childIndex: index
             }}
@@ -62,7 +62,7 @@ import YamdNode from './YamdNode.jsx';
     case 'ul':
       return (
         <div style={getContainerStyle()} >
-          {renderChildList(['yamd-list', 'yamd-ulist'],
+          {renderChildNodes(['yamd-list', 'yamd-ulist'],
             ['yamd-list-item',
             'yamd-full-width'
           ])}
@@ -74,7 +74,7 @@ import YamdNode from './YamdNode.jsx';
     case 'ol':
       return (
         <div style={getContainerStyle()}>
-          {renderChildList(['yamd-list', 'yamd-olist'],
+          {renderChildNodes(['yamd-list', 'yamd-olist'],
             [
               'yamd-list-item',
               'yamd-full-width'
@@ -87,7 +87,7 @@ import YamdNode from './YamdNode.jsx';
     case 'pl':
       return (
         <div style={getContainerStyle()}>
-          {renderChildList(['yamd-list', 'yamd-plist'], [
+          {renderChildNodes(['yamd-list', 'yamd-plist'], [
             'yamd-list-item',
             'yamd-plist-item',
             'yamd-full-width'
@@ -107,7 +107,7 @@ import YamdNode from './YamdNode.jsx';
               <div key={childId} className="yamd-paragraph">
                 <YamdNode 
                   nodeId={childId} 
-                  parentInfo={{ ...parentInfo, childClass: childClass || 'yamd-paragraph-content' }}
+                  parentInfo={{ childDisplay: 'p', childClass: childClass || 'yamd-paragraph-content' }}
                   globalInfo={globalInfo}
                 />
               </div>

@@ -540,7 +540,6 @@ export async function processAllTextSegments(flattenedData) {
       segmentNodesFound++;
       // console.log(`✅ Processed text segments in node ${nodeId}`);
     }
-    
     processedNodes[nodeId] = processedNode;
   }
   

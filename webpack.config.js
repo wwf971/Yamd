@@ -26,12 +26,16 @@ export default (env, argv) => {
   module: {
     rules: [
       {
-        test: /\.jsx?$/,
+        test: /\.(jsx?|tsx?)$/,
         exclude: /node_modules/,
         use: {
           loader: 'babel-loader',
           options: {
-            presets: ['@babel/preset-env', '@babel/preset-react'],
+            presets: [
+              '@babel/preset-env',
+              '@babel/preset-react',
+              '@babel/preset-typescript'
+            ],
           },
         },
       },
@@ -64,7 +68,7 @@ export default (env, argv) => {
     ],
   },
   resolve: {
-    extensions: ['.js', '.jsx', '.css'],
+    extensions: ['.ts', '.tsx', '.js', '.jsx', '.css'],
     alias: {
       '@': path.resolve(__dirname, 'src'),
       // Ensure single React instance

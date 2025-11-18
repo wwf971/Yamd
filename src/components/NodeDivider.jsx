@@ -1,8 +1,7 @@
 import React, { useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
-import { getNodeClass } from '../YamdNode.jsx';
-import YamdChildrenNodes from '../YamdChildrenNodes.jsx';
+import { getNodeClass } from '@/core/YamdNode.jsx';
 import { getChildrenDisplay } from '../YamdRenderUtils.js';
-import { useYamdDocStore } from '../YamdDocStore.js';
+import { useYamdDocStore } from '@/core/YamdDocStore.js';
 import { createBulletEqualityFn } from '../YamdRenderUtils.js';
 
 /**
@@ -18,11 +17,11 @@ const YamdNodeDivider = forwardRef(({ nodeId, parentInfo, globalInfo }, ref) => 
     }
   }, [nodeId, globalInfo]);
 
-  // Expose calcPreferredBulletYPos to parent via ref
+  // Expose calcBulletYPos to parent via ref
   useImperativeHandle(ref, () => ({
-    calcPreferredBulletYPos: () => {
+    calcBulletYPos: () => {
       const docId = globalInfo?.docId;
-      calcPreferredBulletYPos(nodeId, docId, nodeRef, dividerRef);
+      calcBulletYPos(nodeId, docId, nodeRef, dividerRef);
     }
   }), [nodeId, globalInfo]);
 
@@ -37,11 +36,11 @@ const YamdNodeDivider = forwardRef(({ nodeId, parentInfo, globalInfo }, ref) => 
     }
     console.log('noteId:', nodeId, 'docId:', docId, 'YamdNodeDivider useEffect subscribe');
     const unsubscribe = useYamdDocStore.subscribe(
-      (state) => state.bulletPreferredYPosRequests[docId]?.[nodeId] || {},
+      (state) => state.bulletPreferredYPosReq[docId]?.[nodeId] || {},
       (requests) => {
         console.log('noteId:', nodeId, 'YamdNodeDivider useEffect subscribe triggered with requests:', requests);
         // This will only fire if equalityFn returns false
-        calcPreferredBulletYPos(nodeId, docId, nodeRef, dividerRef);
+        calcBulletYPos(nodeId, docId, nodeRef, dividerRef);
       },
       {
         equalityFn: createBulletEqualityFn(nodeId, 'YamdNodeDivider'),
@@ -49,7 +48,7 @@ const YamdNodeDivider = forwardRef(({ nodeId, parentInfo, globalInfo }, ref) => 
     );
     
     // Immediately check for existing requests
-    calcPreferredBulletYPos(nodeId, docId, nodeRef, dividerRef);
+    calcBulletYPos(nodeId, docId, nodeRef, dividerRef);
     return unsubscribe;
   }, [nodeId, docId]);
   // ===== END ZUSTAND LOGIC =====
@@ -75,7 +74,7 @@ const YamdNodeDivider = forwardRef(({ nodeId, parentInfo, globalInfo }, ref) => 
   const dividerRef = useRef(null);
 
   // Note: This component now provides bullet positioning via Zustand on demand
-  // and exposes calcPreferredBulletYPos via useImperativeHandle
+  // and exposes calcBulletYPos via useImperativeHandle
 
   return (
     <div ref={nodeRef} className="yamd-node-divider yamd-full-width">
@@ -114,16 +113,14 @@ const YamdNodeDivider = forwardRef(({ nodeId, parentInfo, globalInfo }, ref) => 
       </div>
       
       {nodeData.children && nodeData.children.length > 0 && (
-        <YamdChildrenNodes
-          childIds={nodeData.children}
-          shouldAddIndent={false}
-          parentInfo={{ 
+        globalInfo.renderChildNodes(nodeData.children, {
+          shouldAddIndent: false,
+          parentInfo: { 
             ...parentInfo, 
             ...(childDisplay && { childDisplay }),
             ...(childClass && { childClass })
-          }}
-          globalInfo={globalInfo}
-        />
+          }
+        })
       )}
     </div>
   );
@@ -138,13 +135,13 @@ const YamdNodeDivider = forwardRef(({ nodeId, parentInfo, globalInfo }, ref) => 
  * @param {React.RefObject} dividerRef - Divider line DOM reference (points to left line)
  * @returns {void}
  */
-const calcPreferredBulletYPos = (nodeId, docId, nodeRef, dividerRef) => {
+const calcBulletYPos = (nodeId, docId, nodeRef, dividerRef) => {
   if (!nodeRef.current || !dividerRef.current) return;
   
   const store = useYamdDocStore.getState();
   // get all requests for this node
-  const requests = store.getPreferredYPosRequests(docId, nodeId);
-  console.log('noteId:', nodeId, 'YamdNodeDivider calcPreferredBulletYPos requests:', requests);
+  const requests = store.getBulletYPosReqs(docId, nodeId);
+  console.log('noteId:', nodeId, 'YamdNodeDivider calcBulletYPos requests:', requests);
   
   // update result for each requesting container
   Object.keys(requests).forEach(containerClassName => {
@@ -155,8 +152,8 @@ const calcPreferredBulletYPos = (nodeId, docId, nodeRef, dividerRef) => {
        
        if (!bulletContainer || !dividerContainer) {
          const result = { code: -1, message: `Divider: bullet container ${containerClassName} not found`, data: null };
-         store.updateRequestResult(docId, nodeId, containerClassName, result);
-         store.incResponseCounter(docId, nodeId, containerClassName);
+         store.updateReqResult(docId, nodeId, containerClassName, result);
+         store.incRespCounter(docId, nodeId, containerClassName);
          return;
        }
        
@@ -170,13 +167,13 @@ const calcPreferredBulletYPos = (nodeId, docId, nodeRef, dividerRef) => {
       const result = { code: 0, message: 'Divider line center position', data: preferredYPos };
       
       // update result in the Zustand store
-      store.updateRequestResult(docId, nodeId, containerClassName, result);
+      store.updateReqResult(docId, nodeId, containerClassName, result);
       // increment response counter in store
-      store.incResponseCounter(docId, nodeId, containerClassName);
+      store.incRespCounter(docId, nodeId, containerClassName);
     } catch (error) {
       const result = { code: -1, message: `Divider positioning error: ${error.message}`, data: null };
-      store.updateRequestResult(docId, nodeId, containerClassName, result);
-      store.incResponseCounter(docId, nodeId, containerClassName);
+      store.updateReqResult(docId, nodeId, containerClassName, result);
+      store.incRespCounter(docId, nodeId, containerClassName);
     }
   });
 };

@@ -1,27 +1,28 @@
 import React from 'react';
-import YamdNodeVideo from './YamdNodeVideo.jsx';
+import NodeImage from './NodeImage.jsx';
 import { getAlignmentStrategy } from '../YamdRenderUtils.js';
-import { VIDEO_LIST_SETTINGS } from '../YamdRenderSettings.js';
+import { IMAGE_LIST_SETTINGS } from '@/config/RenderConfig.js';
 
 /**
- * Component for rendering a list of videos in a single row
- * Supports subindex for custom video numbering (e.g., 1a, 1b, 1c)
- * @param {string} nodeId - The video-list node ID
+ * Component for rendering a list of images in a single row
+ * Supports subindex for custom image numbering (e.g., 1a, 1b, 1c)
+ * @param {string} nodeId - The image-list node ID
  * @param {object} globalInfo - Global parsing information
  * @param {object} parentInfo - Parent component information
- * @returns {JSX.Element} - Video list component
+ * @returns {JSX.Element} - Image list component
  */
-function YamdVideoList({ nodeId, globalInfo, parentInfo }) {
+function YamdImageList({ nodeId, globalInfo, parentInfo }) {
+
 
   /*
-    yamd-video-list-item <-- fixed to height of YamdVideoList
-    video/caption inside yamd-video-list-item grows proportionally to fit it
-    if all yamd-video-list-item exceeds viewport width, show horizontal scrollbar
+    yamd-image-list-item <-- fixed to height of YamdImageList
+    imaeg/caption inside yamd-image-list-item grows proportionally to fit it
+    if all yamd-image-list-item exceeds viewport width, show horizontal scrollbar
   */
 
   const nodeData = globalInfo.getNodeDataById(nodeId);
   if (!nodeData) {
-    return <div className="yamd-error">Video-list node not found: {nodeId}</div>;
+    return <div className="yamd-error">Image-list node not found: {nodeId}</div>;
   }
   
   const { attr = {}, children = [] } = nodeData;
@@ -29,12 +30,12 @@ function YamdVideoList({ nodeId, globalInfo, parentInfo }) {
   // Extract attributes
   const alignX = attr.alignX || 'center';
   const subindex = attr.subindex || 'abc';
-  const height = attr.height || VIDEO_LIST_SETTINGS.height_default;
+  const height = attr.height || IMAGE_LIST_SETTINGS.height_default;
   
   // Get alignment strategy
   const alignmentStrategy = getAlignmentStrategy(nodeData, parentInfo);
   
-  // Calculate subindex for each video
+  // Calculate subindex for each image
   const getSubindex = (index, total) => {
     if (subindex === 'LR' && total === 2) {
       return index === 0 ? 'L' : 'R';
@@ -50,27 +51,27 @@ function YamdVideoList({ nodeId, globalInfo, parentInfo }) {
     }
   };
   
-  // Process children to ensure they are video nodes
-  const processVideoChild = (childId, index) => {
+  // Process children to ensure they are image nodes
+  const processImageChild = (childId, index) => {
     const childData = globalInfo.getNodeDataById(childId);
     if (!childData) {
       return (
         <div key={childId || `missing-${index}`} className="yamd-error">
-          Video child not found: {childId}
+          Image child not found: {childId}
         </div>
       );
     }
     
-    // Force node type to be video if it's not already
-    if (childData.type !== 'video' && childData.type !== 'node') {
+    // Force node type to be image if it's not already
+    if (childData.type !== 'image' && childData.type !== 'node') {
       // Note: subindex is now handled during parsing, not rendering
     }
 
     
-    // Pass forcedHeight to child videos for fixed height calculation
+    // Pass forcedHeight to child images for fixed height calculation
     const enhancedParentInfo = {
       ...parentInfo,
-      forcedHeight: parseFloat(height) || 200 // Use video-list height as forced height
+      forcedHeight: parseFloat(height) || 200 // Use image-list height as forced height
     };
 
     // Calculate item style with fixed height only
@@ -79,12 +80,12 @@ function YamdVideoList({ nodeId, globalInfo, parentInfo }) {
       minHeight: height,
       maxHeight: height,
       flexShrink: 0 // Prevent height from changing
-      // Width is determined naturally by video aspect ratio and container
+      // Width is determined naturally by image aspect ratio and container
     };
 
     return (
-      <div key={childId} className="yamd-video-list-item" style={itemStyle}>
-        <YamdNodeVideo 
+      <div key={childId} className="yamd-image-list-item" style={itemStyle}>
+        <NodeImage 
           nodeId={childId}
           globalInfo={globalInfo}
           parentInfo={enhancedParentInfo}
@@ -94,19 +95,19 @@ function YamdVideoList({ nodeId, globalInfo, parentInfo }) {
   };
   
   return (
-    <div className="yamd-video-list-scroll-container">
+    <div className="yamd-image-list-scroll-container">
       <div 
-        className="yamd-video-list"
+        className="yamd-image-list"
         style={{
           justifyContent: alignmentStrategy,
           height: height,
         }}
       >
-        {children.map((childId, index) => processVideoChild(childId, index))}
+        {children.map((childId, index) => processImageChild(childId, index))}
       </div>
     </div>
   );
   
 }
 
-export default YamdVideoList;
+export default YamdImageList;

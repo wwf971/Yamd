@@ -1,9 +1,9 @@
 import React, { useRef, forwardRef, useImperativeHandle } from 'react';
-import YamdPlainText from './YamdPlainText.jsx';
-import YamdRichTextLaTeXInline from './YamdRichTextLaTeXInline.jsx';
-import YamdRichTextRef from './YamdRichTextRef.jsx';
-import YamdRichTextBib from './YamdRichTextBib.jsx';
-import { calcPreferredBulletYPose as _calcPreferredBulletYPose} from './YamdRichText.js';
+import YamdPlainText from './NodePlainText.jsx';
+import YamdRichTextLaTeXInline from './NodeRichTextLaTeXInline.jsx';
+import YamdRichTextRef from './NodeRichTextRef.jsx';
+import YamdRichTextBib from './NodeRichTextBib.jsx';
+import { calcBulletYPos as _calcBulletYPos} from './NodeRichText.js';
 
 /**
  * Rich text renderer with inline LaTeX math support
@@ -17,13 +17,13 @@ const YamdRichText = forwardRef(({ text, className, parentInfo, textRich = null,
   // console.log("YamdRichText textRich:", textRich);
   // expose methods to parent via ref
   useImperativeHandle(ref, () => ({
-    calcPreferredBulletYPose: (containerClassName) => {
-      return _calcPreferredBulletYPose(textRef.current, textRich, containerClassName);
+    calcBulletYPos: (containerClassName) => {
+      return _calcBulletYPos(textRef.current, textRich, containerClassName);
     }
   }), [textRich]);
 
   // Note: Bullet positioning is now handled entirely by Zustand store in YamdNodeText
-  // All positioning logic moved to calcPreferredBulletYPose in YamdRichText.js
+  // All positioning logic moved to calcBulletYPos in YamdRichText.js
   // If textRich segments are provided, render them
   if (textRich && Array.isArray(textRich)) {
     return (

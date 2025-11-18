@@ -1,6 +1,5 @@
 import React from 'react';
-import YamdNode, { getNodeClass } from '../YamdNode.jsx';
-import YamdChildrenNodes from '../YamdChildrenNodes.jsx';
+import YamdNode, { getNodeClass } from '@/core/YamdNode.jsx';
 import { renderYamdListBullet, getChildrenDisplay } from '../YamdRenderUtils.js';
 
 /**
@@ -55,16 +54,14 @@ const YamdNodeKey = ({ nodeId, parentInfo, globalInfo }) => {
         {/* Remaining children as normal children */}
         {remainingChildIds.length > 0 && (
           <div className="yamd-key-remaining">
-            <YamdChildrenNodes
-              childIds={remainingChildIds}
-              shouldAddIndent={false}
-              parentInfo={{ 
+            {globalInfo.renderChildNodes(remainingChildIds, {
+              shouldAddIndent: false,
+              parentInfo: { 
                 ...parentInfo, 
                 ...(childDisplay && { childDisplay }),
                 ...(childClass && { childClass })
-              }}
-              globalInfo={globalInfo}
-            />
+              }
+            })}
           </div>
         )}
       </div>

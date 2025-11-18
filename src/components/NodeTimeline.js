@@ -1,7 +1,7 @@
 import React from 'react';
-import { TIMELINE_BULLET_SETTINGS, BULLET_DIMENSIONS } from '../YamdRenderSettings.js';
-import { useYamdDocStore } from '../YamdDocStore.js';
-import { formatYPosition } from '../YamdRenderUtils.js';
+import { TIMELINE_BULLET_SETTINGS, BULLET_DIMENSIONS } from '@/config/RenderConfig.js';
+import { useYamdDocStore } from '@/core/YamdDocStore.js';
+import { formatYPosition } from '@/YamdRenderUtils.js';
 
 /**
  * Bullet component registry for timeline
@@ -195,7 +195,8 @@ export const AddTimelineBulletBeforeYamdNode = React.memo(({
   isLast, 
   bulletRefs, 
   lineHeights,
-  onBulletYPosChange
+  onBulletYPosChange,
+  onContentHeightChange
 }) => {
   // Extract parentInfo from childNode props
   const parentInfo = childNode.props.parentInfo;
@@ -203,12 +204,16 @@ export const AddTimelineBulletBeforeYamdNode = React.memo(({
   const nodeId = childNode.props.nodeId;
   const containerClassName = '.yamd-timeline-item';
   
-  // Get bullet type from child node data if not specified
+  // Get bullet type and width from child node data if not specified
   let actualBulletType = bulletType;
+  let timelineWidth = 'max'; // default value
   if (globalInfo?.getNodeDataById && childNode.props.nodeId) {
     const childNodeData = globalInfo.getNodeDataById(childNode.props.nodeId);
     if (childNodeData?.attr?.bullet) {
       actualBulletType = childNodeData.attr.bullet;
+    }
+    if (childNodeData?.attr?.width) {
+      timelineWidth = childNodeData.attr.width;
     }
   }
 
@@ -221,9 +226,9 @@ export const AddTimelineBulletBeforeYamdNode = React.memo(({
     }
     const store = useYamdDocStore.getState();
     // Add request to store
-    store.addBulletPreferredYPosRequest(docId, nodeId, containerClassName);
+    store.addBulletYPosReq(docId, nodeId, containerClassName);
     // Increment request counter to notify the node
-    store.incRequestCounter(docId, nodeId, containerClassName);
+    store.incReqCounter(docId, nodeId, containerClassName);
   }, [nodeId, docId, containerClassName]);
 
   // Subscribe to child bullet Y position result changes 
@@ -233,10 +238,10 @@ export const AddTimelineBulletBeforeYamdNode = React.memo(({
     if (!nodeId || !docId) return;
     // Subscribe to changes in the result
     const unsubscribe = useYamdDocStore.subscribe(
-      (state) => state.bulletPreferredYPosRequests[docId]?.[nodeId]?.[containerClassName]?.responseCounter,
+      (state) => state.bulletPreferredYPosReq[docId]?.[nodeId]?.[containerClassName]?.responseCounter,
       (responseCounter) => {
         const store = useYamdDocStore.getState();
-        const result = store.getPreferredYPosRequests(docId, nodeId)[containerClassName];
+        const result = store.getBulletYPosReqs(docId, nodeId)[containerClassName];
         console.log('nodeId:', nodeId, 'AddTimelineBulletBeforeYamdNode useEffect responseCounter:', responseCounter, 'childBulletYPosResult:', result);
         setChildBulletYPosResult(result);
       }
@@ -244,7 +249,7 @@ export const AddTimelineBulletBeforeYamdNode = React.memo(({
 
     // Get initial value
     const store = useYamdDocStore.getState();
-    const initialRequests = store.getPreferredYPosRequests(docId, nodeId);
+    const initialRequests = store.getBulletYPosReqs(docId, nodeId);
     const initialRequest = initialRequests[containerClassName];
     setChildBulletYPosResult(initialRequest?.result || null);
     
@@ -259,6 +264,28 @@ export const AddTimelineBulletBeforeYamdNode = React.memo(({
     }
   }, [childBulletYPosResult, onBulletYPosChange]);
   // ===== END ZUSTAND LOGIC =====
+
+  // ===== RESIZE OBSERVER LOGIC =====
+  const contentRef = React.useRef(null);
+  
+  React.useEffect(() => {
+    if (!contentRef.current || !onContentHeightChange) return;
+    
+    const resizeObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const newHeight = entry.contentRect.height;
+        console.log(`Timeline item ${itemIndex} height changed:`, newHeight);
+        
+        // Notify parent timeline to recalculate lines
+        onContentHeightChange(itemIndex, newHeight);
+      }
+    });
+    
+    resizeObserver.observe(contentRef.current);
+    
+    return () => resizeObserver.disconnect();
+  }, [itemIndex, onContentHeightChange]);
+  // ===== END RESIZE OBSERVER LOGIC =====
 
   // Create enhanced parentInfo for child node (without bullet notification callback)
   const childParentInfo = React.useMemo(() => ({
@@ -318,8 +345,12 @@ export const AddTimelineBulletBeforeYamdNode = React.memo(({
       </div>
 
       {/* content container */}
-      <div className="yamd-timeline-content">
-        <div style={{ marginLeft: BULLET_DIMENSIONS.content_offset_x }}>
+      <div className="yamd-timeline-content" ref={contentRef}>
+        <div style={{ 
+          marginLeft: BULLET_DIMENSIONS.content_offset_x,
+          ...(timelineWidth === 'max' ? { width: '100%' } : {}),
+          ...(timelineWidth === 'min' ? { width: 'fit-content' } : {})
+        }}>
           {enhancedChildNode}
         </div>
       </div>

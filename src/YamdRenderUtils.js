@@ -4,14 +4,14 @@ import React from 'react';
  * Centralized bullet dimensions configuration
  * These values are used directly in inline styles for guaranteed consistency
  */
-import { BULLET_DIMENSIONS, LIST_SETTINGS, TIMELINE_BULLET_SETTINGS } from './YamdRenderSettings.js';
+import { BULLET_DIMENSIONS, LIST_SETTINGS, TIMELINE_BULLET_SETTINGS } from '@/config/RenderConfig.js';
 
 // Re-export for backward compatibility
 export { BULLET_DIMENSIONS, LIST_SETTINGS };
 export {
   AddListBulletBeforeYamdNode,
   renderYamdListBullet,
-} from './components/AddBullet.jsx';
+} from '@/core/AddBullet.jsx';
 
 /**
  * Get children display mode for a node
@@ -136,6 +136,8 @@ export const createBulletEqualityFn = (nodeId, componentName) => {
     const hasNewRequests = Array.from(keys).some((key) => 
       (next[key]?.requestCounter || 0) > (prev[key]?.requestCounter || 0)
     );
+    // child almost always mounts before parent mounts
+
     
     const shouldSkip = !hasNewRequests; // skip if no new requests
     // console.log(`noteId: ${nodeId} ${componentName} equalityFn hasNewRequests:`, hasNewRequests, "shouldSkip:", shouldSkip);
