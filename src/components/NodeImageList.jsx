@@ -1,6 +1,6 @@
 import React from 'react';
 import NodeImage from './NodeImage.jsx';
-import { getAlignmentStrategy } from '../YamdRenderUtils.js';
+import { getAlignmentStrategy, useRenderUtilsContext } from '@/core/RenderUtils.js';
 import { IMAGE_LIST_SETTINGS } from '@/config/RenderConfig.js';
 
 /**
@@ -12,6 +12,7 @@ import { IMAGE_LIST_SETTINGS } from '@/config/RenderConfig.js';
  * @returns {JSX.Element} - Image list component
  */
 function YamdImageList({ nodeId, globalInfo, parentInfo }) {
+  const renderUtils = useRenderUtilsContext();
 
 
   /*
@@ -20,7 +21,7 @@ function YamdImageList({ nodeId, globalInfo, parentInfo }) {
     if all yamd-image-list-item exceeds viewport width, show horizontal scrollbar
   */
 
-  const nodeData = globalInfo.getNodeDataById(nodeId);
+  const nodeData = renderUtils.getNodeDataById(nodeId);
   if (!nodeData) {
     return <div className="yamd-error">Image-list node not found: {nodeId}</div>;
   }
@@ -53,7 +54,7 @@ function YamdImageList({ nodeId, globalInfo, parentInfo }) {
   
   // Process children to ensure they are image nodes
   const processImageChild = (childId, index) => {
-    const childData = globalInfo.getNodeDataById(childId);
+    const childData = renderUtils.getNodeDataById(childId);
     if (!childData) {
       return (
         <div key={childId || `missing-${index}`} className="yamd-error">

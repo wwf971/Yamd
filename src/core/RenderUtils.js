@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { createContext, useContext } from 'react';
 
 /**
  * Centralized bullet dimensions configuration
@@ -9,8 +9,8 @@ import { BULLET_DIMENSIONS, LIST_SETTINGS, TIMELINE_BULLET_SETTINGS } from '@/co
 // Re-export for backward compatibility
 export { BULLET_DIMENSIONS, LIST_SETTINGS };
 export {
-  AddListBulletBeforeYamdNode,
-  renderYamdListBullet,
+  AddListBulletBeforeNode,
+  renderListBullet,
 } from '@/core/AddBullet.jsx';
 
 /**
@@ -19,14 +19,14 @@ export {
  * @param {boolean} isRoot - Whether this is the root node
  * @returns {string} - Children display mode
  */
-export const getChildrenDisplay = (nodeData, isRoot = false, parentInfo = {}) => {
+export const getChildDisplay = (nodeData, isRoot = false, parentInfo = {}) => {
   // If node explicitly specifies childDisplay, use it
   if (nodeData.attr?.childDisplay) {
     return nodeData.attr.childDisplay;
   }
   
   // Otherwise use default based on node type and context
-  return getChildrenDefaultDisplay(nodeData, isRoot, parentInfo);
+  return getChildDefaultDisplay(nodeData, isRoot, parentInfo);
 };
 
 /**
@@ -36,7 +36,7 @@ export const getChildrenDisplay = (nodeData, isRoot = false, parentInfo = {}) =>
  * @param {object} parentInfo - Parent context information
  * @returns {string} - Default children display mode
  */
-export const getChildrenDefaultDisplay = (nodeData, isRoot = false, parentInfo = {}) => {
+export const getChildDefaultDisplay = (nodeData, isRoot = false, parentInfo = {}) => {
   // Special handling for root node
   if (isRoot) {
     return 'ul';  // Root nodes default to unordered list
@@ -108,7 +108,7 @@ export const getAlignmentStrategy = (nodeData, parentInfo) => {
  * @param {number|string} value - Y position value (number or CSS string like '1.2rem')
  * @returns {string} - Properly formatted CSS value
  */
-export const formatYPosition = (value) => {
+export const formatYPos = (value) => {
   // If it's a number, append 'px'
   if (typeof value === 'number') {
     return `${value}px`;
@@ -145,3 +145,84 @@ export const createBulletEqualityFn = (nodeId, componentName) => {
     return shouldSkip;
   };
 };
+
+// ===== REACT CONTEXT FOR RENDER UTILS =====
+
+/**
+ * RenderUtils Context - provides rendering utility methods and settings
+ * This allows components to access render utilities without prop drilling
+ */
+export const RenderUtilsContext = createContext(null);
+
+/**
+ * Hook to use RenderUtils context
+ * @returns {object} RenderUtils context object
+ */
+export const useRenderUtilsContext = () => {
+  const context = useContext(RenderUtilsContext);
+  if (!context) {
+    throw new Error('useRenderUtilsContext must be used within a RenderUtilsProvider');
+  }
+  return context;
+};
+
+/**
+ * Create the RenderUtils context value
+ * @param {object} options - Options for creating context value
+ * @param {function} options.registerNodeRef - Function to register node DOM references
+ * @param {function} options.renderChildNodes - Function to render child nodes
+ * @param {boolean} options.isEditable - Whether the document is in editable mode
+ * @param {string} options.docId - Document ID for binding to store methods
+ * @param {object} options.docStore - Reference to the Zustand document store
+ * @returns {object} RenderUtils context object with methods and settings
+ */
+export const createRenderUtilsContextValue = ({
+  registerNodeRef,
+  renderChildNodes,
+  isEditable = false,
+  docId = null,
+  docStore = null,
+} = {}) => {
+
+  return {
+    // Methods
+    getChildDisplay,
+    getChildDefaultDisplay,
+    getAlignmentStrategy,
+    formatYPos,
+    createBulletEqualityFn,
+    
+    // Node reference management
+    registerNodeRef,
+    
+    // Child rendering
+    renderChildNodes,
+    
+    // Document store access
+    docStore,  // Direct store reference
+    docId,     // Document ID
+    
+    // Convenience methods with docId bound
+    getNodeDataById: (nodeId) => docStore?.getState().getNodeDataById(docId, nodeId),
+    updateNodeData: (nodeId, producer) => docStore?.getState().updateNodeData(docId, nodeId, producer),
+    getAssetById: (assetId) => {
+      const doc = docStore?.getState().docs[docId];
+      return doc?.docData?.assets?.[assetId];
+    },
+    getRefById: (refId) => {
+      const doc = docStore?.getState().docs[docId];
+      return doc?.docData?.refs?.[refId];
+    },
+    
+    // Settings/Configuration
+    BULLET_DIMENSIONS,
+    LIST_SETTINGS,
+    TIMELINE_BULLET_SETTINGS,
+    
+    // Edit mode
+    isEditable,
+  };
+};
+
+
+

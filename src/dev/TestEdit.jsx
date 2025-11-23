@@ -5,7 +5,7 @@ import {
   parseYamlToJson, 
   formatJson, 
   getSampleYaml,
-  getSampleYamlNames,
+  getSampleYamlSeries,
   processNodes, 
   flattenJson,
   processAllTextSegments
@@ -17,8 +17,8 @@ import './TestEdit.css';
  * Displays YAML source, rendered document, and flattened data side-by-side
  */
 const TestEdit = () => {
-  const sampleNames = getSampleYamlNames();
-  const defaultSample = "rich-text";
+  const sampleNames = getSampleYamlSeries('edit');
+  const defaultSample = "text-simple";
   const [selectedSample, setSelectedSample] = useState(defaultSample);
   const [yamlInput, setYamlInput] = useState(getSampleYaml(defaultSample));
   const [flattenedData, setFlattenedData] = useState(null);
@@ -129,7 +129,11 @@ const TestEdit = () => {
           <h3 className="rendered-panel-title">Rendered Document (Future: Editable)</h3>
           <div className="rendered-panel-content">
             {flattenedData ? (
-              <YamdDoc docData={flattenedData} disableRefJump={false} />
+              <YamdDoc 
+                docData={flattenedData} 
+                disableRefJump={false} 
+                isEditable={true}
+              />
             ) : (
               <div className="rendered-panel-placeholder">
                 {isLoading ? 'Processing...' : 'No document to display'}

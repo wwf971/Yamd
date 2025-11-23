@@ -5,7 +5,7 @@ import { parseYamlToJson as parseYamlToJsonInternal, formatJson as formatJsonInt
 export { parseYamlToJson, formatJson } from '@/parse/_0_yaml_to_json.js';
 
 // Sample data
-export { getSampleYaml, getSampleYamlNames, getCornerCaseYaml } from '@/example/YamlSamples.js';
+export { getSampleYaml, getSampleYamlSeries, getCornerCaseYaml } from '@/example/YamlSamples.js';
 
 // Attribute parsing
 export { 

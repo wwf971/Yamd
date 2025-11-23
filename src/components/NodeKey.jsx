@@ -1,23 +1,23 @@
 import React from 'react';
 import YamdNode, { getNodeClass } from '@/core/YamdNode.jsx';
-import { renderYamdListBullet, getChildrenDisplay } from '../YamdRenderUtils.js';
+import { renderListBullet, useRenderUtilsContext } from '@/core/RenderUtils.js';
 
 /**
  * Key node renderer - renders title and children as siblings, with optional valueNum support
  */
 const YamdNodeKey = ({ nodeId, parentInfo, globalInfo }) => {
-  if (!globalInfo?.getNodeDataById) {
-    return <div className="yamd-error">Missing globalInfo.getNodeDataById</div>;
-  }
-  
-  const nodeData = globalInfo.getNodeDataById(nodeId);
+  // Get render utils from context
+  const renderUtils = useRenderUtilsContext();
+
+  const nodeData = renderUtils.getNodeDataById(nodeId);
   
   if (!nodeData) {
     return <div className="yamd-error">Node not found: {nodeId}</div>;
   }
 
+
   const title = nodeData.textRaw || nodeData.textOriginal || '';
-  const childDisplay = getChildrenDisplay(nodeData, false, parentInfo);
+  const childDisplay = renderUtils.getChildDisplay(nodeData, false, parentInfo);
   const childClass = nodeData.attr?.childClass || 'yamd-tag';
   const valueNum = nodeData.attr?.valueNum;
   const children = nodeData.children || [];
@@ -37,30 +37,32 @@ const YamdNodeKey = ({ nodeId, parentInfo, globalInfo }) => {
         <div className="yamd-key-siblings">
           {title && (
             <span className={nodeClass} style={{ display: 'flex', alignItems: 'flex-start' }}>
-              {(parentInfo?.childDisplay === 'ul' || parentInfo?.childDisplay === 'ol') && renderYamdListBullet({parentInfo})}
+              {(parentInfo?.childDisplay === 'ul' || parentInfo?.childDisplay === 'ol') && renderListBullet({parentInfo})}
               <span>{title}</span>
             </span>
           )}
-          {siblingChildIds.map(childId => (
-            <YamdNode
-              key={childId}
-              nodeId={childId}
-              globalInfo={globalInfo}
-              parentInfo={{ ...parentInfo, childClass }}
-            />
-          ))}
+          {renderUtils.renderChildNodes({
+            childIds: siblingChildIds,
+            shouldAddIndent: false,
+            parentInfo: { ...parentInfo, childClass },
+            globalInfo: globalInfo,
+            firstChildRef: null
+          })}
         </div>
         
         {/* Remaining children as normal children */}
         {remainingChildIds.length > 0 && (
           <div className="yamd-key-remaining">
-            {globalInfo.renderChildNodes(remainingChildIds, {
+            {renderUtils.renderChildNodes({
+              childIds: remainingChildIds,
               shouldAddIndent: false,
               parentInfo: { 
                 ...parentInfo, 
                 ...(childDisplay && { childDisplay }),
                 ...(childClass && { childClass })
-              }
+              },
+              globalInfo: globalInfo,
+              firstChildRef: null
             })}
           </div>
         )}
@@ -72,18 +74,17 @@ const YamdNodeKey = ({ nodeId, parentInfo, globalInfo }) => {
       <div className="yamd-node-key-flat">
         {title && (
           <span className={nodeClass} style={{ display: 'flex', alignItems: 'flex-start' }}>
-            {(parentInfo?.childDisplay === 'ul' || parentInfo?.childDisplay === 'ol') && renderYamdListBullet({parentInfo})}
+            {(parentInfo?.childDisplay === 'ul' || parentInfo?.childDisplay === 'ol') && renderListBullet({parentInfo})}
             <span>{title}</span>
           </span>
         )}
-        {children.map(childId => (
-          <YamdNode
-            key={childId}
-            nodeId={childId}
-            globalInfo={globalInfo}
-            parentInfo={{ ...parentInfo, childClass }}
-          />
-        ))}
+        {renderUtils.renderChildNodes({
+          childIds: children,
+          shouldAddIndent: false,
+          parentInfo: { ...parentInfo, childClass },
+          globalInfo: globalInfo,
+          firstChildRef: null
+        })}
       </div>
     );
   }

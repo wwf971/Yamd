@@ -409,7 +409,7 @@
   max-width: 100%;
 }
 
-/* Custom bullet styles - dimensions now controlled by BULLET_DIMENSIONS in YamdRenderUtils.js */
+/* Custom bullet styles - dimensions now controlled by BULLET_DIMENSIONS in RenderUtils.js */
 
 .yamd-bullet-disc {
   width: 4px;

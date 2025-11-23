@@ -1,13 +1,16 @@
 import React, { useRef, useEffect } from 'react';
 import { getNodeClass } from '@/core/YamdNode.jsx';
 import { IMAGE_SETTINGS } from '@/config/RenderConfig.js';
-import { getAlignmentStrategy } from '@/YamdRenderUtils.js';
+import { getAlignmentStrategy, useRenderUtilsContext } from '@/core/RenderUtils.js';
 
 /**
  * Image node renderer - displays images with captions
  */
 const NodeImage = ({ nodeId, parentInfo, globalInfo }) => {
   const nodeRef = useRef(null);
+  
+  // Get render utils from context
+  const renderUtils = useRenderUtilsContext();
 
   // Register the node reference after the component finishes rendering
   useEffect(() => {
@@ -16,10 +19,8 @@ const NodeImage = ({ nodeId, parentInfo, globalInfo }) => {
     }
   }, [nodeId, globalInfo]);
 
-  if (!globalInfo?.getNodeDataById) {
-    return <div className="yamd-error">Missing globalInfo.getNodeDataById</div>;
-  }
-  const nodeData = globalInfo.getNodeDataById(nodeId);
+  // Get node data from store via renderUtils
+  const nodeData = renderUtils.getNodeDataById(nodeId);
   if (!nodeData) {
     return <div className="yamd-error">Image node not found: nodeId: {nodeId}</div>;
   }
@@ -156,7 +157,7 @@ const NodeImage = ({ nodeId, parentInfo, globalInfo }) => {
           {/* Show index number if available from asset */}
           {(() => {
             if (nodeData.assetId && globalInfo?.getAssetById) {
-              const asset = globalInfo.getAssetById(nodeData.assetId);
+              const asset = renderUtils.getAssetById(nodeData.assetId);
               if (asset && !asset.no_index && (asset.indexStr || asset.indexOfSameType)) {
                 return ` ${asset.indexStr || asset.indexOfSameType}`;
               }

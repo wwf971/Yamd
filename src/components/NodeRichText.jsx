@@ -1,20 +1,20 @@
 import React, { useRef, forwardRef, useImperativeHandle } from 'react';
-import YamdPlainText from './NodePlainText.jsx';
-import YamdRichTextLaTeXInline from './NodeRichTextLaTeXInline.jsx';
-import YamdRichTextRef from './NodeRichTextRef.jsx';
-import YamdRichTextBib from './NodeRichTextBib.jsx';
+import NodeTextPlain from './NodePlainText.jsx';
+import NodeTextRichLaTeXInline from './NodeRichTextLaTeXInline.jsx';
+import NodeTextRichRef from './NodeRichTextRef.jsx';
+import NodeTextRichBib from './NodeRichTextBib.jsx';
 import { calcBulletYPos as _calcBulletYPos} from './NodeRichText.js';
 
 /**
  * Rich text renderer with inline LaTeX math support
  * Renders segmented text content with clean LaTeX conversion (NO MathJax fallback)
- * Also handles bullet positioning like YamdPlainText
+ * Also handles bullet positioning like NodeTextPlain
  */
-const YamdRichText = forwardRef(({ text, className, parentInfo, textRich = null, globalInfo = null }, ref) => {
+const NodeTextRich = forwardRef(({ text, className, parentInfo, textRich = null, globalInfo = null }, ref) => {
   // ref to measure text for bullet positioning (used by Zustand system)
   const textRef = useRef(null);
 
-  // console.log("YamdRichText textRich:", textRich);
+  // console.log("NodeTextRich textRich:", textRich);
   // expose methods to parent via ref
   useImperativeHandle(ref, () => ({
     calcBulletYPos: (containerClassName) => {
@@ -23,7 +23,7 @@ const YamdRichText = forwardRef(({ text, className, parentInfo, textRich = null,
   }), [textRich]);
 
   // Note: Bullet positioning is now handled entirely by Zustand store in YamdNodeText
-  // All positioning logic moved to calcBulletYPos in YamdRichText.js
+  // All positioning logic moved to calcBulletYPos in NodeTextRich.js
   // If textRich segments are provided, render them
   if (textRich && Array.isArray(textRich)) {
     return (
@@ -32,7 +32,7 @@ const YamdRichText = forwardRef(({ text, className, parentInfo, textRich = null,
           if (segment.type === 'latex_inline') {
             // Use dedicated LaTeX component - NO MathJax fallback!
             return (
-              <YamdRichTextLaTeXInline 
+              <NodeTextRichLaTeXInline 
                 key={index}
                 segment={segment}
                 globalInfo={globalInfo}
@@ -41,7 +41,7 @@ const YamdRichText = forwardRef(({ text, className, parentInfo, textRich = null,
           } else if (segment.type === 'ref-asset') {
             // Use dedicated reference component
             return (
-              <YamdRichTextRef
+              <NodeTextRichRef
                 key={index}
                 segment={segment}
                 globalInfo={globalInfo}
@@ -50,7 +50,7 @@ const YamdRichText = forwardRef(({ text, className, parentInfo, textRich = null,
           } else if (segment.type === 'ref-bib') {
             // Use dedicated bibliography component
             return (
-              <YamdRichTextBib
+              <NodeTextRichBib
                 key={index}
                 segment={segment}
                 globalInfo={globalInfo}
@@ -79,6 +79,6 @@ const YamdRichText = forwardRef(({ text, className, parentInfo, textRich = null,
   );
 });
 
-YamdRichText.displayName = 'YamdRichText';
+NodeTextRich.displayName = 'NodeTextRich';
 
-export default YamdRichText;
+export default NodeTextRich;

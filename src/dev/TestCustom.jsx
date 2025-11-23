@@ -5,7 +5,7 @@ import {
   parseYamlToJson, 
   formatJson, 
   getSampleYaml,
-  getSampleYamlNames,
+  getSampleYamlSeries,
   processNodes, 
   flattenJson,
   processAllTextSegments
@@ -15,7 +15,7 @@ import './TestRender.css';
 import './TestEdit.css';
 
 const TestCustom = () => {
-  const sampleNames = getSampleYamlNames('custom');
+  const sampleNames = getSampleYamlSeries('custom');
   const defaultSample = sampleNames[0] || "custom-box";
   const [selectedSample, setSelectedSample] = useState(defaultSample);
   const [yamlInput, setYamlInput] = useState(getSampleYaml(defaultSample));

@@ -1,23 +1,22 @@
 import React from 'react';
 
+import { useRenderUtilsContext } from '@/core/RenderUtils.js';
 /**
  * Component for referring to assets(images, videos, latex blocks, etc) in same document
  * this component is a kind of segments in YamdNodeText.jsx's selfTextRich
  * Handles \ref{linkText}{linkId} patterns
  */
-const YamdRichTextRef = ({ segment, globalInfo }) => {
+const NodeTextRichRef = ({ segment, globalInfo }) => {
+  const renderUtils = useRenderUtilsContext();
   if (!segment || segment.type !== 'ref-asset') {
     return <span className="yamd-error">Invalid reference segment</span>;
   }
 
   const { refId, targetId, linkText } = segment;
   
-  if (!globalInfo?.getRefById || !globalInfo?.getNodeDataById || !globalInfo?.getAssetById) {
-    return <span className="yamd-error">Missing globalInfo functions</span>;
-  }
 
   // Get reference data
-  const refData = globalInfo.getRefById(refId);
+  const refData = renderUtils.getRefById(refId);
   if (!refData) {
     // Fallback: display original reference syntax
     return <span className="yamd-ref-fallback">{segment.textRaw}</span>;
@@ -27,12 +26,12 @@ const YamdRichTextRef = ({ segment, globalInfo }) => {
   let displayText = linkText;
   if (!displayText || displayText.trim() === '') {
     // Try to find the target node to generate appropriate text
-    const targetNode = globalInfo.getNodeDataById(targetId);
+    const targetNode = renderUtils.getNodeDataById(targetId);
     
     if (targetNode) {
       if (targetNode.type === 'latex') {
         // For LaTeX nodes, try to get asset info for numbering
-        const asset = targetNode.assetId ? globalInfo.getAssetById(targetNode.assetId) : null;
+        const asset = targetNode.assetId ? renderUtils.getAssetById(targetNode.assetId) : null;
         if (asset && asset.indexOfSameType && !asset.no_index) {
           const captionTitle = asset.captionTitle || 'Eq';
           displayText = `${captionTitle} ${asset.indexOfSameType}`;
@@ -57,7 +56,7 @@ const YamdRichTextRef = ({ segment, globalInfo }) => {
 
   // Handle click to notify YamdDoc
   const handleClick = (e) => {
-    console.log('🔍 YamdRichTextRef handleClick rendering');
+    console.log('🔍 NodeTextRichRef handleClick rendering');
     e.preventDefault();
     
     if (globalInfo?.onRefClick) {
@@ -86,4 +85,4 @@ const YamdRichTextRef = ({ segment, globalInfo }) => {
   );
 };
 
-export default YamdRichTextRef;
+export default NodeTextRichRef;

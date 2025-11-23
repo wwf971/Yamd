@@ -1,68 +1,72 @@
 import React, { useState, useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { getNodeClass } from '@/core/YamdNode.jsx';
-import { getChildrenDisplay } from '../YamdRenderUtils.js';
-import { useYamdDocStore } from '@/core/YamdDocStore.js';
-import { createBulletEqualityFn } from '../YamdRenderUtils.js';
+import { useRenderUtilsContext } from '@/core/RenderUtils.js';
+// Store is now accessed via RenderUtils context
+import { createBulletEqualityFn } from '@/core/RenderUtils.js';
 
 /**
  * Panel node renderer - displays collapsible panel with show/hide functionality
  */
-const YamdPanel = forwardRef(({ nodeId, parentInfo, globalInfo }, ref) => {
+const NodePanel = forwardRef(({ nodeId, parentInfo, globalInfo }, ref) => {
   const nodeRef = useRef(null);
+
+  // Get render utils from context
+  const renderUtils = useRenderUtilsContext();
+  const docStore = renderUtils.docStore;
+  const docId = renderUtils.docId;
+  
+  // Debug: check if docIds match
+  if (globalInfo?.docId && docId !== globalInfo.docId) {
+    console.warn('⚠️ NodePanel docId mismatch:', { renderUtilsDocId: docId, globalInfoDocId: globalInfo.docId });
+  }
 
   // Register the node reference after the component finishes rendering
   useEffect(() => {
     if (nodeRef.current) {
-      globalInfo?.registerNodeRef?.(nodeId, nodeRef.current);
+      renderUtils.registerNodeRef?.(nodeId, nodeRef.current);
     }
-  }, [nodeId, globalInfo]);
+  }, [nodeId, renderUtils.registerNodeRef]);
 
   // expose calcBulletYPos to parent via ref
   useImperativeHandle(ref, () => ({
     calcBulletYPos: () => {
-      const docId = globalInfo?.docId;
-      calcBulletYPos(nodeId, docId, nodeRef, buttonRef);
+      calcBulletYPos(nodeId, docId, nodeRef, buttonRef, docStore);
     }
-  }), [nodeId, globalInfo]);
+  }), [nodeId, docId, docStore]);
 
   // ===== ZUSTAND LOGIC =====
-  // get docId from globalInfo or use default
-  const docId = globalInfo?.docId; // don't use 'default-doc' here. let it be undefined.
   
   // Subscribe to request counter changes with custom equality function
   useEffect(() => {
-    if (!nodeId || !docId) return;
-    console.log('YamdPanel noteId:', nodeId, 'useEffect subscribe');
-    const unsubscribe = useYamdDocStore.subscribe(
-      (state) => state.bulletPreferredYPosReq[docId]?.[nodeId] || {},
+    if (!nodeId || !docId || !docStore) return;
+    console.log('NodePanel noteId:', nodeId, 'useEffect subscribe');
+    const unsubscribe = docStore.subscribe(
+      (state) => state.bulletYPosReq[docId]?.[nodeId] || {},
       (requests) => {
-        console.log('noteId:', nodeId, 'YamdPanel useEffect subscribe triggered with requests:', requests);
+        console.log('noteId:', nodeId, 'NodePanel useEffect subscribe triggered with requests:', requests);
         // This will only fire if equalityFn returns false
-        calcBulletYPos(nodeId, docId, nodeRef, buttonRef);
+        calcBulletYPos(nodeId, docId, nodeRef, buttonRef, docStore);
       },
       {
-        equalityFn: createBulletEqualityFn(nodeId, 'YamdPanel'),
+        equalityFn: createBulletEqualityFn(nodeId, 'NodePanel'),
       }
     );
     
     // Immediately check for existing requests
-    calcBulletYPos(nodeId, docId, nodeRef, buttonRef);
+    calcBulletYPos(nodeId, docId, nodeRef, buttonRef, docStore);
     return unsubscribe;
-  }, [nodeId, docId]);
+  }, [nodeId, docId, docStore]);
   // ===== END ZUSTAND LOGIC =====
 
-  if (!globalInfo?.getNodeDataById) {
-    return <div className="yamd-error">Missing globalInfo.getNodeDataById</div>;
-  }
-
-  const nodeData = globalInfo.getNodeDataById(nodeId);
+  // Get node data from store via renderUtils
+  const nodeData = renderUtils.getNodeDataById(nodeId);
   
   if (!nodeData) {
     return <div className="yamd-error">Node not found: {nodeId}</div>;
   }
 
   const title = nodeData.textRaw || nodeData.textOriginal || '';
-  const childDisplay = getChildrenDisplay(nodeData, false, parentInfo);
+  const childDisplay = renderUtils.getChildDisplay(nodeData, false, parentInfo);
   const childClass = nodeData.attr?.childClass;
   
   // use the utility function to get appropriate CSS class
@@ -102,13 +106,16 @@ const YamdPanel = forwardRef(({ nodeId, parentInfo, globalInfo }, ref) => {
       {isExpanded && (
         <div className="yamd-panel-content">
           {nodeData.children && nodeData.children.length > 0 && (
-            globalInfo.renderChildNodes(nodeData.children, {
+            renderUtils.renderChildNodes({
+              childIds: nodeData.children,
               shouldAddIndent: false,
               parentInfo: { 
                 ...parentInfo, 
                 ...(childDisplay && { childDisplay }),
                 ...(childClass && { childClass })
-              }
+              },
+              globalInfo: globalInfo,
+              firstChildRef: null
             })
           )}
         </div>
@@ -123,15 +130,16 @@ const YamdPanel = forwardRef(({ nodeId, parentInfo, globalInfo }, ref) => {
  * @param {string} docId - Document ID  
  * @param {React.RefObject} nodeRef - Node DOM reference
  * @param {React.RefObject} buttonRef - Button DOM reference
+ * @param {object} docStore - Zustand document store
  * @returns {void}
  */
-const calcBulletYPos = (nodeId, docId, nodeRef, buttonRef) => {
+const calcBulletYPos = (nodeId, docId, nodeRef, buttonRef, docStore) => {
   if (!nodeRef.current || !buttonRef.current) return;
   
-  const store = useYamdDocStore.getState();
+  const store = docStore.getState();
   // Get all requests for this node
   const requests = store.getBulletYPosReqs(docId, nodeId);
-  console.log('noteId:', nodeId, 'YamdPanel calcBulletYPos requests:', requests);
+  console.log('noteId:', nodeId, 'NodePanel calcBulletYPos requests:', requests);
   
   // Update result for each requesting container
   Object.keys(requests).forEach(containerClassName => {
@@ -167,4 +175,4 @@ const calcBulletYPos = (nodeId, docId, nodeRef, buttonRef) => {
   });
 };
 
-export default YamdPanel;
+export default NodePanel;

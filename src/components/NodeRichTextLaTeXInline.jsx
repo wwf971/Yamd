@@ -1,10 +1,14 @@
 import React from 'react';
+import { useRenderUtilsContext } from '@/core/RenderUtils.js';
 
 /**
  * LaTeX inline renderer component
  * Handles rendering of LaTeX segments with asset-based HTML conversion
  */
-const YamdRichTextLaTeXInline = ({ segment, globalInfo }) => {
+const NodeTextRichLaTeXInline = ({ segment, globalInfo }) => {
+  // Get render utils from context
+  const renderUtils = useRenderUtilsContext();
+  
   if (segment.type !== 'latex_inline' || !segment.assetId) {
     // Not a LaTeX segment, should not be handled by this component
     return (
@@ -13,16 +17,8 @@ const YamdRichTextLaTeXInline = ({ segment, globalInfo }) => {
       </span>
     );
   }
-
-  if (!globalInfo?.getAssetById) {
-    return (
-      <span className="yamd-text-segment yamd-error">
-        Missing globalInfo.getAssetById
-      </span>
-    );
-  }
   
-  const asset = globalInfo.getAssetById(segment.assetId);
+  const asset = renderUtils.getAssetById(segment.assetId);
   
   if (!asset) {
     // Asset not found, display raw text
@@ -52,4 +48,4 @@ const YamdRichTextLaTeXInline = ({ segment, globalInfo }) => {
   }
 };
 
-export default YamdRichTextLaTeXInline;
+export default NodeTextRichLaTeXInline;

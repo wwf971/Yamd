@@ -1,6 +1,6 @@
 import React from 'react';
 import NodeVideo from './NodeVideo.jsx';
-import { getAlignmentStrategy } from '../YamdRenderUtils.js';
+import { getAlignmentStrategy, useRenderUtilsContext } from '@/core/RenderUtils.js';
 import { VIDEO_LIST_SETTINGS } from '@/config/RenderConfig.js';
 
 /**
@@ -12,6 +12,8 @@ import { VIDEO_LIST_SETTINGS } from '@/config/RenderConfig.js';
  * @returns {JSX.Element} - Video list component
  */
 function YamdVideoList({ nodeId, globalInfo, parentInfo }) {
+  // Get render utils from context
+  const renderUtils = useRenderUtilsContext();
 
   /*
     yamd-video-list-item <-- fixed to height of YamdVideoList
@@ -19,7 +21,7 @@ function YamdVideoList({ nodeId, globalInfo, parentInfo }) {
     if all yamd-video-list-item exceeds viewport width, show horizontal scrollbar
   */
 
-  const nodeData = globalInfo.getNodeDataById(nodeId);
+  const nodeData = renderUtils.getNodeDataById(nodeId);
   if (!nodeData) {
     return <div className="yamd-error">Video-list node not found: {nodeId}</div>;
   }
@@ -52,7 +54,7 @@ function YamdVideoList({ nodeId, globalInfo, parentInfo }) {
   
   // Process children to ensure they are video nodes
   const processVideoChild = (childId, index) => {
-    const childData = globalInfo.getNodeDataById(childId);
+    const childData = renderUtils.getNodeDataById(childId);
     if (!childData) {
       return (
         <div key={childId || `missing-${index}`} className="yamd-error">

@@ -1,6 +1,6 @@
 /**
- * YamdRichText utility functions for bullet positioning
- * Extracted from YamdRichText.jsx to keep component clean
+ * NodeTextRich utility functions for bullet positioning
+ * Extracted from NodeTextRich.jsx to keep component clean
  */
 
 /**

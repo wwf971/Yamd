@@ -1,6 +1,5 @@
-import React, { useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
-import { createBulletEqualityFn } from '../YamdRenderUtils.js';
-
+import React, { useRef, useEffect, useLayoutEffect, forwardRef, useImperativeHandle } from 'react';
+import { createBulletEqualityFn, useRenderUtilsContext } from '@/core/RenderUtils.js';
 
 /**
  * Anonymous node renderer - skips title completely and renders only children (for nodes with empty textRaw)
@@ -9,15 +8,17 @@ const YamdNodeAnonym = forwardRef(({ nodeId, parentInfo, globalInfo }, ref) => {
   const firstChildRef = useRef(null);
   // Track child subscriptions to prevent memory leaks
   const childSubscriptionsRef = useRef(new Map());
-  
+  // Get render utils from context
+  const renderUtils = useRenderUtilsContext();
+
   console.log('nodeId:', nodeId, 'YamdNodeAnonym parentInfo:', parentInfo);
   // Expose calcBulletYPos to parent via ref
   useImperativeHandle(ref, () => ({
     calcBulletYPos: () => {
       const docId = globalInfo?.docId;
-      calcBulletYPos(nodeId, docId, globalInfo, childSubscriptionsRef);
+      calcBulletYPos(nodeId, docId, globalInfo, childSubscriptionsRef, renderUtils);
     }
-  }), [nodeId, globalInfo]);
+  }), [nodeId, globalInfo, renderUtils]);
 
   // ===== ZUSTAND LOGIC =====
   const docId = globalInfo?.docId;
@@ -30,11 +31,11 @@ const YamdNodeAnonym = forwardRef(({ nodeId, parentInfo, globalInfo }, ref) => {
     }
     console.log('noteId:', nodeId, 'docId:', docId, 'YamdNodeAnonym useEffect subscribe');
     const unsubscribe = globalInfo.getDocStore().subscribe(
-      (state) => state.bulletPreferredYPosReq[docId]?.[nodeId] || {},
+      (state) => state.bulletYPosReq[docId]?.[nodeId] || {},
       (requests) => {
         console.log('noteId:', nodeId, 'YamdNodeAnonym useEffect subscribe triggered with requests:', requests);
         // this will only fire if equalityFn returns false
-        calcBulletYPos(nodeId, docId, globalInfo, childSubscriptionsRef);
+        calcBulletYPos(nodeId, docId, globalInfo, childSubscriptionsRef, renderUtils);
       },
       {
         equalityFn: createBulletEqualityFn(nodeId, 'YamdNodeAnonym'),
@@ -42,7 +43,7 @@ const YamdNodeAnonym = forwardRef(({ nodeId, parentInfo, globalInfo }, ref) => {
     );
     
     // Immediately check for existing requests
-    calcBulletYPos(nodeId, docId, globalInfo, childSubscriptionsRef);
+    calcBulletYPos(nodeId, docId, globalInfo, childSubscriptionsRef, renderUtils);
     
     return () => {
       unsubscribe();
@@ -50,14 +51,10 @@ const YamdNodeAnonym = forwardRef(({ nodeId, parentInfo, globalInfo }, ref) => {
       childSubscriptionsRef.current.forEach(unsub => unsub());
       childSubscriptionsRef.current.clear();
     };
-  }, [nodeId, docId, globalInfo]);
+  }, [nodeId, docId, globalInfo, renderUtils]);
   // ===== END ZUSTAND LOGIC =====
 
-  if (!globalInfo?.getNodeDataById) {
-    return <div className="yamd-error">Missing globalInfo.getNodeDataById</div>;
-  }
-  
-  const nodeData = globalInfo.getNodeDataById(nodeId);
+  const nodeData = renderUtils.getNodeDataById(nodeId);
   
   if (!nodeData) {
     return <div className="yamd-error">Node not found: {nodeId}</div>;
@@ -72,9 +69,12 @@ const YamdNodeAnonym = forwardRef(({ nodeId, parentInfo, globalInfo }, ref) => {
 
   // Render only children, no title
   // Pass firstChildRef to the first child for forwarding positioning requests
-  return globalInfo.renderChildNodes(nodeData.children || [], {
+
+  return renderUtils.renderChildNodes({
+    childIds: nodeData.children || [],
     shouldAddIndent: false,
     parentInfo: childrenParentInfo,
+    globalInfo: globalInfo,
     firstChildRef: firstChildRef // Pass ref to first child
   });
 });
@@ -86,9 +86,10 @@ const YamdNodeAnonym = forwardRef(({ nodeId, parentInfo, globalInfo }, ref) => {
  * @param {string} docId - Document ID  
  * @param {object} globalInfo - Global info object
  * @param {React.RefObject} childSubscriptionsRef - Reference to Map tracking child subscriptions
+ * @param {object} renderUtils - Render utilities from context
  * @returns {void}
  */
-const calcBulletYPos = (nodeId, docId, globalInfo, childSubscriptionsRef) => {
+const calcBulletYPos = (nodeId, docId, globalInfo, childSubscriptionsRef, renderUtils) => {
   const store = globalInfo.getDocStore().getState();
   // Get all requests for this node
   const requests = store.getBulletYPosReqs(docId, nodeId);
@@ -108,7 +109,7 @@ const calcBulletYPos = (nodeId, docId, globalInfo, childSubscriptionsRef) => {
       
       // NEW LOGIC: Forward request through Zustand store
       // Get the first child node data to forward the request
-      const nodeData = globalInfo.getNodeDataById(nodeId);
+      const nodeData = renderUtils.getNodeDataById(nodeId);
       if (nodeData?.children && nodeData.children.length > 0) {
         const firstChildId = nodeData.children[0];
         
@@ -130,7 +131,7 @@ const calcBulletYPos = (nodeId, docId, globalInfo, childSubscriptionsRef) => {
         
         // Subscribe to the first child's response and forward it back
         const unsubscribeChild = globalInfo.getDocStore().subscribe(
-          (state) => state.bulletPreferredYPosReq[docId]?.[firstChildId]?.[containerClassName]?.responseCounter,
+          (state) => state.bulletYPosReq[docId]?.[firstChildId]?.[containerClassName]?.responseCounter,
           (responseCounter) => {
             // Always use fresh store reference to avoid stale closures
             const freshStore = globalInfo.getDocStore().getState();

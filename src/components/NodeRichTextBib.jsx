@@ -4,9 +4,9 @@ import React from 'react';
  * Bibliography reference segment renderer - displays clickable bibliography citations
  * Renders ref-bib segments with click handling for navigation to bibliography list
  */
-const YamdRichTextBib = ({ segment, globalInfo }) => {
+const NodeTextRichBib = ({ segment, globalInfo }) => {
   if (!segment || segment.type !== 'ref-bib') {
-    console.warn('YamdRichTextBib received invalid segment:', segment);
+    console.warn('NodeTextRichBib received invalid segment:', segment);
     return <span className="yamd-bib-fallback">{segment?.textRaw || '[Invalid Bib]'}</span>;
   }
 
@@ -73,4 +73,4 @@ const YamdRichTextBib = ({ segment, globalInfo }) => {
   );
 };
 
-export default YamdRichTextBib;
+export default NodeTextRichBib;

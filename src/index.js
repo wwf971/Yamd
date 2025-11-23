@@ -1,7 +1,7 @@
 // Main entry point for Yamd module
 export { default as YamdDoc } from '@/core/YamdDoc.jsx';
 export { default as YamdNode, getNodeClass } from '@/core/YamdNode.jsx';
-export { default as YamdChildrenNodes } from '@/core/YamdChildrenNodes.jsx';
+export { default as YamdChildNodes } from '@/core/YamdChildNodes.jsx';
 export { default as YamdImageList } from '@/components/NodeImageList.jsx';
 export { default as YamdVideoList } from '@/components/NodeVideoList.jsx';
 export { default as TestYamd } from './TestYamd.jsx';
@@ -21,15 +21,15 @@ export {
 
 // Export render utilities
 export {
-  renderYamdListBullet,
-  getChildrenDisplay,
-  getChildrenDefaultDisplay,
+  renderListBullet,
+  getChildDisplay,
+  getChildDefaultDisplay,
   getAlignmentStrategy,
   createBulletEqualityFn
-} from './YamdRenderUtils.js';
+} from '@/core/RenderUtils.js';
 
 export {
-  AddListBulletBeforeYamdNode,
+  AddListBulletBeforeNode,
 } from '@/core/AddBullet.jsx';
 
 // export render settings

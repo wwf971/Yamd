@@ -1,4 +1,5 @@
 import React, { useRef, useImperativeHandle, forwardRef } from 'react';
+import { useRenderUtilsContext } from '@/core/RenderUtils.js';
 import './NodeCustomBox.css';
 
 /**
@@ -15,6 +16,9 @@ import './NodeCustomBox.css';
 const NodeCustomBox = forwardRef(({ nodeId, nodeData, parentInfo, globalInfo }, ref) => {
   const boxRef = useRef(null);
   const headerRef = useRef(null);
+  
+  // Get render utils from context
+  const renderUtils = useRenderUtilsContext();
   
   const textRaw = nodeData.textRaw || '';
   const children = nodeData.children || [];
@@ -54,12 +58,15 @@ const NodeCustomBox = forwardRef(({ nodeId, nodeData, parentInfo, globalInfo }, 
       
       {children.length > 0 && (
         <div className="yamd-custom-box-content">
-          {globalInfo.renderChildNodes(children, {
+          {renderUtils.renderChildNodes({
+            childIds: children,
             shouldAddIndent: true,
             parentInfo: {
               childDisplay: 'ul',
               childClass: 'yamd-custom-box-item'
-            }
+            },
+            globalInfo: globalInfo,
+            firstChildRef: null
           })}
         </div>
       )}

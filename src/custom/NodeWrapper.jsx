@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
-import { createBulletEqualityFn } from '@/YamdRenderUtils.js';
+import { createBulletEqualityFn } from '@/core/RenderUtils.js';
 
 /**
  * YamdCustomNodeWrapper - Wrapper component for custom user nodes
@@ -15,7 +15,7 @@ import { createBulletEqualityFn } from '@/YamdRenderUtils.js';
  * 
  * Props the custom component will receive:
  * - nodeId: string - The node ID
- * - nodeData: object - The node data from globalInfo.getNodeDataById(nodeId)
+ * - nodeData: object - The node data from renderUtils.getNodeDataById(nodeId)
  * - parentInfo: object - Parent context information
  * - globalInfo: object - Global info with utility functions
  * 
@@ -46,7 +46,7 @@ const YamdCustomNodeWrapper = forwardRef(({ nodeId, parentInfo, globalInfo, Cust
     }
     console.log('nodeId:', nodeId, 'docId:', docId, 'YamdCustomNodeWrapper useEffect subscribe');
     const unsubscribe = globalInfo.getDocStore().subscribe(
-      (state) => state.bulletPreferredYPosReq[docId]?.[nodeId] || {},
+      (state) => state.bulletYPosReq[docId]?.[nodeId] || {},
       (requests) => {
         console.log('nodeId:', nodeId, 'YamdCustomNodeWrapper useEffect subscribe triggered with requests:', requests);
         // This will only fire if equalityFn returns false
@@ -66,11 +66,10 @@ const YamdCustomNodeWrapper = forwardRef(({ nodeId, parentInfo, globalInfo, Cust
   }, [nodeId, docId, globalInfo]);
   // ===== END ZUSTAND LOGIC =====
 
-  if (!globalInfo?.getNodeDataById) {
-    return <div className="yamd-error">Missing globalInfo.getNodeDataById</div>;
-  }
-  
-  const nodeData = globalInfo.getNodeDataById(nodeId);
+  // Get render utils from context
+  const renderUtils = useRenderUtilsContext();
+
+  const nodeData = renderUtils.getNodeDataById(nodeId);
   
   if (!nodeData) {
     return <div className="yamd-error">Node not found: {nodeId}</div>;

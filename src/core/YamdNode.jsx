@@ -1,18 +1,20 @@
 import React from 'react';
 import './YamdNode.css';
-import YamdPanel from '@/components/NodePanel.jsx';
-import YamdNodeDivider from '@/components/NodeDivider.jsx';
+import NodePanel from '@/components/NodePanel.jsx';
+import NodeDivider from '@/components/NodeDivider.jsx';
 import YamdNodeKey from '@/components/NodeKey.jsx';
 import YamdNodeTopRight from '@/components/NodeTopRight.jsx';
 import YamdNodeAnonym from '@/components/NodeAnonym.jsx';
 import YamdNodeText from '@/components/NodeText.jsx';
-import YamdNodeLaTeX from '@/components/NodeLaTeX.jsx';
+import NodeLaTeX from '@/components/NodeLaTeX.jsx';
 import NodeImage from '@/components/NodeImage.jsx';
 import NodeVideo from '@/components/NodeVideo.jsx';
 import YamdImageList from '@/components/NodeImageList.jsx';
 import YamdVideoList from '@/components/NodeVideoList.jsx';
-import { AddListBulletBeforeYamdNode } from '@/core/AddBullet.jsx';
-import { getChildrenDisplay } from '@/YamdRenderUtils.js';
+import { AddListBulletBeforeNode } from '@/core/AddBullet.jsx';
+import { useRenderUtilsContext } from '@/core/RenderUtils.js';
+
+
 
 /**
  * Main YamdNode component for rendering flattened Yamd data
@@ -22,10 +24,12 @@ import { getChildrenDisplay } from '@/YamdRenderUtils.js';
  */
 const YamdNode = React.memo(({ nodeId, parentInfo = null, globalInfo = null }) => {
   // console.log('🔍 YamdNode rendering node:', nodeId);
-  if (!globalInfo?.getNodeDataById) {
-    return <div className="yamd-error">Missing globalInfo.getNodeDataById</div>;
-  }
-  const nodeData = globalInfo.getNodeDataById(nodeId);
+  
+  // Get render utils from context
+  const renderUtils = useRenderUtilsContext();
+  
+  // Get node data from store via renderUtils
+  const nodeData = renderUtils.getNodeDataById(nodeId);
   if (!nodeData) {
     return <div className="yamd-error">Node not found. noedId: {nodeId}</div>;
   }
@@ -33,15 +37,15 @@ const YamdNode = React.memo(({ nodeId, parentInfo = null, globalInfo = null }) =
   // assign default values if missing
   const selfDisplay = nodeData.attr?.selfDisplay || 
     (nodeData.textRaw && nodeData.textRaw !== '' ? 'default' : 'none');
-  const childDisplay = getChildrenDisplay(nodeData, false, parentInfo);
+  const childDisplay = renderUtils.getChildDisplay(nodeData, false, parentInfo);
   console.log('YamdNode rendering node:', nodeId, 'nodeData.type:', nodeData.type, 'selfDisplay:', selfDisplay, 'childDisplay:', childDisplay);
   const getNodeContent = () => {
     // Handle special leaf node types first
     if (nodeData.type === 'latex') {
       return (
-        <AddListBulletBeforeYamdNode 
+        <AddListBulletBeforeNode 
           childNode={
-            <YamdNodeLaTeX
+            <NodeLaTeX
               nodeId={nodeId}
               parentInfo={parentInfo}
               globalInfo={globalInfo}
@@ -54,7 +58,7 @@ const YamdNode = React.memo(({ nodeId, parentInfo = null, globalInfo = null }) =
     
     if (nodeData.type === 'image') {
       return (
-        <AddListBulletBeforeYamdNode 
+        <AddListBulletBeforeNode 
           childNode={
             <NodeImage
               nodeId={nodeId}
@@ -69,7 +73,7 @@ const YamdNode = React.memo(({ nodeId, parentInfo = null, globalInfo = null }) =
     
     if (nodeData.type === 'video') {
       return (
-        <AddListBulletBeforeYamdNode 
+        <AddListBulletBeforeNode 
           childNode={
             <NodeVideo
               nodeId={nodeId}
@@ -84,7 +88,7 @@ const YamdNode = React.memo(({ nodeId, parentInfo = null, globalInfo = null }) =
     
     if (nodeData.type === 'image-list') {
       return (
-        <AddListBulletBeforeYamdNode 
+        <AddListBulletBeforeNode 
           childNode={
             <YamdImageList
               nodeId={nodeId}
@@ -99,7 +103,7 @@ const YamdNode = React.memo(({ nodeId, parentInfo = null, globalInfo = null }) =
     
     if (nodeData.type === 'video-list') {
       return (
-        <AddListBulletBeforeYamdNode 
+        <AddListBulletBeforeNode 
           childNode={
             <YamdVideoList
               nodeId={nodeId}
@@ -114,7 +118,7 @@ const YamdNode = React.memo(({ nodeId, parentInfo = null, globalInfo = null }) =
 
     if (nodeData.type === 'custom') {
       return (
-        <AddListBulletBeforeYamdNode
+        <AddListBulletBeforeNode
           childNode={globalInfo.renderCustomNode(nodeData, parentInfo)}
           alignBullet='flex-start'
         />
@@ -124,9 +128,9 @@ const YamdNode = React.memo(({ nodeId, parentInfo = null, globalInfo = null }) =
     switch (selfDisplay) {
     case 'panel':
       return (
-        <AddListBulletBeforeYamdNode
+        <AddListBulletBeforeNode
           childNode={
-            <YamdPanel 
+            <NodePanel 
               nodeId={nodeId} 
               parentInfo={parentInfo}
               globalInfo={globalInfo} 
@@ -138,9 +142,9 @@ const YamdNode = React.memo(({ nodeId, parentInfo = null, globalInfo = null }) =
     
     case 'divider':
       return (
-        <AddListBulletBeforeYamdNode 
+        <AddListBulletBeforeNode 
           childNode={
-            <YamdNodeDivider 
+            <NodeDivider 
               nodeId={nodeId} 
               parentInfo={parentInfo}
               globalInfo={globalInfo} 
@@ -184,7 +188,7 @@ const YamdNode = React.memo(({ nodeId, parentInfo = null, globalInfo = null }) =
           - bb
           - cc
         */
-        <AddListBulletBeforeYamdNode
+        <AddListBulletBeforeNode
           childNode={
             <YamdNodeText 
               nodeId={nodeId} 
@@ -199,7 +203,49 @@ const YamdNode = React.memo(({ nodeId, parentInfo = null, globalInfo = null }) =
   };
   
   return getNodeContent();
-});
+}, shouldRerender);
+
+
+/**
+ * Custom equality function for YamdNode React.memo
+ * Only re-render if nodeId, parentInfo values, or globalInfo reference changes
+ * @param {object} prevProps - Previous props
+ * @param {object} nextProps - Next props
+ * @returns {boolean} - True if props are equal (skip re-render), false otherwise
+ */
+const shouldRerender = (prevProps, nextProps) => {
+  // Always re-render if nodeId changes
+  if (prevProps.nodeId !== nextProps.nodeId) {
+    return false;
+  }
+  
+  // Always re-render if globalInfo reference changes
+  if (prevProps.globalInfo !== nextProps.globalInfo) {
+    return false;
+  }
+  
+  // Check parentInfo values (not reference)
+  const prevParentInfo = prevProps.parentInfo || {};
+  const nextParentInfo = nextProps.parentInfo || {};
+  
+  // Check if childDisplay value changed
+  if (prevParentInfo.childDisplay !== nextParentInfo.childDisplay) {
+    return false;
+  }
+  
+  // Check if childClass value changed
+  if (prevParentInfo.childClass !== nextParentInfo.childClass) {
+    return false;
+  }
+  
+  // Check if childIndex value changed (used for ordered lists)
+  if (prevParentInfo.childIndex !== nextParentInfo.childIndex) {
+    return false;
+  }
+  
+  // Props are equal, skip re-render
+  return true;
+};
 
 /**
  * Component for rendering children based on childDisplay style from parentInfo

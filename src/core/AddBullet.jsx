@@ -1,13 +1,13 @@
 import React from 'react';
 import { BULLET_DIMENSIONS, LIST_SETTINGS } from '@/config/RenderConfig.js';
-import { formatYPosition } from '../YamdRenderUtils.js';
+import { formatYPos, useRenderUtilsContext } from './RenderUtils.js';
 
 /**
  * Utility function to render bullet inline for components that need precise control
  * @param {object} parentInfo - Parent context information
  * @returns {JSX.Element|null} - Bullet element or null
  */
-export const renderYamdListBullet = ({parentInfo, alignBullet = 'center'}) => {
+export const renderListBullet = ({parentInfo}) => {
   const childDisplay = parentInfo?.childDisplay;
   const childIndex = parentInfo?.childIndex;
   
@@ -17,7 +17,6 @@ export const renderYamdListBullet = ({parentInfo, alignBullet = 'center'}) => {
         flexShrink: 0,
         width: BULLET_DIMENSIONS.width,
         height: BULLET_DIMENSIONS.height,
-        alignSelf: alignBullet,
         display: 'flex',
         justifyContent: 'center',
         alignItems: 'center',
@@ -32,7 +31,6 @@ export const renderYamdListBullet = ({parentInfo, alignBullet = 'center'}) => {
         flexShrink: 0,
         width: BULLET_DIMENSIONS.width,
         height: BULLET_DIMENSIONS.height,
-        alignSelf: alignBullet,
         display: 'flex',
         justifyContent: 'center',
         alignItems: 'center',
@@ -65,7 +63,7 @@ const injectIntoParentInfo = (parentInfo, additionalProps) => {
  * @param {string} alignBullet - Bullet alignment ('center', 'flex-start', etc.)
  * @returns {JSX.Element} - Wrapped component with bullet if needed
  */
-export const AddListBulletBeforeYamdNode = React.memo(({ childNode, alignBullet = 'center' }) => {
+export const AddListBulletBeforeNode = React.memo(({ childNode, alignBullet = 'center' }) => {
   // Extract props from childNode
   const parentInfo = childNode?.props?.parentInfo;
   const globalInfo = childNode?.props?.globalInfo;
@@ -86,11 +84,12 @@ export const AddListBulletBeforeYamdNode = React.memo(({ childNode, alignBullet 
   const docId = globalInfo?.docId;
   const nodeId = childId;
   const containerClassName = '.yamd-bullet-container';
-  
+  // Get render utils from context
+  const renderUtils = useRenderUtilsContext();
   // Get width attribute from child node data
   let listItemWidth = 'max'; // default value
-  if (globalInfo?.getNodeDataById && nodeId) {
-    const childNodeData = globalInfo.getNodeDataById(nodeId);
+  if (nodeId) {
+    const childNodeData = renderUtils.getNodeDataById(nodeId);
     if (childNodeData?.attr?.width) {
       listItemWidth = childNodeData.attr.width;
     }
@@ -103,16 +102,16 @@ export const AddListBulletBeforeYamdNode = React.memo(({ childNode, alignBullet 
     console.log('🔍 AddBullet useLayoutEffect nodeId:', nodeId, 'shouldRenderBullet:', shouldRenderBullet, 'docId:', docId);
     // Only add request if we should render bullet
     if (!shouldRenderBullet) return;
-    // console.log('noteId:', nodeId, 'AddListBulletBeforeYamdNode useLayoutEffect docId:', docId);
+    // console.log('noteId:', nodeId, 'AddListBulletBeforeNode useLayoutEffect docId:', docId);
     if (!nodeId || !docId) {
-      console.warn('noteId:', nodeId, 'docId:', docId, 'AddListBulletBeforeYamdNode useLayoutEffect skipped');
+      console.warn('noteId:', nodeId, 'docId:', docId, 'AddListBulletBeforeNode useLayoutEffect skipped');
       return; 
     }
     console.log('✅ AddBullet ADDING REQUEST nodeId:', nodeId);
     const store = globalInfo.getDocStore().getState();
     // add request to store
     store.addBulletYPosReq(docId, nodeId, containerClassName);
-    // console.log('noteId:', nodeId, 'AddListBulletBeforeYamdNode useLayoutEffect addBulletYPosReq');
+    // console.log('noteId:', nodeId, 'AddListBulletBeforeNode useLayoutEffect addBulletYPosReq');
     // increment request counter to notify the node
     store.incReqCounter(docId, nodeId, containerClassName);
     // console.log('noteId:', nodeId, 'AddListBincReqCounter request:', store.getBulletYPosReqs(docId, nodeId)[containerClassName]);
@@ -126,11 +125,12 @@ export const AddListBulletBeforeYamdNode = React.memo(({ childNode, alignBullet 
     if (!shouldRenderBullet || !nodeId || !docId) return;
     // subscribe to changes in the result with proper equality function
     const unsubscribe = globalInfo.getDocStore().subscribe(
-      (state) => state.bulletPreferredYPosReq[docId]?.[nodeId]?.[containerClassName]?.responseCounter,
+      (state) => state.bulletYPosReq[docId]?.[nodeId]?.[containerClassName]?.responseCounter,
       (responseCounter) => {
         const store = globalInfo.getDocStore().getState();
-        const result = store.getBulletYPosReqs(docId, nodeId)[containerClassName];
-        console.log('noteId:', nodeId, 'AddListBulletBeforeYamdNode useEffect responseCounter:', responseCounter, 'result:', result);
+        const requestData = store.getBulletYPosReqs(docId, nodeId)[containerClassName];
+        const result = requestData?.result;
+        console.log('noteId:', nodeId, 'AddListBulletBeforeNode useEffect responseCounter:', responseCounter, 'requestData:', requestData, 'result:', result);
         setResult(result);
       }
     );
@@ -166,7 +166,7 @@ export const AddListBulletBeforeYamdNode = React.memo(({ childNode, alignBullet 
   const finalPreferredYPos = hasResult ? result.data : LIST_SETTINGS.bullet_y_pos_default;
 
   // Always use positioned rendering - simplified single branch
-  const bulletElement = renderYamdListBullet({parentInfo, alignBullet: 'flex-start'});
+  const bulletEl = renderListBullet({parentInfo});
   
   return (
     <div className="yamd-bullet-container" style={{ display: 'flex', alignItems: 'flex-start' }}>
@@ -180,11 +180,11 @@ export const AddListBulletBeforeYamdNode = React.memo(({ childNode, alignBullet 
       }}>
         <div style={{
           position: 'absolute',
-          top: formatYPosition(finalPreferredYPos),
+          top: formatYPos(finalPreferredYPos),
           left: '50%',
           transform: 'translate(-50%, -50%)' // center both horizontally and vertically on preferred position
         }}>
-          {bulletElement}
+          {bulletEl}
         </div>
       </div>
       <div

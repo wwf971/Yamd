@@ -1,10 +1,13 @@
 import React, { useState, useRef, useCallback, useMemo, useEffect, useLayoutEffect } from 'react';
 import YamdNode from '@/core/YamdNode.jsx';
-import YamdChildrenNodes from '@/core/YamdChildrenNodes.jsx';
+import YamdChildNodes from '@/core/YamdChildNodes.jsx';
 import YamdRefHandler from '@/components/NodeRefHandler.jsx';
 import YamdBibsList from '@/components/NodeBibsList.jsx';
-import { handleRefClick, handleBibClick, handleBackToSource, createGlobalInfo } from '@/core/YamdDoc.js';
-import { useYamdDocStore, generateDocId } from '@/core/YamdDocStore.js';
+import NodeWrapper from '@/custom/NodeWrapper.jsx';
+import { handleRefClick, handleBibClick, handleBackToSource } from '@/core/YamdDoc.js';
+import { useDocStore, generateDocId } from '@/core/DocStore.js';
+// Import RenderUtils context for direct usage
+import { RenderUtilsContext, createRenderUtilsContextValue } from '@/core/RenderUtils.js';
 
 /**
  * YamdDoc - Document container that manages global reference handling
@@ -16,24 +19,23 @@ const YamdDoc = ({
   disableBibsList = false,
   docId = null,
   customNodeRenderer = null,
+  isEditable = false,
 }) => {
   // Generate docId if not provided
   const actualDocId = useMemo(() => docId || generateDocId(), [docId]);
   
-  // Clear bullet position data when docData changes (synchronously during render)
-  // This must happen in render phase, BEFORE children mount
-  const prevDocDataRef = useRef(null);
-  if (prevDocDataRef.current !== null && prevDocDataRef.current !== docData) {
-    // Clear any old bullet position data for this docId when docData changes
-    // This ensures children start with clean state when they mount
-    useYamdDocStore.getState().clearPreferredYPosRequestsForDoc(actualDocId);
-  }
-  prevDocDataRef.current = docData;
+  // Clean up bullet position data when component unmounts or docId changes
+  useEffect(() => {
+    // Cleanup function runs when docId changes or component unmounts
+    return () => {
+      useDocStore.getState().clearBulletYPosReqForDoc(actualDocId);
+    };
+  }, [actualDocId]);
   
   // return <div>Hello</div>;
   // initialize document data in store (example usage)
   useEffect(() => {
-    useYamdDocStore.getState().setDocData(actualDocId, {
+    useDocStore.getState().setDocData(actualDocId, {
       docId: actualDocId,
       createdAt: new Date().toISOString(),
       docData: docData,
@@ -57,12 +59,12 @@ const YamdDoc = ({
     sourceElement: null
   });
 
-  // handle reference click from YamdRichTextRef components
+  // handle reference click from NodeTextRichRef components
   const handleRefClickCallback = useCallback((refData) => {
     handleRefClick(refData, containerRef, setRefState);
   }, []);
 
-  // handle bibliography click from YamdRichTextBib components
+  // handle bibliography click from NodeTextRichBib components
   const handleBibClickCallback = useCallback((bibData) => {
     handleBibClick(bibData, containerRef, setRefState, disableRefJump, disableBibsList);
   }, [disableRefJump, disableBibsList]);
@@ -78,7 +80,7 @@ const YamdDoc = ({
       nodeRefsMap.current.set(nodeId, nodeRef);
       // console.log(`📌 Registered node ref for ${nodeId}:`, nodeRef);
     }
-  }, []);
+  }, [nodeRefsMap]);
 
   // Get node reference by ID
   const getNodeRefById = useCallback((nodeId) => {
@@ -87,10 +89,88 @@ const YamdDoc = ({
     return nodeRef;
   }, []);
 
-  // Create render function for children
-  const renderChildNodes = useCallback((childIds, shouldAddIndent, parentInfo, globalInfo, firstChildRef) => {
+  // Create stable globalInfo object to prevent infinite re-renders
+  const globalInfo = useMemo(() => {
+    console.log('🔍 globalInfo re-created');
+    
+    // Create the globalInfo object (will be used recursively)
+    const globalInfo = { 
+      docId: actualDocId, // Include docId for Zustand positioning
+      docStore: useDocStore, // Direct reference to Zustand store
+      
+      onRefClick: handleRefClickCallback, // Function for reference handling
+      onBibClick: handleBibClickCallback, // Function for bibliography handling
+      registerNodeRef: registerNodeRef, // Function for registering node DOM references
+      getNodeRefById: getNodeRefById, // Function for retrieving node DOM references
+      getDocStore: () => useDocStore, // Function to get Zustand document store (backwards compat)
+      
+      
+      /**
+       * Render custom node - calls user-provided custom node renderer wrapped in NodeWrapper
+       * @param {object} nodeData - The node data with type='custom' and customType
+       * @param {object} parentInfo - Parent context information
+       * @returns {React.Element} Rendered custom node component
+       */
+      renderCustomNode: (nodeData, parentInfo) => {
+        if (!customNodeRenderer) {
+          return <div className="yamd-error">No custom node renderer provided</div>;
+        }
+        
+        const customType = nodeData.attr?.customType;
+        if (!customType) {
+          return <div className="yamd-error">Custom node missing customType attribute</div>;
+        }
+        
+        const CustomComponent = customNodeRenderer[customType];
+        if (!CustomComponent) {
+          return <div className="yamd-error">Unknown custom type: {customType}</div>;
+        }
+        
+        // Wrap the custom component with NodeWrapper to handle bullet positioning
+        return <NodeWrapper 
+          nodeId={nodeData.id}
+          nodeData={nodeData}
+          parentInfo={parentInfo}
+          globalInfo={globalInfo}
+          CustomComponent={CustomComponent}
+        />;
+      },
+      
+      getBibText: (bibKey) => {
+        // For now, always return fallback (user can override this)
+        return {
+          code: -1,
+          message: 'Bibliography text fetching not implemented',
+          data: null
+        };
+      },
+      
+      fetchExternalData: (nodeData) => {
+        console.log('🌐 fetchExternalData called with:', nodeData);
+        return {
+          code: 1, // Component should handle data fetching itself
+          message: 'Component should handle data fetching directly',
+          data: null
+        };
+      }
+    };
+    
+    return globalInfo;
+  }, [handleRefClickCallback, handleBibClickCallback,
+      registerNodeRef, getNodeRefById, actualDocId, customNodeRenderer
+    ]
+  );
+
+  // Create renderChildNodes function
+  const renderChildNodes = useCallback(({
+    childIds, 
+    shouldAddIndent = false, 
+    parentInfo = null, 
+    globalInfo, 
+    firstChildRef = null
+  }) => {
     return (
-      <YamdChildrenNodes
+      <YamdChildNodes
         childIds={childIds}
         shouldAddIndent={shouldAddIndent}
         parentInfo={parentInfo}
@@ -100,54 +180,56 @@ const YamdDoc = ({
     );
   }, []);
 
-  // Create stable globalInfo object to prevent infinite re-renders
-  const globalInfo = useMemo(() => 
-    createGlobalInfo(
-      docData,
-      handleRefClickCallback,
-      handleBibClickCallback,
-      registerNodeRef,
-      getNodeRefById,
-      actualDocId,
-      useYamdDocStore,
+  // Initialize render utils context value
+  const renderUtilsContextValue = useMemo(() => 
+    createRenderUtilsContextValue({ 
+      registerNodeRef, 
       renderChildNodes,
-      customNodeRenderer),
-    [docData, handleRefClickCallback, handleBibClickCallback,
-      registerNodeRef, getNodeRefById, actualDocId, renderChildNodes, customNodeRenderer
-    ]
+      isEditable,
+      docId: actualDocId,
+      docStore: useDocStore
+    }), 
+    [registerNodeRef, renderChildNodes, isEditable, actualDocId]
   );
 
-  if (!docData || !docData.rootNodeId) {
-    return <div className="yamd-error">No document data provided</div>;
+  // Get document data from store
+  const doc = useDocStore(state => state.docs[actualDocId]);
+  const rootNodeId = doc?.docData?.rootNodeId;
+  const bibs = doc?.docData?.bibs || {};
+
+  if (!doc || !rootNodeId) {
+    return <div className="yamd-error">No document data in store for docId: {actualDocId}</div>;
   }
 
   return (
-    <div ref={containerRef} style={{ position: 'relative' }} data-doc-id={actualDocId}>
-      
-      {/* main document, rendering start from root node*/}
-      <YamdNode
-        nodeId={docData.rootNodeId}
-        parentInfo={null}
-        globalInfo={globalInfo}
-      />
-
-      {/* bibliography list at the end of document */}
-      {!disableBibsList && (
-        <YamdBibsList 
-          bibs={docData.bibs || {}}
+    <RenderUtilsContext.Provider value={renderUtilsContextValue}>
+      <div ref={containerRef} style={{ position: 'relative' }} data-doc-id={actualDocId}>
+        
+        {/* main document, rendering start from root node*/}
+        <YamdNode
+          nodeId={rootNodeId}
+          parentInfo={null}
           globalInfo={globalInfo}
         />
-      )}
 
-      {/* deals with user click on refs and bibs*/}
-      {!disableRefJump && (
-        <YamdRefHandler
-          refState={refState}
-          onBackToSource={handleBackToSourceCallback}
-          containerRef={containerRef}
-        />
-      )}
-    </div>
+        {/* bibliography list at the end of document */}
+        {!disableBibsList && (
+          <YamdBibsList 
+            bibs={bibs}
+            globalInfo={globalInfo}
+          />
+        )}
+
+        {/* deals with user click on refs and bibs*/}
+        {!disableRefJump && (
+          <YamdRefHandler
+            refState={refState}
+            onBackToSource={handleBackToSourceCallback}
+            containerRef={containerRef}
+          />
+        )}
+      </div>
+    </RenderUtilsContext.Provider>
   );
 };
 

@@ -3,14 +3,15 @@ import { immer } from 'zustand/middleware/immer';
 import { subscribeWithSelector } from 'zustand/middleware';
 
 /**
- * YamdDocStore - Zustand store for managing states of multiple YamdDoc instances
+ * DocStore - Zustand store for managing document data and states
  * Each document instance is identified by a unique docId
+ * Stores both document metadata and the actual node data (docData.nodes)
  */
-export const useYamdDocStore = create(
+export const useDocStore = create(
   subscribeWithSelector(
     immer((set, get) => ({
   // Store data for each document instance
-  // Structure: { [docId]: { ...document-specific data } }
+  // Structure: { [docId]: { docData: { nodes: {...}, rootNodeId: '...' }, ...other metadata } }
   docs: {},
 
   // List bullet preferred Y position requests
@@ -27,7 +28,7 @@ export const useYamdDocStore = create(
   //     }
   //   }
   // }
-  bulletPreferredYPosReq: {},
+  bulletYPosReq: {},
   /**
    * Add a list bullet preferred Y position request using Immer
    * @param {string} docId - Document ID
@@ -37,18 +38,18 @@ export const useYamdDocStore = create(
   addBulletYPosReq: (docId, nodeId, containerClassName) => {
     set((state) => {
       // Ensure the document exists in the requests structure
-      if (!state.bulletPreferredYPosReq[docId]) {
-        state.bulletPreferredYPosReq[docId] = {};
+      if (!state.bulletYPosReq[docId]) {
+        state.bulletYPosReq[docId] = {};
       }
       
       // Ensure the node exists in the document's requests
-      if (!state.bulletPreferredYPosReq[docId][nodeId]) {
-        state.bulletPreferredYPosReq[docId][nodeId] = {};
+      if (!state.bulletYPosReq[docId][nodeId]) {
+        state.bulletYPosReq[docId][nodeId] = {};
       }
       
       // Add the request using containerClassName as key
-      if (!state.bulletPreferredYPosReq[docId][nodeId][containerClassName]) {
-        state.bulletPreferredYPosReq[docId][nodeId][containerClassName] = {
+      if (!state.bulletYPosReq[docId][nodeId][containerClassName]) {
+        state.bulletYPosReq[docId][nodeId][containerClassName] = {
           result: null,
           requestCounter: 0,
           responseCounter: 0
@@ -67,8 +68,8 @@ export const useYamdDocStore = create(
    */
   updateReqResult: (docId, nodeId, containerClassName, result) => {
     set((state) => {
-      if (state.bulletPreferredYPosReq[docId]?.[nodeId]?.[containerClassName]) {
-        state.bulletPreferredYPosReq[docId][nodeId][containerClassName].result = result;
+      if (state.bulletYPosReq[docId]?.[nodeId]?.[containerClassName]) {
+        state.bulletYPosReq[docId][nodeId][containerClassName].result = result;
       }
     });
   },
@@ -81,8 +82,8 @@ export const useYamdDocStore = create(
    */
   incReqCounter: (docId, nodeId, containerClassName) => {
     set((state) => {
-      if (state.bulletPreferredYPosReq[docId]?.[nodeId]?.[containerClassName]) {
-        state.bulletPreferredYPosReq[docId][nodeId][containerClassName].requestCounter++;
+      if (state.bulletYPosReq[docId]?.[nodeId]?.[containerClassName]) {
+        state.bulletYPosReq[docId][nodeId][containerClassName].requestCounter++;
       }
     });
   },
@@ -95,8 +96,8 @@ export const useYamdDocStore = create(
    */
   incRespCounter: (docId, nodeId, containerClassName) => {
     set((state) => {
-      if (state.bulletPreferredYPosReq[docId]?.[nodeId]?.[containerClassName]) {
-        state.bulletPreferredYPosReq[docId][nodeId][containerClassName].responseCounter++;
+      if (state.bulletYPosReq[docId]?.[nodeId]?.[containerClassName]) {
+        state.bulletYPosReq[docId][nodeId][containerClassName].responseCounter++;
       }
     });
   },
@@ -108,7 +109,7 @@ export const useYamdDocStore = create(
    * @returns {object} Object with container class names as keys and request data as values
    */
   getBulletYPosReqs: (docId, nodeId) => {
-    return get().bulletPreferredYPosReq[docId]?.[nodeId] || {};
+    return get().bulletYPosReq[docId]?.[nodeId] || {};
   },
 
   /**
@@ -119,17 +120,17 @@ export const useYamdDocStore = create(
    */
   removePreferredYPosRequest: (docId, nodeId, containerClassName) => {
     set((state) => {
-      if (state.bulletPreferredYPosReq[docId]?.[nodeId]?.[containerClassName]) {
-        delete state.bulletPreferredYPosReq[docId][nodeId][containerClassName];
+      if (state.bulletYPosReq[docId]?.[nodeId]?.[containerClassName]) {
+        delete state.bulletYPosReq[docId][nodeId][containerClassName];
         
         // If no more requests for this node, remove the node entry
-        if (Object.keys(state.bulletPreferredYPosReq[docId][nodeId]).length === 0) {
-          delete state.bulletPreferredYPosReq[docId][nodeId];
+        if (Object.keys(state.bulletYPosReq[docId][nodeId]).length === 0) {
+          delete state.bulletYPosReq[docId][nodeId];
         }
         
         // If no more nodes for this doc, remove the doc entry
-        if (Object.keys(state.bulletPreferredYPosReq[docId]).length === 0) {
-          delete state.bulletPreferredYPosReq[docId];
+        if (Object.keys(state.bulletYPosReq[docId]).length === 0) {
+          delete state.bulletYPosReq[docId];
         }
       }
     });
@@ -142,12 +143,12 @@ export const useYamdDocStore = create(
    */
   clearPreferredYPosRequestsForNode: (docId, nodeId) => {
     set((state) => {
-      if (state.bulletPreferredYPosReq[docId]?.[nodeId]) {
-        delete state.bulletPreferredYPosReq[docId][nodeId];
+      if (state.bulletYPosReq[docId]?.[nodeId]) {
+        delete state.bulletYPosReq[docId][nodeId];
         
         // If no more nodes for this doc, remove the doc entry
-        if (Object.keys(state.bulletPreferredYPosReq[docId]).length === 0) {
-          delete state.bulletPreferredYPosReq[docId];
+        if (Object.keys(state.bulletYPosReq[docId]).length === 0) {
+          delete state.bulletYPosReq[docId];
         }
       }
     });
@@ -157,10 +158,10 @@ export const useYamdDocStore = create(
    * Clear all requests for a document (using Immer)
    * @param {string} docId - Document ID
    */
-  clearPreferredYPosRequestsForDoc: (docId) => {
+  clearBulletYPosReqForDoc: (docId) => {
     set((state) => {
-      if (state.bulletPreferredYPosReq[docId]) {
-        delete state.bulletPreferredYPosReq[docId];
+      if (state.bulletYPosReq[docId]) {
+        delete state.bulletYPosReq[docId];
       }
     });
   },
@@ -172,7 +173,7 @@ export const useYamdDocStore = create(
    * @returns {boolean} True if there are requests for this node
    */
   hasPreferredYPosRequests: (docId, nodeId) => {
-    const requests = get().bulletPreferredYPosReq[docId]?.[nodeId];
+    const requests = get().bulletYPosReq[docId]?.[nodeId];
     return requests && Object.keys(requests).length > 0;
   },
 
@@ -252,6 +253,45 @@ export const useYamdDocStore = create(
    */
   hasDoc: (docId) => {
     return docId in get().docs;
+  },
+
+  // ===== Node Data Management Methods =====
+
+  /**
+   * Get node data by ID from a specific document
+   * @param {string} docId - Document ID
+   * @param {string} nodeId - Node ID
+   * @returns {object|null} Node data or null if not found
+   */
+  getNodeDataById: (docId, nodeId) => {
+    const doc = get().docs[docId];
+    if (!doc || !doc.docData || !doc.docData.nodes) {
+      return null;
+    }
+    return doc.docData.nodes[nodeId] || null;
+  },
+
+  /**
+   * Update node data using an Immer producer function
+   * @param {string} docId - Document ID
+   * @param {string} nodeId - Node ID
+   * @param {function} producer - Immer producer function that receives the node data to mutate
+   * @example
+   * updateNodeData('doc-1', 'node-123', (node) => {
+   *   node.textRaw = 'New text';
+   *   node.textOriginal = 'New text';
+   * });
+   */
+  updateNodeData: (docId, nodeId, producer) => {
+    set((state) => {
+      const doc = state.docs[docId];
+      if (!doc || !doc.docData || !doc.docData.nodes || !doc.docData.nodes[nodeId]) {
+        console.warn(`Cannot update node: docId=${docId}, nodeId=${nodeId} not found`);
+        return;
+      }
+      // Immer allows us to "mutate" the node safely
+      producer(doc.docData.nodes[nodeId]);
+    });
   }
   }))
   )

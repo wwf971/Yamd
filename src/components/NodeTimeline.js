@@ -1,7 +1,7 @@
 import React from 'react';
 import { TIMELINE_BULLET_SETTINGS, BULLET_DIMENSIONS } from '@/config/RenderConfig.js';
-import { useYamdDocStore } from '@/core/YamdDocStore.js';
-import { formatYPosition } from '@/YamdRenderUtils.js';
+import { useRenderUtilsContext } from '@/core/RenderUtils.js';
+import { formatYPos } from '@/core/RenderUtils.js';
 
 /**
  * Bullet component registry for timeline
@@ -198,17 +198,21 @@ export const AddTimelineBulletBeforeYamdNode = React.memo(({
   onBulletYPosChange,
   onContentHeightChange
 }) => {
+  // Get render utils from context
+  const renderUtils = useRenderUtilsContext();
+  const docStore = renderUtils.docStore;
+  const docId = renderUtils.docId;
+  
   // Extract parentInfo from childNode props
   const parentInfo = childNode.props.parentInfo;
-  const docId = globalInfo?.docId;
   const nodeId = childNode.props.nodeId;
   const containerClassName = '.yamd-timeline-item';
   
   // Get bullet type and width from child node data if not specified
   let actualBulletType = bulletType;
   let timelineWidth = 'max'; // default value
-  if (globalInfo?.getNodeDataById && childNode.props.nodeId) {
-    const childNodeData = globalInfo.getNodeDataById(childNode.props.nodeId);
+  if (childNode.props.nodeId) {
+    const childNodeData = renderUtils.getNodeDataById(childNode.props.nodeId);
     if (childNodeData?.attr?.bullet) {
       actualBulletType = childNodeData.attr.bullet;
     }
@@ -220,27 +224,27 @@ export const AddTimelineBulletBeforeYamdNode = React.memo(({
   // ===== ZUSTAND LOGIC =====
   // Set up request when component mounts
   React.useEffect(() => {
-    if (!nodeId || !docId) {
+    if (!nodeId || !docId || !docStore) {
       console.warn('nodeId:', nodeId, 'docId:', docId, 'AddTimelineBulletBeforeYamdNode useEffect skipped');
       return; 
     }
-    const store = useYamdDocStore.getState();
+    const store = docStore.getState();
     // Add request to store
     store.addBulletYPosReq(docId, nodeId, containerClassName);
     // Increment request counter to notify the node
     store.incReqCounter(docId, nodeId, containerClassName);
-  }, [nodeId, docId, containerClassName]);
+  }, [nodeId, docId, containerClassName, docStore]);
 
   // Subscribe to child bullet Y position result changes 
   const [childBulletYPosResult, setChildBulletYPosResult] = React.useState(null);
   
   React.useEffect(() => {
-    if (!nodeId || !docId) return;
+    if (!nodeId || !docId || !docStore) return;
     // Subscribe to changes in the result
-    const unsubscribe = useYamdDocStore.subscribe(
-      (state) => state.bulletPreferredYPosReq[docId]?.[nodeId]?.[containerClassName]?.responseCounter,
+    const unsubscribe = docStore.subscribe(
+      (state) => state.bulletYPosReq[docId]?.[nodeId]?.[containerClassName]?.responseCounter,
       (responseCounter) => {
-        const store = useYamdDocStore.getState();
+        const store = docStore.getState();
         const result = store.getBulletYPosReqs(docId, nodeId)[containerClassName];
         console.log('nodeId:', nodeId, 'AddTimelineBulletBeforeYamdNode useEffect responseCounter:', responseCounter, 'childBulletYPosResult:', result);
         setChildBulletYPosResult(result);
@@ -248,13 +252,13 @@ export const AddTimelineBulletBeforeYamdNode = React.memo(({
     );
 
     // Get initial value
-    const store = useYamdDocStore.getState();
+    const store = docStore.getState();
     const initialRequests = store.getBulletYPosReqs(docId, nodeId);
     const initialRequest = initialRequests[containerClassName];
     setChildBulletYPosResult(initialRequest?.result || null);
     
     return unsubscribe;
-  }, [nodeId, docId, containerClassName]);
+  }, [nodeId, docId, containerClassName, docStore]);
   
   // Trigger timeline replot when child bullet position changes
   React.useEffect(() => {
@@ -335,7 +339,7 @@ export const AddTimelineBulletBeforeYamdNode = React.memo(({
         >
           <div style={{
             position: 'absolute',
-            top: formatYPosition(preferredYPosFinal),
+            top: formatYPos(preferredYPosFinal),
             left: '50%',
             transform: 'translate(-50%, -50%)'
           }}>

@@ -1,5 +1,5 @@
 
-export function getSampleYamlNames(series='normal'){
+export function getSampleYamlSeries(series='normal'){
   if(series === 'normal') {
     return [
       'timeline',
@@ -12,6 +12,12 @@ export function getSampleYamlNames(series='normal'){
       'custom-box',
       'custom-mixed',
     ];
+  }
+  if(series === 'edit') {
+    return [
+      'text-simple',
+      'ul-add-remove'
+    ]
   }
 }
 /**
@@ -26,7 +32,7 @@ export function getSampleYaml(name) {
   //     - cc
   // `
   if(!name) {
-    name = getSampleYamlNames()[0];
+    name = getSampleYamlSeries()[0];
   }
 
   if(name === 'timeline') {
@@ -99,6 +105,25 @@ export function getSampleYaml(name) {
         - Child item 1
         - Child item 2
         - Child item 3
+    `
+  }
+  
+  if(name === 'text-simple') {
+    return `
+      # Simple Text Editing
+      - "This is a simple text that can be edited"
+      - "Another line of text"
+      - "Third line for testing"
+    `
+  }
+
+  if(name === 'ul-add-remove') {
+    return `
+      # Unordered List Add and Remove
+      - "List with add and remove[child=ul]":
+        - Item 1
+        - Item 2
+        - Item 3
     `
   }
 }

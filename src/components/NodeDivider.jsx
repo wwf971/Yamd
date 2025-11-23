@@ -1,14 +1,19 @@
-import React, { useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
+import React, { useRef, useEffect, useLayoutEffect, forwardRef, useImperativeHandle } from 'react';
 import { getNodeClass } from '@/core/YamdNode.jsx';
-import { getChildrenDisplay } from '../YamdRenderUtils.js';
-import { useYamdDocStore } from '@/core/YamdDocStore.js';
-import { createBulletEqualityFn } from '../YamdRenderUtils.js';
+import { useRenderUtilsContext } from '@/core/RenderUtils.js';
+// Store is now accessed via RenderUtils context
+import { createBulletEqualityFn } from '@/core/RenderUtils.js';
 
 /**
  * Divider node renderer - displays title as a divider line with text
  */
-const YamdNodeDivider = forwardRef(({ nodeId, parentInfo, globalInfo }, ref) => {
+const NodeDivider = forwardRef(({ nodeId, parentInfo, globalInfo }, ref) => {
   const nodeRef = useRef(null);
+  
+  // Get render utils from context
+  const renderUtils = useRenderUtilsContext();
+  const docStore = renderUtils.docStore;
+  const docId = renderUtils.docId;
 
   // Register the node reference after the component finishes rendering
   useEffect(() => {
@@ -20,51 +25,46 @@ const YamdNodeDivider = forwardRef(({ nodeId, parentInfo, globalInfo }, ref) => 
   // Expose calcBulletYPos to parent via ref
   useImperativeHandle(ref, () => ({
     calcBulletYPos: () => {
-      const docId = globalInfo?.docId;
-      calcBulletYPos(nodeId, docId, nodeRef, dividerRef);
+      calcBulletYPos(nodeId, docId, nodeRef, dividerRef, docStore);
     }
-  }), [nodeId, globalInfo]);
+  }), [nodeId, docId, docStore]);
 
   // ===== ZUSTAND LOGIC =====
-  const docId = globalInfo?.docId;
   
   // Subscribe to request counter changes with custom equality function
-  useEffect(() => {
-    if (!nodeId || !docId) {
-      console.warn('noteId:', nodeId, 'docId:', docId, 'YamdNodeDivider useEffect subscribe skipped');
+  useLayoutEffect(() => {
+    if (!nodeId || !docId || !docStore) {
+      console.warn('noteId:', nodeId, 'docId:', docId, 'NodeDivider useLayoutEffect subscribe skipped');
       return;
     }
-    console.log('noteId:', nodeId, 'docId:', docId, 'YamdNodeDivider useEffect subscribe');
-    const unsubscribe = useYamdDocStore.subscribe(
-      (state) => state.bulletPreferredYPosReq[docId]?.[nodeId] || {},
+    console.log('noteId:', nodeId, 'docId:', docId, 'NodeDivider useLayoutEffect subscribe');
+    const unsubscribe = docStore.subscribe(
+      (state) => state.bulletYPosReq[docId]?.[nodeId] || {},
       (requests) => {
-        console.log('noteId:', nodeId, 'YamdNodeDivider useEffect subscribe triggered with requests:', requests);
+        console.log('noteId:', nodeId, 'NodeDivider useLayoutEffect subscribe triggered with requests:', requests);
         // This will only fire if equalityFn returns false
-        calcBulletYPos(nodeId, docId, nodeRef, dividerRef);
+        calcBulletYPos(nodeId, docId, nodeRef, dividerRef, docStore);
       },
       {
-        equalityFn: createBulletEqualityFn(nodeId, 'YamdNodeDivider'),
+        equalityFn: createBulletEqualityFn(nodeId, 'NodeDivider'),
       }
     );
     
     // Immediately check for existing requests
-    calcBulletYPos(nodeId, docId, nodeRef, dividerRef);
+    calcBulletYPos(nodeId, docId, nodeRef, dividerRef, docStore);
     return unsubscribe;
-  }, [nodeId, docId]);
+  }, [nodeId, docId, docStore]);
   // ===== END ZUSTAND LOGIC =====
 
-  if (!globalInfo?.getNodeDataById) {
-    return <div className="yamd-error">Missing globalInfo.getNodeDataById</div>;
-  }
-  
-  const nodeData = globalInfo.getNodeDataById(nodeId);
+  // Get node data from store via renderUtils
+  const nodeData = renderUtils.getNodeDataById(nodeId);
   
   if (!nodeData) {
     return <div className="yamd-error">Node not found: {nodeId}</div>;
   }
 
   const title = nodeData.textRaw || nodeData.textOriginal || '';
-  const childDisplay = getChildrenDisplay(nodeData, false, parentInfo);
+  const childDisplay = renderUtils.getChildDisplay(nodeData, false, parentInfo);
   const childClass = nodeData.attr?.childClass;
   
   // Use the utility function to get appropriate CSS class
@@ -113,13 +113,16 @@ const YamdNodeDivider = forwardRef(({ nodeId, parentInfo, globalInfo }, ref) => 
       </div>
       
       {nodeData.children && nodeData.children.length > 0 && (
-        globalInfo.renderChildNodes(nodeData.children, {
+        renderUtils.renderChildNodes({
+          childIds: nodeData.children,
           shouldAddIndent: false,
           parentInfo: { 
             ...parentInfo, 
             ...(childDisplay && { childDisplay }),
             ...(childClass && { childClass })
-          }
+          },
+          globalInfo: globalInfo,
+          firstChildRef: null
         })
       )}
     </div>
@@ -135,13 +138,13 @@ const YamdNodeDivider = forwardRef(({ nodeId, parentInfo, globalInfo }, ref) => 
  * @param {React.RefObject} dividerRef - Divider line DOM reference (points to left line)
  * @returns {void}
  */
-const calcBulletYPos = (nodeId, docId, nodeRef, dividerRef) => {
+const calcBulletYPos = (nodeId, docId, nodeRef, dividerRef, docStore) => {
   if (!nodeRef.current || !dividerRef.current) return;
   
-  const store = useYamdDocStore.getState();
+  const store = docStore.getState();
   // get all requests for this node
   const requests = store.getBulletYPosReqs(docId, nodeId);
-  console.log('noteId:', nodeId, 'YamdNodeDivider calcBulletYPos requests:', requests);
+  console.log('noteId:', nodeId, 'NodeDivider calcBulletYPos requests:', requests);
   
   // update result for each requesting container
   Object.keys(requests).forEach(containerClassName => {
@@ -178,4 +181,4 @@ const calcBulletYPos = (nodeId, docId, nodeRef, dividerRef) => {
   });
 };
 
-export default YamdNodeDivider;
+export default NodeDivider;

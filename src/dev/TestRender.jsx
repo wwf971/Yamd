@@ -5,7 +5,7 @@ import {
   parseYamlToJson, 
   formatJson, 
   getSampleYaml,
-  getSampleYamlNames,
+  getSampleYamlSeries,
   getCornerCaseYaml,
   processNodes, 
   flattenJson,
@@ -14,7 +14,7 @@ import {
 import './TestRender.css';
 
 const TestRender = () => {
-  const sampleNames = getSampleYamlNames();
+  const sampleNames = getSampleYamlSeries();
   const defaultSample = "rich-text";
   const [selectedSample, setSelectedSample] = useState(defaultSample);
   const [yamlInput, setYamlInput] = useState(getSampleYaml(defaultSample));

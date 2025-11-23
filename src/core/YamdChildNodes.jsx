@@ -10,7 +10,7 @@ import YamdNode from '@/core/YamdNode.jsx';
  * @param {boolean} shouldAddIndent - Whether to add indentation to children (controlled by parent component type)
  * @param {object} globalInfo - Global context with getNodeDataById, getAssetById, getRefById, and fetchExternalData methods
  */
-const YamdChildrenNodes = ({ 
+const YamdChildNodes = ({ 
   childIds, 
   parentInfo = null,
   shouldAddIndent = false,
@@ -18,7 +18,7 @@ const YamdChildrenNodes = ({
 }) => {
   // render children based on parentInfo.childDisplay
   if (!childIds || childIds.length === 0) return null;
-  // console.log('🔍 YamdChildrenNodes rendering childIds:', childIds);
+  // console.log('🔍 YamdChildNodes rendering childIds:', childIds);
   const childDisplay = parentInfo?.childDisplay || 'pl';
   const childClass = parentInfo?.childClass;
   
@@ -30,14 +30,16 @@ const YamdChildrenNodes = ({
     return classNames || '';
   };
   
-  // common list renderer. using divs instead of ul/ol/li
+
+  // ordered/unordered list renderer. using divs instead of ul/ol/li
   // supports multiple containerClassName and itemClassName
   const renderChildNodes = (containerClassName, itemClassName, defaultChildClass = 'yamd-list-content') => (
     <div className={joinClassNames(containerClassName)}>
       {childIds.map((childId, index) => (
         <div key={childId} className={joinClassNames(itemClassName)}>
-          <YamdNode 
-            nodeId={childId} 
+          <YamdNode
+            key={childId}
+            nodeId={childId}
             parentInfo={{ 
               childDisplay: childDisplay, // Pass current childDisplay so AddBullet knows to add bullets
               childClass: childClass || defaultChildClass,
@@ -105,7 +107,8 @@ const YamdChildrenNodes = ({
           <div className="yamd-paragraphs">
             {childIds.map(childId => (
               <div key={childId} className="yamd-paragraph">
-                <YamdNode 
+                <YamdNode
+                  key={childId}
                   nodeId={childId} 
                   parentInfo={{ childDisplay: 'p', childClass: childClass || 'yamd-paragraph-content' }}
                   globalInfo={globalInfo}
@@ -130,7 +133,7 @@ const YamdChildrenNodes = ({
       return (
         <div className="yamd-tags">
           {childIds.map(childId => (
-            <YamdNode 
+            <YamdNode
               key={childId}
               nodeId={childId} 
               parentInfo={{ ...parentInfo, childClass: childClass || 'yamd-tag' }}
@@ -142,4 +145,4 @@ const YamdChildrenNodes = ({
   }
 };
 
-export default YamdChildrenNodes;
+export default YamdChildNodes;

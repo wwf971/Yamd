@@ -1,7 +1,7 @@
 import React, { useRef, useEffect } from 'react';
 import { getNodeClass } from '@/core/YamdNode.jsx';
 import { VIDEO_SETTINGS } from '@/config/RenderConfig.js';
-import { getAlignmentStrategy } from '@/YamdRenderUtils.js';
+import { getAlignmentStrategy, useRenderUtilsContext } from '@/core/RenderUtils.js';
 
 /**
  * Video node renderer - displays videos with captions
@@ -17,11 +17,11 @@ const NodeVideo = ({ nodeId, parentInfo, globalInfo }) => {
     }
   }, [nodeId, globalInfo]);
 
-  if (!globalInfo?.getNodeDataById) {
-    return <div className="yamd-error">Missing globalInfo.getNodeDataById</div>;
-  }
+  // Get render utils from context
+  const renderUtils = useRenderUtilsContext();
   
-  const nodeData = globalInfo.getNodeDataById(nodeId);
+  // Get node data from store via renderUtils
+  const nodeData = renderUtils.getNodeDataById(nodeId);
   
   if (!nodeData) {
     return <div className="yamd-error">Video node not found: {nodeId}</div>;
@@ -174,7 +174,7 @@ const NodeVideo = ({ nodeId, parentInfo, globalInfo }) => {
           {/* Show index number if available from asset */}
           {(() => {
             if (nodeData.assetId && globalInfo?.getAssetById) {
-              const asset = globalInfo.getAssetById(nodeData.assetId);
+              const asset = renderUtils.getAssetById(nodeData.assetId);
               if (asset && !asset.no_index && asset.indexOfSameType) {
                 return ` ${asset.indexOfSameType}`;
               }
