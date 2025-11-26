@@ -1,7 +1,7 @@
 import React, { useRef, useEffect } from 'react';
 import { getNodeClass } from '@/core/YamdNode.jsx';
 import { LATEX_SETTINGS } from '@/config/RenderConfig.js';
-import { getAlignmentStrategy, useRenderUtilsContext } from '@/core/RenderUtils.js';
+import { getAlignmentStrategy, useRenderUtilsContext } from '@/core/RenderUtils.ts';
 
 /**
  * LaTeX block node renderer - displays standalone LaTeX equations

@@ -409,7 +409,7 @@
   max-width: 100%;
 }
 
-/* Custom bullet styles - dimensions now controlled by BULLET_DIMENSIONS in RenderUtils.js */
+/* Custom bullet styles - dimensions now controlled by BULLET_DIMENSIONS in RenderUtils.ts */
 
 .yamd-bullet-disc {
   width: 4px;
@@ -897,7 +897,7 @@
 .yamd-list-content {
   font-size: 0.9rem;
   color: #374151;
-  line-height: 1.4;
+  line-height: 1.2;
 }
 
 .yamd-paragraph-content {

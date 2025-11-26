@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useLayoutEffect, forwardRef, useImperativeHandle } from 'react';
-import { createBulletEqualityFn, useRenderUtilsContext } from '@/core/RenderUtils.js';
+import { createBulletEqualityFn, useRenderUtilsContext } from '@/core/RenderUtils.ts';
 
 /**
  * Anonymous node renderer - skips title completely and renders only children (for nodes with empty textRaw)
@@ -54,7 +54,8 @@ const YamdNodeAnonym = forwardRef(({ nodeId, parentInfo, globalInfo }, ref) => {
   }, [nodeId, docId, globalInfo, renderUtils]);
   // ===== END ZUSTAND LOGIC =====
 
-  const nodeData = renderUtils.getNodeDataById(nodeId);
+  // Subscribe to node data changes (especially children array changes)
+  const nodeData = renderUtils.useNodeData(nodeId);
   
   if (!nodeData) {
     return <div className="yamd-error">Node not found: {nodeId}</div>;

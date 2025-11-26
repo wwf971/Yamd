@@ -1,6 +1,6 @@
 import React from 'react';
 import NodeImage from './NodeImage.jsx';
-import { getAlignmentStrategy, useRenderUtilsContext } from '@/core/RenderUtils.js';
+import { getAlignmentStrategy, useRenderUtilsContext } from '@/core/RenderUtils.ts';
 import { IMAGE_LIST_SETTINGS } from '@/config/RenderConfig.js';
 
 /**

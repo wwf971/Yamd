@@ -1,6 +1,6 @@
 import React from 'react';
 import NodeVideo from './NodeVideo.jsx';
-import { getAlignmentStrategy, useRenderUtilsContext } from '@/core/RenderUtils.js';
+import { getAlignmentStrategy, useRenderUtilsContext } from '@/core/RenderUtils.ts';
 import { VIDEO_LIST_SETTINGS } from '@/config/RenderConfig.js';
 
 /**

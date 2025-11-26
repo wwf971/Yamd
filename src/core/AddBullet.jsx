@@ -1,6 +1,6 @@
 import React from 'react';
 import { BULLET_DIMENSIONS, LIST_SETTINGS } from '@/config/RenderConfig.js';
-import { formatYPos, useRenderUtilsContext } from './RenderUtils.js';
+import { formatYPos, useRenderUtilsContext } from './RenderUtils.ts';
 
 /**
  * Utility function to render bullet inline for components that need precise control
@@ -69,8 +69,6 @@ export const AddListBulletBeforeNode = React.memo(({ childNode, alignBullet = 'c
   const globalInfo = childNode?.props?.globalInfo;
   const childId = childNode?.props?.nodeId;
   
-  console.log('🔍 AddBullet rendering nodeId:', childId, 'parentInfo.childDisplay:', parentInfo?.childDisplay);
-  
   // Check if we should render bullet
   let shouldRenderBullet = parentInfo?.childDisplay === 'ul' || parentInfo?.childDisplay === 'ol';
   
@@ -95,47 +93,34 @@ export const AddListBulletBeforeNode = React.memo(({ childNode, alignBullet = 'c
     }
   }
   
-  // IMPORTANT: All hooks must be called before any conditional returns!
-  // Set up request when component mounts
+  // Add bullet positioning request when component mounts
   // Use useLayoutEffect to ensure request is added before sibling useEffect hooks run
   React.useLayoutEffect(() => {
-    console.log('🔍 AddBullet useLayoutEffect nodeId:', nodeId, 'shouldRenderBullet:', shouldRenderBullet, 'docId:', docId);
-    // Only add request if we should render bullet
-    if (!shouldRenderBullet) return;
-    // console.log('noteId:', nodeId, 'AddListBulletBeforeNode useLayoutEffect docId:', docId);
-    if (!nodeId || !docId) {
-      console.warn('noteId:', nodeId, 'docId:', docId, 'AddListBulletBeforeNode useLayoutEffect skipped');
-      return; 
-    }
-    console.log('✅ AddBullet ADDING REQUEST nodeId:', nodeId);
+    if (!shouldRenderBullet || !nodeId || !docId) return;
+    
     const store = globalInfo.getDocStore().getState();
-    // add request to store
     store.addBulletYPosReq(docId, nodeId, containerClassName);
-    // console.log('noteId:', nodeId, 'AddListBulletBeforeNode useLayoutEffect addBulletYPosReq');
-    // increment request counter to notify the node
     store.incReqCounter(docId, nodeId, containerClassName);
-    // console.log('noteId:', nodeId, 'AddListBincReqCounter request:', store.getBulletYPosReqs(docId, nodeId)[containerClassName]);
   }, [shouldRenderBullet, nodeId, docId, containerClassName, globalInfo]);
 
   // subscribe to result changes with custom equality function
   const [result, setResult] = React.useState(null);
   
+  // Subscribe to bullet positioning results
   React.useEffect(() => {
-    // Only subscribe if we should render bullet
     if (!shouldRenderBullet || !nodeId || !docId) return;
-    // subscribe to changes in the result with proper equality function
+    
     const unsubscribe = globalInfo.getDocStore().subscribe(
       (state) => state.bulletYPosReq[docId]?.[nodeId]?.[containerClassName]?.responseCounter,
       (responseCounter) => {
         const store = globalInfo.getDocStore().getState();
         const requestData = store.getBulletYPosReqs(docId, nodeId)[containerClassName];
         const result = requestData?.result;
-        console.log('noteId:', nodeId, 'AddListBulletBeforeNode useEffect responseCounter:', responseCounter, 'requestData:', requestData, 'result:', result);
         setResult(result);
       }
     );
 
-    // get initial value
+    // Get initial value
     const store = globalInfo.getDocStore().getState();
     const initialRequests = store.getBulletYPosReqs(docId, nodeId);
     const initialRequest = initialRequests[containerClassName];

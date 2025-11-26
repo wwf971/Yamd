@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import YamdDoc from '@/core/YamdDoc.jsx';
+import { useDocStore, docsData } from '@/core/DocStore.js';
 import { loadMathJax } from '@/mathjax/MathJaxLoad.js';
 import { 
   parseYamlToJson, 
@@ -10,6 +11,7 @@ import {
   flattenJson,
   processAllTextSegments
 } from '@/parse/ParseYamd.js';
+import { DocDataDisplay } from './TestUtils.jsx';
 import './TestEdit.css';
 
 /**
@@ -24,6 +26,8 @@ const TestEdit = () => {
   const [flattenedData, setFlattenedData] = useState(null);
   const [flattenedOutput, setFlattenedOutput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [docId, setDocId] = useState(null);
+  const [nodeIds, setNodeIds] = useState([]);
 
   // Initialize MathJax
   useEffect(() => {
@@ -64,6 +68,25 @@ const TestEdit = () => {
           
           setFlattenedOutput(formatJson(finalResult));
           setFlattenedData(finalResult);
+          
+          // Generate a unique docId
+          const newDocId = `doc_${Math.random().toString(36).substr(2, 9)}_${Date.now()}`;
+          
+          // Initialize Jotai atoms from flattened data
+          const docInfo = docsData.fromFlattenedData(newDocId, finalResult);
+          
+          // Store nodeIds for rendering individual node displays
+          setNodeIds(docInfo.nodeIds);
+          
+          // Also store in Zustand for backward compatibility (will be removed later)
+          useDocStore.getState().setDocData(newDocId, {
+            docId: newDocId,
+            createdAt: new Date().toISOString(),
+            docData: finalResult
+          });
+          
+          // Set docId state AFTER data is in store
+          setDocId(newDocId);
         } else {
           setFlattenedOutput('');
           setFlattenedData(null);
@@ -85,6 +108,9 @@ const TestEdit = () => {
     setSelectedSample(sampleName);
     setYamlInput(getSampleYaml(sampleName));
   };
+
+  // Note: Real-time updates are now handled by Jotai subscriptions in NodeDataDisplay components
+  // No need for manual Zustand subscription anymore
 
   return (
     <div className="test-edit-container">
@@ -126,11 +152,11 @@ const TestEdit = () => {
       <div className="split-view-section">
         {/* Left Panel: Rendered Document */}
         <div className="rendered-panel">
-          <h3 className="rendered-panel-title">Rendered Document (Future: Editable)</h3>
+          <h3 className="rendered-panel-title">Rendered Document (Editable)</h3>
           <div className="rendered-panel-content">
-            {flattenedData ? (
+            {docId ? (
               <YamdDoc 
-                docData={flattenedData} 
+                docId={docId}
                 disableRefJump={false} 
                 isEditable={true}
               />
@@ -144,16 +170,12 @@ const TestEdit = () => {
 
         {/* Right Panel: Flattened Data */}
         <div className="flattened-panel">
-          <h3 className="flattened-panel-title">Flattened Data (Future: Real-time Updates)</h3>
-          <textarea
-            value={flattenedOutput}
-            readOnly
-            className="flattened-panel-textarea"
-            placeholder="Flattened document structure will appear here..."
+          <h3 className="flattened-panel-title">Flattened Data (Real-time Updates)</h3>
+          <DocDataDisplay 
+            docId={docId} 
+            nodeIds={nodeIds} 
+            isLoading={isLoading}
           />
-          <div className="flattened-panel-info">
-            {flattenedOutput ? `${flattenedOutput.length} chars` : 'Awaiting data'}
-          </div>
         </div>
       </div>
     </div>

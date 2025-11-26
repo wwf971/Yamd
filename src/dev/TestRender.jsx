@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import YamdDoc from '@/core/YamdDoc.jsx';
+import { docsData, useDocStore } from '@/core/DocStore.js';
 import { loadMathJax } from '@/mathjax/MathJaxLoad.js';
 import { 
   parseYamlToJson, 
@@ -11,6 +12,7 @@ import {
   flattenJson,
   processAllTextSegments
 } from '@/parse/ParseYamd.js';
+import { DocDataDisplay } from './TestUtils.jsx';
 import './TestRender.css';
 
 const TestRender = () => {
@@ -22,6 +24,8 @@ const TestRender = () => {
   const [processedOutput, setProcessedOutput] = useState('');
   const [flattenedOutput, setFlattenedOutput] = useState('');
   const [flattenedData, setFlattenedData] = useState(null);
+  const [docId, setDocId] = useState(null);
+  const [nodeIds, setNodeIds] = useState([]);
   const [parseError, setParseError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
@@ -65,6 +69,17 @@ const TestRender = () => {
         };
         setFlattenedOutput(formatJson(finalResult));
         setFlattenedData(finalResult);
+        
+        // Generate docId and initialize both Jotai and Zustand stores
+        const newDocId = `doc_${Math.random().toString(36).substr(2, 9)}_${Date.now()}`;
+        const docInfo = docsData.fromFlattenedData(newDocId, finalResult);
+        setNodeIds(docInfo.nodeIds);
+        useDocStore.getState().setDocData(newDocId, {
+          docId: newDocId,
+          createdAt: new Date().toISOString(),
+          docData: finalResult
+        });
+        setDocId(newDocId);
         
         setParseError('');
       } else {
@@ -238,27 +253,30 @@ const TestRender = () => {
           </div>
         </div>
 
-        {/* Panel 4: Flattened Structure */}
+        {/* Panel 4: Flattened Structure (Real-time) */}
         <div className="panel">
-          <h3 className="panel-title">4. Flattened Structure</h3>
-          <textarea
-            value={flattenedOutput}
-            readOnly
-            placeholder="Flattened ID-based structure..."
-            className="panel-textarea panel-textarea-flattened"
-          />
-          <div className="panel-info">
-            {flattenedOutput ? `${flattenedOutput.length} chars` : 'Awaiting flattening'}
+          <h3 className="panel-title">4. Flattened Structure (Real-time Updates)</h3>
+          <div style={{ 
+            height: '400px',
+            border: '1px solid #ddd',
+            borderRadius: '4px',
+            overflow: 'hidden'
+          }}>
+            <DocDataDisplay 
+              docId={docId} 
+              nodeIds={nodeIds} 
+              isLoading={isLoading}
+            />
           </div>
         </div>
       </div>
 
       {/* Full-width Rendering Panel */}
-      {flattenedData && (
+      {docId && (
         <div className="rendered-document-section">
           <h3 className="rendered-document-title">5. Rendered Document</h3>
           <div className="rendered-document-container">
-        <YamdDoc docData={flattenedData} disableRefJump={false} />
+        <YamdDoc docId={docId} disableRefJump={false} />
           </div>
         </div>
       )}

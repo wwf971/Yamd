@@ -1,7 +1,7 @@
 import React from 'react';
 import { TIMELINE_BULLET_SETTINGS, BULLET_DIMENSIONS } from '@/config/RenderConfig.js';
-import { useRenderUtilsContext } from '@/core/RenderUtils.js';
-import { formatYPos } from '@/core/RenderUtils.js';
+import { useRenderUtilsContext } from '@/core/RenderUtils.ts';
+import { formatYPos } from '@/core/RenderUtils.ts';
 
 /**
  * Bullet component registry for timeline

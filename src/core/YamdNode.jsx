@@ -12,7 +12,7 @@ import NodeVideo from '@/components/NodeVideo.jsx';
 import YamdImageList from '@/components/NodeImageList.jsx';
 import YamdVideoList from '@/components/NodeVideoList.jsx';
 import { AddListBulletBeforeNode } from '@/core/AddBullet.jsx';
-import { useRenderUtilsContext } from '@/core/RenderUtils.js';
+import { useRenderUtilsContext } from '@/core/RenderUtils.ts';
 
 
 
@@ -28,15 +28,17 @@ const YamdNode = React.memo(({ nodeId, parentInfo = null, globalInfo = null }) =
   // Get render utils from context
   const renderUtils = useRenderUtilsContext();
   
-  // Get node data from store via renderUtils
-  const nodeData = renderUtils.getNodeDataById(nodeId);
+  // Get node data reactively from Jotai store
+  const nodeData = renderUtils.useNodeData(nodeId);
   if (!nodeData) {
-    return <div className="yamd-error">Node not found. noedId: {nodeId}</div>;
+    return <div className="yamd-error">Node not found. nodeId: {nodeId}</div>;
   }
 
   // assign default values if missing
+  // Only use 'none' if explicitly specified in attr.selfDisplay
+  // Otherwise default to 'default' for text nodes, or infer from content
   const selfDisplay = nodeData.attr?.selfDisplay || 
-    (nodeData.textRaw && nodeData.textRaw !== '' ? 'default' : 'none');
+    (nodeData.textRaw !== undefined ? 'default' : 'default');
   const childDisplay = renderUtils.getChildDisplay(nodeData, false, parentInfo);
   console.log('YamdNode rendering node:', nodeId, 'nodeData.type:', nodeData.type, 'selfDisplay:', selfDisplay, 'childDisplay:', childDisplay);
   const getNodeContent = () => {

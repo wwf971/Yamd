@@ -1,6 +1,309 @@
 import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
 import { subscribeWithSelector } from 'zustand/middleware';
+import { atom, createStore, getDefaultStore } from 'jotai';
+
+/**
+ * DocsData - Class-based store for fine-grained node reactivity
+ * Each node gets its own reactive data container, avoiding unnecessary re-renders
+ * Internal implementation uses Jotai atoms
+ * 
+ * Encapsulates the Jotai store to ensure all operations use the same store instance
+ */
+class DocsData {
+  constructor() {
+    // Internal structure: { [docId]: { [nodeId]: atom(nodeData), _meta: { bibs, rootNodeId, etc. } } }
+    this._data = {};
+    
+    // Use Jotai's default store for consistency with useAtomValue hooks in React components
+    this._store = getDefaultStore();
+  }
+  
+  /**
+   * Get the Jotai store instance
+   * @returns {object} Jotai store
+   */
+  getStore() {
+    return this._store;
+  }
+  
+  /**
+   * Read an atom's value (non-reactive, for use outside React components)
+   * @param {object} atomRef - Jotai atom reference
+   * @returns {*} Current atom value
+   */
+  getAtomValue(atomRef) {
+    return this._store.get(atomRef);
+  }
+  
+  /**
+   * Write to an atom (for use outside React components)
+   * @param {object} atomRef - Jotai atom reference
+   * @param {*} update - New value or updater function
+   */
+  setAtom(atomRef, update) {
+    this._store.set(atomRef, update);
+  }
+
+  /**
+   * Initialize document from flattened data structure
+   * Creates atoms for all nodes and metadata
+   * @param {string} docId - Document ID
+   * @param {object} flattenedData - Flattened document data with nodes, rootNodeId, etc.
+   * @returns {object} Document metadata (rootNodeId, nodeIds, etc.)
+   */
+  fromFlattenedData(docId, flattenedData) {
+    if (!flattenedData?.nodes) {
+      console.warn('fromFlattenedData: Invalid flattenedData, missing nodes');
+      return null;
+    }
+
+    // Clear any existing data for this docId to avoid stale atoms
+    if (this._data[docId]) {
+      delete this._data[docId];
+    }
+    
+    // Create fresh doc entry
+    this._data[docId] = {};
+
+    // Create atoms for each node
+    const nodeIds = Object.keys(flattenedData.nodes);
+    console.log(`📦 fromFlattenedData: Creating ${nodeIds.length} node atoms for docId: ${docId}`);
+    console.log(`  Sample nodes:`, nodeIds.slice(0, 3).map(id => ({ 
+      id, 
+      type: flattenedData.nodes[id].type, 
+      textRaw: flattenedData.nodes[id].textRaw?.substring(0, 50) 
+    })));
+    nodeIds.forEach(nodeId => {
+      const nodeData = flattenedData.nodes[nodeId];
+      // Create atom with initial node data
+      this._data[docId][nodeId] = atom(nodeData);
+    });
+
+    // Store metadata in special _meta object with atoms
+    this._data[docId]._meta = {
+      rootNodeId: atom(flattenedData.rootNodeId),
+      bibs: atom(flattenedData.bibs || {}),
+      assets: atom(flattenedData.assets || {}),
+      refs: atom(flattenedData.refs || {}),
+      bibsLookup: atom(flattenedData.bibsLookup || {})
+    };
+
+    console.log(`✅ fromFlattenedData: Initialized docId: ${docId}, rootNodeId: ${flattenedData.rootNodeId}`);
+
+    // Return metadata about the loaded document
+    return {
+      docId,
+      rootNodeId: flattenedData.rootNodeId,
+      nodeIds,
+      nodeCount: nodeIds.length
+    };
+  }
+
+  /**
+   * Get bibliography atom for a document
+   * @param {string} docId - Document ID
+   * @returns {object} Reactive reference for bibs (internal: Jotai atom)
+   */
+  getBibs(docId) {
+    if (!this._data[docId]?._meta?.bibs) {
+      // Create default empty bibs atom if doesn't exist
+      if (!this._data[docId]) {
+        this._data[docId] = {};
+      }
+      if (!this._data[docId]._meta) {
+        this._data[docId]._meta = {};
+      }
+      this._data[docId]._meta.bibs = atom({});
+    }
+    return this._data[docId]._meta.bibs;
+  }
+
+  /**
+   * Get root node ID atom for a document
+   * @param {string} docId - Document ID
+   * @returns {object} Reactive reference for rootNodeId (internal: Jotai atom)
+   */
+  getRootNodeId(docId) {
+    if (!this._data[docId]?._meta?.rootNodeId) {
+      // Create default null rootNodeId atom if doesn't exist
+      if (!this._data[docId]) {
+        this._data[docId] = {};
+      }
+      if (!this._data[docId]._meta) {
+        this._data[docId]._meta = {};
+      }
+      this._data[docId]._meta.rootNodeId = atom(null);
+    }
+    return this._data[docId]._meta.rootNodeId;
+  }
+
+  /**
+   * Get reactive node data reference for a specific node
+   * @param {string} docId - Document ID
+   * @param {string} nodeId - Node ID
+   * @returns {object} Reactive reference for the node (internal: Jotai atom)
+   */
+  getNodeData(docId, nodeId) {
+    if (!this._data[docId]) {
+      console.warn(`⚠️ getNodeData: docId "${docId}" not found in store`);
+      this._data[docId] = {};
+    }
+    
+    if (!this._data[docId][nodeId]) {
+      console.warn(`⚠️ getNodeData: nodeId "${nodeId}" not found in docId "${docId}", creating null atom`);
+      // Create new reactive container with null initial value
+      this._data[docId][nodeId] = atom(null);
+    }
+    
+    return this._data[docId][nodeId];
+  }
+
+  /**
+   * Ensure node data reference exists (creates if doesn't exist)
+   * @param {string} docId - Document ID
+   * @param {string} nodeId - Node ID
+   * @returns {object} Reactive reference for the node
+   */
+  ensureNode(docId, nodeId) {
+    return this.getNodeData(docId, nodeId);
+  }
+
+  /**
+   * Remove a node's reactive data
+   * @param {string} docId - Document ID
+   * @param {string} nodeId - Node ID
+   */
+  removeNode(docId, nodeId) {
+    if (this._data[docId]?.[nodeId]) {
+      delete this._data[docId][nodeId];
+      
+      // Clean up empty doc entries
+      if (Object.keys(this._data[docId]).length === 0) {
+        delete this._data[docId];
+      }
+    }
+  }
+
+  /**
+   * Remove all nodes for a document
+   * @param {string} docId - Document ID
+   */
+  removeDoc(docId) {
+    if (this._data[docId]) {
+      delete this._data[docId];
+    }
+  }
+
+  /**
+   * Get all node IDs for a document
+   * @param {string} docId - Document ID
+   * @returns {string[]} Array of node IDs
+   */
+  getNodeIds(docId) {
+    return Object.keys(this._data[docId] || {});
+  }
+
+  /**
+   * Check if a node exists
+   * @param {string} docId - Document ID
+   * @param {string} nodeId - Node ID
+   * @returns {boolean} True if node exists
+   */
+  hasNode(docId, nodeId) {
+    return !!(this._data[docId]?.[nodeId]);
+  }
+}
+
+// Create singleton instance
+export const docsData = new DocsData();
+
+// Export convenience functions that use the singleton's store
+// These ensure all atom operations use the same store instance
+export const getAtomValue = (atomRef) => docsData.getAtomValue(atomRef);
+export const setAtom = (atomRef, update) => docsData.setAtom(atomRef, update);
+
+/**
+ * DocsState - Class-based store for node operation states (focus, cursor, etc.)
+ * Separate from DocsData (content) to keep concerns separated
+ * Each node has a state atom with: { focus: { counter, type }, ... }
+ */
+class DocsState {
+  constructor() {
+    // Structure: { [docId]: { [nodeId]: atom(stateData) } }
+    this._states = {};
+    // Use the same Jotai store as DocsData
+    this._store = docsData.getStore();
+  }
+
+  /**
+   * Get or create state atom for a node
+   * @param {string} docId - Document ID
+   * @param {string} nodeId - Node ID
+   * @returns {object} Jotai atom for node state
+   */
+  getNodeState(docId, nodeId) {
+    if (!this._states[docId]) {
+      this._states[docId] = {};
+    }
+    
+    if (!this._states[docId][nodeId]) {
+      // Create initial state
+      this._states[docId][nodeId] = atom({
+        focus: {
+          counter: 0,
+          type: null // 'prevSiblingDeleted', 'nextSiblingDeleted', 'parentCommand', etc.
+        }
+      });
+    }
+    
+    return this._states[docId][nodeId];
+  }
+
+  /**
+   * Trigger focus on a node
+   * @param {string} docId - Document ID
+   * @param {string} nodeId - Node ID
+   * @param {string} type - Focus type ('prevSiblingDeleted', etc.)
+   */
+  triggerFocus(docId, nodeId, type, extraData = {}) {
+    const stateAtom = this.getNodeState(docId, nodeId);
+    const currentState = this._store.get(stateAtom);
+    
+    this._store.set(stateAtom, {
+      ...currentState,
+      focus: {
+        counter: currentState.focus.counter + 1,
+        type,
+        ...extraData
+      }
+    });
+  }
+
+  /**
+   * Remove state for a node
+   * @param {string} docId - Document ID
+   * @param {string} nodeId - Node ID
+   */
+  removeNodeState(docId, nodeId) {
+    if (this._states[docId]?.[nodeId]) {
+      delete this._states[docId][nodeId];
+    }
+  }
+
+  /**
+   * Remove all states for a document
+   * @param {string} docId - Document ID
+   */
+  removeDocStates(docId) {
+    if (this._states[docId]) {
+      delete this._states[docId];
+    }
+  }
+}
+
+// Create singleton instance
+export const docsState = new DocsState();
 
 /**
  * DocStore - Zustand store for managing document data and states
@@ -118,7 +421,7 @@ export const useDocStore = create(
    * @param {string} nodeId - Node ID
    * @param {string} containerClassName - CSS class name of the container (starting with dot)
    */
-  removePreferredYPosRequest: (docId, nodeId, containerClassName) => {
+  removeBulletYPosReq: (docId, nodeId, containerClassName) => {
     set((state) => {
       if (state.bulletYPosReq[docId]?.[nodeId]?.[containerClassName]) {
         delete state.bulletYPosReq[docId][nodeId][containerClassName];
@@ -141,7 +444,7 @@ export const useDocStore = create(
    * @param {string} docId - Document ID
    * @param {string} nodeId - Node ID
    */
-  clearPreferredYPosRequestsForNode: (docId, nodeId) => {
+  clearBulletYPosReqForDoc: (docId, nodeId) => {
     set((state) => {
       if (state.bulletYPosReq[docId]?.[nodeId]) {
         delete state.bulletYPosReq[docId][nodeId];
@@ -195,10 +498,10 @@ export const useDocStore = create(
    */
   setDocData: (docId, data) => {
     set((state) => {
-      if (!state.docs[docId]) {
-        state.docs[docId] = {};
-      }
-      Object.assign(state.docs[docId], data);
+      state.docs[docId] = {
+        ...state.docs[docId],
+        ...data
+      };
     });
   },
 
@@ -215,6 +518,37 @@ export const useDocStore = create(
       }
       state.docs[docId][field] = value;
     });
+  },
+
+  /**
+   * Delete a node from the document (using Immer)
+   * @param {string} docId - Document ID
+   * @param {string} nodeId - Node ID to delete
+   * @returns {object} Result with code and message
+   */
+  deleteNodeFromDoc: (docId, nodeId) => {
+    const state = get();
+    const doc = state.docs[docId];
+    if (!doc?.docData?.nodes) return { code: -1, message: 'Document not found' };
+    
+    const targetNode = doc.docData.nodes[nodeId];
+    if (!targetNode) return { code: -1, message: `Node ${nodeId} not found` };
+    if (!targetNode.parentId) return { code: -1, message: 'Cannot delete root node' };
+    
+    const parentNode = doc.docData.nodes[targetNode.parentId];
+    if (!parentNode) return { code: -1, message: `Parent node not found` };
+    
+    const nodeIndex = parentNode.children.indexOf(nodeId);
+    if (nodeIndex === -1) return { code: -1, message: 'Node not found in parent\'s children' };
+    
+    // Perform the deletion with Immer
+    set((state) => {
+      const parent = state.docs[docId].docData.nodes[targetNode.parentId];
+      parent.children.splice(nodeIndex, 1);
+      delete state.docs[docId].docData.nodes[nodeId];
+    });
+    
+    return { code: 0, message: `Node ${nodeId} deleted successfully` };
   },
 
   /**
@@ -302,5 +636,5 @@ export const useDocStore = create(
  * @returns {string} Random document ID
  */
 export const generateDocId = () => {
-  return `yamd_doc_${Math.random().toString(36).substr(2, 9)}_${Date.now()}`;
+  return `doc_${Math.random().toString(36).substr(2, 9)}_${Date.now()}`;
 };

@@ -1,52 +1,38 @@
 import React, { useState, useRef, useCallback, useMemo, useEffect, useLayoutEffect } from 'react';
+import { useAtom } from 'jotai';
 import YamdNode from '@/core/YamdNode.jsx';
 import YamdChildNodes from '@/core/YamdChildNodes.jsx';
 import YamdRefHandler from '@/components/NodeRefHandler.jsx';
 import YamdBibsList from '@/components/NodeBibsList.jsx';
 import NodeWrapper from '@/custom/NodeWrapper.jsx';
 import { handleRefClick, handleBibClick, handleBackToSource } from '@/core/YamdDoc.js';
-import { useDocStore, generateDocId } from '@/core/DocStore.js';
+import { useDocStore, generateDocId, docsData } from '@/core/DocStore.js';
 // Import RenderUtils context for direct usage
-import { RenderUtilsContext, createRenderUtilsContextValue } from '@/core/RenderUtils.js';
+import { RenderUtilsContext, createRenderUtilsContextValue } from '@/core/RenderUtils.ts';
 
 /**
  * YamdDoc - Document container that manages global reference handling
  * Renders the root YamdNode and provides reference navigation functionality
  */
 const YamdDoc = ({
-  docData,
+  docId,
   disableRefJump = false,
   disableBibsList = false,
-  docId = null,
   customNodeRenderer = null,
   isEditable = false,
 }) => {
-  // Generate docId if not provided
-  const actualDocId = useMemo(() => docId || generateDocId(), [docId]);
+  if (!docId) {
+    console.error('YamdDoc: docId is required');
+    return <div className="yamd-error">Error: docId is required</div>;
+  }
   
   // Clean up bullet position data when component unmounts or docId changes
   useEffect(() => {
     // Cleanup function runs when docId changes or component unmounts
     return () => {
-      useDocStore.getState().clearBulletYPosReqForDoc(actualDocId);
+      useDocStore.getState().clearBulletYPosReqForDoc(docId);
     };
-  }, [actualDocId]);
-  
-  // return <div>Hello</div>;
-  // initialize document data in store (example usage)
-  useEffect(() => {
-    useDocStore.getState().setDocData(actualDocId, {
-      docId: actualDocId,
-      createdAt: new Date().toISOString(),
-      docData: docData,
-      // add any other document-specific data here
-      // examples:
-      // userPreferences: { theme: 'light', fontSize: 'medium' },
-      // viewState: { scrollPosition: 0, expandedPanels: [] },
-      // annotations: [],
-      // bookmarks: []
-    });
-  }, [actualDocId, docData]);
+  }, [docId]);
 
   const containerRef = useRef(null);
   const nodeRefsMap = useRef(new Map()); // Map from nodeId to DOM element reference
@@ -95,7 +81,7 @@ const YamdDoc = ({
     
     // Create the globalInfo object (will be used recursively)
     const globalInfo = { 
-      docId: actualDocId, // Include docId for Zustand positioning
+      docId: docId, // Include docId for Zustand positioning
       docStore: useDocStore, // Direct reference to Zustand store
       
       onRefClick: handleRefClickCallback, // Function for reference handling
@@ -157,7 +143,7 @@ const YamdDoc = ({
     
     return globalInfo;
   }, [handleRefClickCallback, handleBibClickCallback,
-      registerNodeRef, getNodeRefById, actualDocId, customNodeRenderer
+      registerNodeRef, getNodeRefById, docId, customNodeRenderer
     ]
   );
 
@@ -186,24 +172,24 @@ const YamdDoc = ({
       registerNodeRef, 
       renderChildNodes,
       isEditable,
-      docId: actualDocId,
+      docId: docId,
       docStore: useDocStore
     }), 
-    [registerNodeRef, renderChildNodes, isEditable, actualDocId]
+    [registerNodeRef, renderChildNodes, isEditable, docId]
   );
 
-  // Get document data from store
-  const doc = useDocStore(state => state.docs[actualDocId]);
-  const rootNodeId = doc?.docData?.rootNodeId;
-  const bibs = doc?.docData?.bibs || {};
+  // Get document data from Jotai atoms
+  const [rootNodeId] = useAtom(docsData.getRootNodeId(docId));
+  const [bibs] = useAtom(docsData.getBibs(docId));
 
-  if (!doc || !rootNodeId) {
-    return <div className="yamd-error">No document data in store for docId: {actualDocId}</div>;
+  // If no rootNodeId yet, document hasn't been loaded
+  if (!rootNodeId) {
+    return <div className="yamd-loading">Loading document...</div>;
   }
 
   return (
     <RenderUtilsContext.Provider value={renderUtilsContextValue}>
-      <div ref={containerRef} style={{ position: 'relative' }} data-doc-id={actualDocId}>
+      <div ref={containerRef} style={{ position: 'relative' }} data-doc-id={docId}>
         
         {/* main document, rendering start from root node*/}
         <YamdNode

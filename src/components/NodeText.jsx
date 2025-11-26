@@ -1,9 +1,9 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { getNodeClass } from '@/core/YamdNode.jsx';
-import { useRenderUtilsContext } from '@/core/RenderUtils.js';
+import { useRenderUtilsContext } from '@/core/RenderUtils.ts';
 import NodeTextRich from './NodeRichText.jsx';
 import NodeTextPlain from './NodePlainText.jsx';
-import { createBulletEqualityFn } from '@/core/RenderUtils.js';
+import { createBulletEqualityFn } from '@/core/RenderUtils.ts';
 
 /**
  * render a text node, and then render its children nodes.
@@ -30,17 +30,13 @@ const YamdNodeText = React.memo(({ nodeId, parentInfo, globalInfo }) => {
 
   // console.log('noteId:', nodeId, 'YamdNodeText docId:', docId);
   // Subscribe to request counter changes with custom equality function
+  // Subscribe to bullet positioning requests from Zustand store
   useEffect(() => {
-    if (!nodeId || !docId){
-      console.warn('noteId:', nodeId, 'docId:', docId, 'YamdNodeText useEffect subscribe skipped');
-      return;
-    }
-    console.log('noteId:', nodeId, 'docId:', docId, 'YamdNodeText useEffect subscribe');
+    if (!nodeId || !docId) return;
+    
     const unsubscribe = globalInfo.getDocStore().subscribe(
       (state) => state.bulletYPosReq[docId]?.[nodeId] || {},
       (requests) => {
-        console.log('noteId:', nodeId, 'YamdNodeText useEffect subscribe triggered with requests:', requests);
-        // This will only fire if equalityFn returns false
         calcBulletYPos(nodeId, docId, nodeRef, textContentRef, globalInfo);
       },
       {
@@ -48,36 +44,21 @@ const YamdNodeText = React.memo(({ nodeId, parentInfo, globalInfo }) => {
       }
     );
     
-    // Retry logic to handle ref not being ready immediately
-    let attempts = 0;
-    const maxAttempts = 10;
-    const tryCalculate = () => {
-      console.log(`noteId: ${nodeId} tryCalculate attempt ${attempts}, ref ready:`, !!textContentRef.current);
-      calcBulletYPos(nodeId, docId, nodeRef, textContentRef, globalInfo);
-      attempts++;
-      
-      // If ref still isn't ready and we haven't exceeded max attempts, retry
-      if (!textContentRef.current && attempts < maxAttempts) {
-        console.log(`noteId: ${nodeId} scheduling retry ${attempts}/${maxAttempts}`);
-        setTimeout(tryCalculate, 5);
-      }
-    };
-    
-    // Start trying
-    tryCalculate();
+    // Calculate initial bullet positions
+    calcBulletYPos(nodeId, docId, nodeRef, textContentRef, globalInfo);
     
     return unsubscribe;
   }, [nodeId, docId, globalInfo]);
-  // ===== END ZUSTAND LOGIC =====
 
-  // Get node data from store via renderUtils
-  const nodeData = renderUtils.getNodeDataById(nodeId);
+  // Subscribe to node data changes (especially children array changes)
+  const nodeData = renderUtils.useNodeData(nodeId);
   
   if (!nodeData) {
     return <div className="yamd-error">Node not found: {nodeId}</div>;
   }
 
-  const selfText = nodeData.textRaw || nodeData.textOriginal || '';
+  // Use ?? instead of || to handle empty strings correctly
+  const selfText = nodeData.textRaw ?? nodeData.textOriginal ?? '';
   const textRich = nodeData.textRich; // Rich text segments if LaTeX was processed
   
   // Determine if this is plain text (no textRich, or textRich with only one text segment)
@@ -91,11 +72,14 @@ const YamdNodeText = React.memo(({ nodeId, parentInfo, globalInfo }) => {
   // Use the utility function to get appropriate CSS class
   const nodeClass = getNodeClass(nodeData, parentInfo) || 'yamd-title-default';
   // console.log("textRich:", textRich, "isPlainText:", isPlainText);
+  
+  // Check if text node has content (including empty string for editable mode)
+  const hasTextContent = nodeData.textRaw !== undefined || nodeData.textOriginal !== undefined;
 
   return (
     <div ref={nodeRef} className="yamd-node-text">
       {/* self content */}
-      {selfText && isPlainText && (
+      {hasTextContent && isPlainText && (
         <NodeTextPlain 
           ref={textContentRef}
           nodeId={nodeId}
@@ -104,7 +88,7 @@ const YamdNodeText = React.memo(({ nodeId, parentInfo, globalInfo }) => {
           globalInfo={globalInfo}
         />
       )}
-      {selfText && !isPlainText && (
+      {hasTextContent && !isPlainText && (
         <NodeTextRich 
           ref={textContentRef}
           text={selfText}
@@ -134,36 +118,21 @@ const YamdNodeText = React.memo(({ nodeId, parentInfo, globalInfo }) => {
 });
 
 
-// function to calculate and provide preferred Y position
+// Calculate and provide bullet Y position for this text node
 const calcBulletYPos = (nodeId, docId, nodeRef, textContentRef, globalInfo) => {
-  // guard for nodeRef or textContentRef not ready
+  // Guard: refs must be ready
   if (!nodeRef.current || !textContentRef.current?.calcBulletYPos) {
-    console.log(`noteId: ${nodeId} calcBulletYPos guard failed - nodeRef:`, !!nodeRef.current, 'textContentRef:', !!textContentRef.current, 'calcBulletYPos:', !!textContentRef.current?.calcBulletYPos);
     return;
   }
 
   const store = globalInfo.getDocStore().getState();
-  // get all requests for this node
   const requests = store.getBulletYPosReqs(docId, nodeId);
-  console.log('noteId:', nodeId, 'YamdNodeText calcBulletYPos requests:', requests);
   
-  const requestKeys = Object.keys(requests);
-  console.log('noteId:', nodeId, 'YamdNodeText calcBulletYPos requestKeys:', requestKeys);
-  
-  // update result for each requesting container
-  requestKeys.forEach(containerClassName => {
-    console.log('noteId:', nodeId, 'YamdNodeText calculating for container:', containerClassName);
-    // get preferred Y position from NodeTextRich or NodeTextPlain
+  // Update result for each requesting container
+  Object.keys(requests).forEach(containerClassName => {
     const result = textContentRef.current.calcBulletYPos(containerClassName);
-    console.log('noteId:', nodeId, 'YamdNodeText got result:', result);
-    
-    // update result in the Zustand store
     store.updateReqResult(docId, nodeId, containerClassName, result);
-    console.log('noteId:', nodeId, 'YamdNodeText updated result in store');
-    
-    // increment response counter in store
     store.incRespCounter(docId, nodeId, containerClassName);
-    console.log('noteId:', nodeId, 'YamdNodeText incremented response counter');
   });
 };
 

@@ -1,6 +1,6 @@
 import React, { useRef, useEffect } from 'react';
 import { getNodeClass } from '@/core/YamdNode.jsx';
-import { renderListBullet, useRenderUtilsContext } from '@/core/RenderUtils.js';
+import { renderListBullet, useRenderUtilsContext } from '@/core/RenderUtils.ts';
 
 /**
  * Top-right node renderer - positions title in top-right corner
@@ -17,18 +17,16 @@ const YamdNodeTopRight = ({ nodeId, parentInfo, globalInfo }) => {
     }
   }, [nodeId, globalInfo]);
 
-  if (!globalInfo?.getNodeDataById) {
-    return <div className="yamd-error">Missing globalInfo.getNodeDataById</div>;
-  }
   
-  const nodeData = renderUtils.getNodeDataById(nodeId);
+  // Subscribe to node data changes (especially children array changes)
+  const nodeData = renderUtils.useNodeData(nodeId);
   
   if (!nodeData) {
     return <div className="yamd-error">Node not found: {nodeId}</div>;
   }
 
 
-  const title = nodeData.textRaw || nodeData.textOriginal || '';
+  const title = nodeData.textRaw ?? nodeData.textOriginal ?? '';
   const childDisplay = renderUtils.getChildDisplay(nodeData, false, parentInfo);
   const childClass = nodeData.attr?.childClass;
   

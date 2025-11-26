@@ -1,5 +1,5 @@
 import React from 'react';
-import { useRenderUtilsContext } from '@/core/RenderUtils.js';
+import { useRenderUtilsContext } from '@/core/RenderUtils.ts';
 
 /**
  * LaTeX inline renderer component

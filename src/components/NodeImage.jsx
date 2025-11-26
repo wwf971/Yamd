@@ -1,7 +1,7 @@
 import React, { useRef, useEffect } from 'react';
 import { getNodeClass } from '@/core/YamdNode.jsx';
 import { IMAGE_SETTINGS } from '@/config/RenderConfig.js';
-import { getAlignmentStrategy, useRenderUtilsContext } from '@/core/RenderUtils.js';
+import { getAlignmentStrategy, useRenderUtilsContext } from '@/core/RenderUtils.ts';
 
 /**
  * Image node renderer - displays images with captions

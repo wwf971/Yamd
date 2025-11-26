@@ -1,6 +1,6 @@
 import React from 'react';
 import YamdNode, { getNodeClass } from '@/core/YamdNode.jsx';
-import { renderListBullet, useRenderUtilsContext } from '@/core/RenderUtils.js';
+import { renderListBullet, useRenderUtilsContext } from '@/core/RenderUtils.ts';
 
 /**
  * Key node renderer - renders title and children as siblings, with optional valueNum support
@@ -9,14 +9,15 @@ const YamdNodeKey = ({ nodeId, parentInfo, globalInfo }) => {
   // Get render utils from context
   const renderUtils = useRenderUtilsContext();
 
-  const nodeData = renderUtils.getNodeDataById(nodeId);
+  // Subscribe to node data changes (especially children array changes)
+  const nodeData = renderUtils.useNodeData(nodeId);
   
   if (!nodeData) {
     return <div className="yamd-error">Node not found: {nodeId}</div>;
   }
 
 
-  const title = nodeData.textRaw || nodeData.textOriginal || '';
+  const title = nodeData.textRaw ?? nodeData.textOriginal ?? '';
   const childDisplay = renderUtils.getChildDisplay(nodeData, false, parentInfo);
   const childClass = nodeData.attr?.childClass || 'yamd-tag';
   const valueNum = nodeData.attr?.valueNum;

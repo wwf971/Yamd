@@ -1,6 +1,6 @@
 import React from 'react';
 
-import { useRenderUtilsContext } from '@/core/RenderUtils.js';
+import { useRenderUtilsContext } from '@/core/RenderUtils.ts';
 /**
  * Component for referring to assets(images, videos, latex blocks, etc) in same document
  * this component is a kind of segments in YamdNodeText.jsx's selfTextRich

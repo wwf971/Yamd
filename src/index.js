@@ -26,7 +26,7 @@ export {
   getChildDefaultDisplay,
   getAlignmentStrategy,
   createBulletEqualityFn
-} from '@/core/RenderUtils.js';
+} from '@/core/RenderUtils.ts';
 
 export {
   AddListBulletBeforeNode,

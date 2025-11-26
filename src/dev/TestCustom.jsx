@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import YamdDoc from '@/core/YamdDoc.jsx';
+import { docsData, useDocStore } from '@/core/DocStore.js';
 import { loadMathJax } from '@/mathjax/MathJaxLoad.js';
 import { 
   parseYamlToJson, 
@@ -11,6 +12,7 @@ import {
   processAllTextSegments
 } from '@/parse/ParseYamd.js';
 import NodeCustomBox from '@/custom/NodeCustomBox.jsx';
+import { DocDataDisplay } from './TestUtils.jsx';
 import './TestRender.css';
 import './TestEdit.css';
 
@@ -20,6 +22,8 @@ const TestCustom = () => {
   const [selectedSample, setSelectedSample] = useState(defaultSample);
   const [yamlInput, setYamlInput] = useState(getSampleYaml(defaultSample));
   const [docData, setDocData] = useState(null);
+  const [docId, setDocId] = useState(null);
+  const [nodeIds, setNodeIds] = useState([]);
   const [parseError, setParseError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
@@ -67,6 +71,17 @@ const TestCustom = () => {
         
         setDocData(finalResult);
         setParseError('');
+        
+        // Generate docId and initialize both Jotai and Zustand stores
+        const newDocId = `doc_${Math.random().toString(36).substr(2, 9)}_${Date.now()}`;
+        const docInfo = docsData.fromFlattenedData(newDocId, finalResult);
+        setNodeIds(docInfo.nodeIds);
+        useDocStore.getState().setDocData(newDocId, {
+          docId: newDocId,
+          createdAt: new Date().toISOString(),
+          docData: finalResult
+        });
+        setDocId(newDocId);
       } else {
         setDocData(null);
         setParseError(yamlResult.message);
@@ -149,14 +164,14 @@ const TestCustom = () => {
       )}
 
       {/* Split View: Rendered Document and Flattened Data */}
-      {docData && (
+      {docId && docData && (
         <div className="split-view-section">
           {/* Left Panel: Rendered Document */}
           <div className="rendered-panel">
             <h3 className="rendered-panel-title">Rendered Document with Custom Nodes</h3>
             <div className="rendered-panel-content">
               <YamdDoc 
-                docData={docData} 
+                docId={docId}
                 disableRefJump={false}
                 customNodeRenderer={customNodeRenderer}
               />
@@ -165,10 +180,12 @@ const TestCustom = () => {
           
           {/* Right Panel: Flattened Data */}
           <div className="flattened-panel">
-            <h3 className="flattened-panel-title">Flattened docData</h3>
-            <div className="flattened-panel-content">
-              <pre className="flattened-panel-json">{JSON.stringify(docData, null, 2)}</pre>
-            </div>
+            <h3 className="flattened-panel-title">Flattened Data (Real-time Updates)</h3>
+            <DocDataDisplay 
+              docId={docId} 
+              nodeIds={nodeIds} 
+              isLoading={isLoading}
+            />
           </div>
         </div>
       )}

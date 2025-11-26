@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
-import { createBulletEqualityFn } from '@/core/RenderUtils.js';
+import { useRenderUtilsContext, createBulletEqualityFn } from '@/core/RenderUtils.ts';
 
 /**
  * YamdCustomNodeWrapper - Wrapper component for custom user nodes

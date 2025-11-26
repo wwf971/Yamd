@@ -1,8 +1,8 @@
 import React, { useRef, useEffect, useLayoutEffect, forwardRef, useImperativeHandle } from 'react';
 import { getNodeClass } from '@/core/YamdNode.jsx';
-import { useRenderUtilsContext } from '@/core/RenderUtils.js';
+import { useRenderUtilsContext } from '@/core/RenderUtils.ts';
 // Store is now accessed via RenderUtils context
-import { createBulletEqualityFn } from '@/core/RenderUtils.js';
+import { createBulletEqualityFn } from '@/core/RenderUtils.ts';
 
 /**
  * Divider node renderer - displays title as a divider line with text
@@ -56,14 +56,14 @@ const NodeDivider = forwardRef(({ nodeId, parentInfo, globalInfo }, ref) => {
   }, [nodeId, docId, docStore]);
   // ===== END ZUSTAND LOGIC =====
 
-  // Get node data from store via renderUtils
-  const nodeData = renderUtils.getNodeDataById(nodeId);
+  // Subscribe to node data changes (especially children array changes)
+  const nodeData = renderUtils.useNodeData(nodeId);
   
   if (!nodeData) {
     return <div className="yamd-error">Node not found: {nodeId}</div>;
   }
 
-  const title = nodeData.textRaw || nodeData.textOriginal || '';
+  const title = nodeData.textRaw ?? nodeData.textOriginal ?? '';
   const childDisplay = renderUtils.getChildDisplay(nodeData, false, parentInfo);
   const childClass = nodeData.attr?.childClass;
   

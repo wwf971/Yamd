@@ -1,5 +1,5 @@
 import React, { useRef, useImperativeHandle, forwardRef } from 'react';
-import { useRenderUtilsContext } from '@/core/RenderUtils.js';
+import { useRenderUtilsContext } from '@/core/RenderUtils.ts';
 import './NodeCustomBox.css';
 
 /**
@@ -20,7 +20,7 @@ const NodeCustomBox = forwardRef(({ nodeId, nodeData, parentInfo, globalInfo }, 
   // Get render utils from context
   const renderUtils = useRenderUtilsContext();
   
-  const textRaw = nodeData.textRaw || '';
+  const textRaw = nodeData.textRaw ?? '';
   const children = nodeData.children || [];
   
   // Expose calcBulletYPos method for bullet positioning
