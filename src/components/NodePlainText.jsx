@@ -3,8 +3,8 @@ import { useRenderUtilsContext } from '@/core/RenderUtils.ts';
 import { docsState } from '@/core/DocStore.js';
 import {
   isCursorAtEnd, isCursorAtBeginning,
-  getCursorPosition, setCursorPosition,
-  setCursorToEnd, setCursorToBeginning
+  getCursorPosition, getCursorPageX, getClosestCursorPos,
+  setCursorPosition, setCursorToEnd, setCursorToBeginning
 } from './TextUtils.js';
 
 /**
@@ -34,6 +34,9 @@ const NodeTextPlain = forwardRef(({ nodeId, className, parentInfo, globalInfo, i
   
   // Track if user is currently editing
   const isEditingRef = useRef(false);
+  
+  // Track last cursor horizontal position for smart up/down navigation
+  const lastCursorPageXRef = useRef(null);
   
   // Expose calcBulletYPos method to parent via ref
   useImperativeHandle(ref, () => ({
@@ -75,7 +78,7 @@ const NodeTextPlain = forwardRef(({ nodeId, className, parentInfo, globalInfo, i
   useEffect(() => {
     if (!nodeState?.focus || !textElRef.current) return;
     
-    const { counter, type, cursorPosition } = nodeState.focus;
+    const { counter, type, cursorPosition, cursorPageX } = nodeState.focus;
     
     // Skip if counter is 0 (initial state)
     if (counter === 0) return;
@@ -84,7 +87,15 @@ const NodeTextPlain = forwardRef(({ nodeId, className, parentInfo, globalInfo, i
     textElRef.current.focus();
     
     // Set cursor position based on focus type
-    if (type === 'prevSiblingDeleted' || type === 'arrowNavigation') {
+    if (type === 'arrowUp' && cursorPageX !== undefined) {
+      // Moving up: search backward (end to start) to find last match
+      const closestPos = getClosestCursorPos(textElRef.current, cursorPageX, 'backward');
+      setCursorPosition(textElRef.current, closestPos);
+    } else if (type === 'arrowDown' && cursorPageX !== undefined) {
+      // Moving down: search forward (start to end) to find first match
+      const closestPos = getClosestCursorPos(textElRef.current, cursorPageX, 'forward');
+      setCursorPosition(textElRef.current, closestPos);
+    } else if (type === 'prevSiblingDeleted') {
       setCursorToEnd(textElRef.current);
     } else if (type === 'selfCreated') {
       setCursorToBeginning(textElRef.current);
@@ -92,7 +103,7 @@ const NodeTextPlain = forwardRef(({ nodeId, className, parentInfo, globalInfo, i
       setCursorPosition(textElRef.current, cursorPosition);
     }
     
-  }, [nodeState?.focus?.counter, nodeState?.focus?.type, nodeState?.focus?.cursorPosition, nodeId]);
+  }, [nodeState?.focus?.counter, nodeState?.focus?.type, nodeState?.focus?.cursorPosition, nodeState?.focus?.cursorPageX, nodeId]);
 
   // Handle key events
   const handleKeyDown = (e) => {
@@ -142,6 +153,11 @@ const NodeTextPlain = forwardRef(({ nodeId, className, parentInfo, globalInfo, i
     // Navigate to previous sibling with Up arrow
     if (e.key === 'ArrowUp') {
       e.preventDefault();
+      
+      // Store current cursor horizontal position
+      const cursorPageX = getCursorPageX(textElRef.current);
+      lastCursorPageXRef.current = cursorPageX;
+      
       const currentNode = renderUtils.getNodeDataById(nodeId);
       const parentId = currentNode?.parentId;
       
@@ -152,7 +168,7 @@ const NodeTextPlain = forwardRef(({ nodeId, className, parentInfo, globalInfo, i
         
         if (currentIndex > 0) {
           const prevSiblingId = siblings[currentIndex - 1];
-          docsState.triggerFocus(globalInfo.docId, prevSiblingId, 'arrowNavigation');
+          docsState.triggerFocus(globalInfo.docId, prevSiblingId, 'arrowUp', { cursorPageX });
         }
       }
       return;
@@ -161,6 +177,11 @@ const NodeTextPlain = forwardRef(({ nodeId, className, parentInfo, globalInfo, i
     // Navigate to next sibling with Down arrow
     if (e.key === 'ArrowDown') {
       e.preventDefault();
+      
+      // Store current cursor horizontal position
+      const cursorPageX = getCursorPageX(textElRef.current);
+      lastCursorPageXRef.current = cursorPageX;
+      
       const currentNode = renderUtils.getNodeDataById(nodeId);
       const parentId = currentNode?.parentId;
       
@@ -171,7 +192,7 @@ const NodeTextPlain = forwardRef(({ nodeId, className, parentInfo, globalInfo, i
         
         if (currentIndex < siblings.length - 1) {
           const nextSiblingId = siblings[currentIndex + 1];
-          docsState.triggerFocus(globalInfo.docId, nextSiblingId, 'arrowNavigation');
+          docsState.triggerFocus(globalInfo.docId, nextSiblingId, 'arrowDown', { cursorPageX });
         }
       }
       return;
