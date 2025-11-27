@@ -16,7 +16,7 @@ const initMathJaxNoScan = () => {
     // this is not always desired.
   // sometimes the document is not fully loaded yet, when MathJax is ready
   */
-  console.log('🔍 Available MathJax startup methods:', Object.keys(window.MathJax.startup));
+  // console.log('🔍 Available MathJax startup methods:', Object.keys(window.MathJax.startup));
   // try manual initialization step by step with error handling
   console.log('🔧 Initializing MathJax manually without document scanning...');
   try {

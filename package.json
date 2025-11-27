@@ -1,7 +1,7 @@
 {
-  "name": "yamd",
+  "name": "YAMD",
   "version": "1.0.0",
-  "description": "YAML to Markdown-like document renderer for React",
+  "description": "A renderer/editor for markdown-like documents",
   "main": "src/index.js",
   "type": "module",
   "scripts": {

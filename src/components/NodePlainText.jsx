@@ -6,6 +6,7 @@ import {
   getCursorPosition, getCursorPageX, getClosestCursorPos,
   setCursorPosition, setCursorToEnd, setCursorToBeginning
 } from './TextUtils.js';
+import { getMoveUpTargetId, getMoveDownTargetId } from '@/core/EditUtils.js';
 
 /**
  * Plain text renderer with bullet positioning support
@@ -15,9 +16,9 @@ import {
 const NodeTextPlain = forwardRef(({ nodeId, className, parentInfo, globalInfo, isEditable = null}, ref) => {
   // Get render utils from context
   const renderUtils = useRenderUtilsContext();
+
   const contextIsEditable = renderUtils.isEditable;
-  
-  // If isEditable prop is not null, it overwrites the value from context
+    // If isEditable prop is not null, it overwrites the value from context
   const finalIsEditable = isEditable !== null ? isEditable : contextIsEditable;
   
   // Get node data from store via convenience method
@@ -41,9 +42,12 @@ const NodeTextPlain = forwardRef(({ nodeId, className, parentInfo, globalInfo, i
   // Expose calcBulletYPos method to parent via ref
   useImperativeHandle(ref, () => ({
     calcBulletYPos: (containerClassName) => {
+      console.log(`📍 NodePlainText ${nodeId} calcBulletYPos called for container: ${containerClassName}`);
+      
       // Calculate bullet position for plain text
       try {
         if (!textElRef.current) {
+          console.log(`❌ NodePlainText ${nodeId} textElRef not ready`);
           return { code: -1, message: 'Text element not found', data: null };
         }
         
@@ -51,21 +55,42 @@ const NodeTextPlain = forwardRef(({ nodeId, className, parentInfo, globalInfo, i
         const bulletContainer = textEl.closest(containerClassName);
         
         if (!bulletContainer) {
+          console.log(`❌ NodePlainText ${nodeId} bullet container not found: ${containerClassName}`);
           return { code: -1, message: `Plain text: bullet container ${containerClassName} not found`, data: null };
         }
         
-        const textRect = textEl.getBoundingClientRect();
         const containerRect = bulletContainer.getBoundingClientRect();
         
-        // Calculate relative Y position (center of first line)
+        // Use Range API to measure actual text content position, not the span element
+        const textNode = textEl.firstChild;
+        if (!textNode || textNode.nodeType !== Node.TEXT_NODE) {
+          // Fallback to span measurement if no text node
+          const textRect = textEl.getBoundingClientRect();
+          const relativeY = textRect.top - containerRect.top + (textRect.height * 0.55);
+          console.log(`⚠️ NodePlainText ${nodeId} using fallback (no text node): ${relativeY.toFixed(2)}px`);
+          return { code: 0, message: 'Success (fallback)', data: relativeY };
+        }
+        
+        // Create a range for the first character to measure actual text position
+        const range = document.createRange();
+        range.setStart(textNode, 0);
+        range.setEnd(textNode, Math.min(1, textNode.textContent?.length || 0));
+        
+        const textRect = range.getBoundingClientRect();
+        
+        // Calculate relative Y position (center of first line of actual text)
+        // The 0.55 factor positions bullet slightly above center for better visual alignment
         const relativeY = textRect.top - containerRect.top + (textRect.height * 0.55);
+        
+        console.log(`✅ NodePlainText ${nodeId} bullet position: ${relativeY.toFixed(2)}px (textHeight: ${textRect.height.toFixed(2)}px, offset: ${(textRect.top - containerRect.top).toFixed(2)}px)`);
         
         return { code: 0, message: 'Success (plain text)', data: relativeY };
       } catch (error) {
+        console.log(`❌ NodePlainText ${nodeId} positioning error:`, error);
         return { code: -1, message: `Plain text positioning error: ${error.message}`, data: null };
       }
     }
-  }), []);
+  }), [nodeId]);
   
   // Update DOM content when text prop changes externally (but not while user is editing)
   useEffect(() => {
@@ -95,18 +120,49 @@ const NodeTextPlain = forwardRef(({ nodeId, className, parentInfo, globalInfo, i
       // Moving down: search forward (start to end) to find first match
       const closestPos = getClosestCursorPos(textElRef.current, cursorPageX, 'forward');
       setCursorPosition(textElRef.current, closestPos);
+    } else if (type === 'arrowUpFromFirstChild' && cursorPageX !== undefined) {
+      // Coming from first child: position at end with smart horizontal positioning
+      const closestPos = getClosestCursorPos(textElRef.current, cursorPageX, 'backward');
+      setCursorPosition(textElRef.current, closestPos);
+    } else if (type === 'arrowDownFromLastChild' && cursorPageX !== undefined) {
+      // Coming from last child: position at beginning with smart horizontal positioning
+      const closestPos = getClosestCursorPos(textElRef.current, cursorPageX, 'forward');
+      setCursorPosition(textElRef.current, closestPos);
     } else if (type === 'prevSiblingDeleted') {
       setCursorToEnd(textElRef.current);
     } else if (type === 'selfCreated') {
       setCursorToBeginning(textElRef.current);
     } else if (type === 'mergedFromNext' && cursorPosition !== undefined) {
       setCursorPosition(textElRef.current, cursorPosition);
+    } else if (type === 'indented' || type === 'outdented') {
+      // Maintain current cursor position after indent/outdent
+      textElRef.current.focus();
     }
     
   }, [nodeState?.focus?.counter, nodeState?.focus?.type, nodeState?.focus?.cursorPosition, nodeState?.focus?.cursorPageX, nodeId]);
 
   // Handle key events
   const handleKeyDown = (e) => {
+    // Handle Tab - indent node under previous sibling
+    if (e.key === 'Tab' && !e.shiftKey) {
+      e.preventDefault();
+      const result = renderUtils.indentNode(nodeId);
+      if (result.code !== 0) {
+        console.log('⚠️ Indent failed:', result.message);
+      }
+      return;
+    }
+    
+    // Handle Shift+Tab - outdent node to parent's level
+    if (e.key === 'Tab' && e.shiftKey) {
+      e.preventDefault();
+      const result = renderUtils.outdentNode(nodeId);
+      if (result.code !== 0) {
+        console.log('⚠️ Outdent failed:', result.message);
+      }
+      return;
+    }
+    
     // Handle Backspace
     if (e.key === 'Backspace') {
       // Case 1: Empty text - delete node
@@ -150,7 +206,7 @@ const NodeTextPlain = forwardRef(({ nodeId, className, parentInfo, globalInfo, i
       return;
     }
     
-    // Navigate to previous sibling with Up arrow
+    // Navigate up with Up arrow
     if (e.key === 'ArrowUp') {
       e.preventDefault();
       
@@ -158,23 +214,19 @@ const NodeTextPlain = forwardRef(({ nodeId, className, parentInfo, globalInfo, i
       const cursorPageX = getCursorPageX(textElRef.current);
       lastCursorPageXRef.current = cursorPageX;
       
-      const currentNode = renderUtils.getNodeDataById(nodeId);
-      const parentId = currentNode?.parentId;
-      
-      if (parentId) {
-        const parentNode = renderUtils.getNodeDataById(parentId);
-        const siblings = parentNode?.children || [];
-        const currentIndex = siblings.indexOf(nodeId);
+      const targetId = getMoveUpTargetId(nodeId, renderUtils.getNodeDataById);
+      if (targetId) {
+        // Determine focus type based on whether target is parent
+        const currentNode = renderUtils.getNodeDataById(nodeId);
+        const isMovingToParent = targetId === currentNode?.parentId;
+        const focusType = isMovingToParent ? 'arrowUpFromFirstChild' : 'arrowUp';
         
-        if (currentIndex > 0) {
-          const prevSiblingId = siblings[currentIndex - 1];
-          docsState.triggerFocus(globalInfo.docId, prevSiblingId, 'arrowUp', { cursorPageX });
-        }
+        docsState.triggerFocus(globalInfo.docId, targetId, focusType, { cursorPageX });
       }
       return;
     }
     
-    // Navigate to next sibling with Down arrow
+    // Navigate down with Down arrow
     if (e.key === 'ArrowDown') {
       e.preventDefault();
       
@@ -182,18 +234,9 @@ const NodeTextPlain = forwardRef(({ nodeId, className, parentInfo, globalInfo, i
       const cursorPageX = getCursorPageX(textElRef.current);
       lastCursorPageXRef.current = cursorPageX;
       
-      const currentNode = renderUtils.getNodeDataById(nodeId);
-      const parentId = currentNode?.parentId;
-      
-      if (parentId) {
-        const parentNode = renderUtils.getNodeDataById(parentId);
-        const siblings = parentNode?.children || [];
-        const currentIndex = siblings.indexOf(nodeId);
-        
-        if (currentIndex < siblings.length - 1) {
-          const nextSiblingId = siblings[currentIndex + 1];
-          docsState.triggerFocus(globalInfo.docId, nextSiblingId, 'arrowDown', { cursorPageX });
-        }
+      const targetId = getMoveDownTargetId(nodeId, renderUtils.getNodeDataById);
+      if (targetId) {
+        docsState.triggerFocus(globalInfo.docId, targetId, 'arrowDown', { cursorPageX });
       }
       return;
     }
@@ -292,7 +335,7 @@ const NodeTextPlain = forwardRef(({ nodeId, className, parentInfo, globalInfo, i
         minHeight: '1.2em', // Always visible
         outline: 'none',
         cursor: 'text',
-        padding: '2px 4px',
+        padding: '0px 0px',
         borderRadius: '2px',
         transition: 'background-color 0.2s, border 0.2s',
         userSelect: 'text',

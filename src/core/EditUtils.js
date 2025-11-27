@@ -277,6 +277,100 @@ export function deleteNode(nodeId, docData) {
 }
 
 /**
+ * Get the target node ID when moving up with arrow key
+ * Returns the deepest last descendant of the previous sibling, or parent if first child
+ * 
+ * @param {string} nodeId - ID of the current node
+ * @param {function} getNodeDataById - Function to get node data by ID
+ * @returns {string|null} - Target node ID or null if no target
+ */
+export function getMoveUpTargetId(nodeId, getNodeDataById) {
+  const currentNode = getNodeDataById(nodeId);
+  const parentId = currentNode?.parentId;
+  
+  if (!parentId) return null; // Root node
+  
+  const parentNode = getNodeDataById(parentId);
+  const siblings = parentNode?.children || [];
+  const currentIndex = siblings.indexOf(nodeId);
+  
+  if (currentIndex > 0) {
+    // Navigate to previous sibling's deepest last descendant
+    let targetId = siblings[currentIndex - 1];
+    
+    // Keep going to last child until we find a node without children
+    while (true) {
+      const targetNode = getNodeDataById(targetId);
+      if (targetNode?.children && targetNode.children.length > 0) {
+        // Has children - go to last child
+        targetId = targetNode.children[targetNode.children.length - 1];
+      } else {
+        // No children - this is our target
+        break;
+      }
+    }
+    
+    return targetId;
+  } else {
+    // First child - navigate to parent
+    return parentId;
+  }
+}
+
+/**
+ * Get the target node ID when moving down with arrow key
+ * Priority: 1) First child, 2) Next sibling, 3) Next ancestor's sibling
+ * 
+ * @param {string} nodeId - ID of the current node
+ * @param {function} getNodeDataById - Function to get node data by ID
+ * @returns {string|null} - Target node ID or null if no target
+ */
+export function getMoveDownTargetId(nodeId, getNodeDataById) {
+  const currentNode = getNodeDataById(nodeId);
+  
+  // Priority 1: If current node has children, go to first child
+  if (currentNode?.children && currentNode.children.length > 0) {
+    return currentNode.children[0];
+  }
+  
+  // Priority 2: Try to find next sibling
+  const parentId = currentNode?.parentId;
+  if (!parentId) return null; // Root node with no children
+  
+  const parentNode = getNodeDataById(parentId);
+  const siblings = parentNode?.children || [];
+  const currentIndex = siblings.indexOf(nodeId);
+  
+  if (currentIndex < siblings.length - 1) {
+    // Has next sibling
+    return siblings[currentIndex + 1];
+  }
+  
+  // Priority 3: Last child - find next ancestor's sibling
+  let ancestorId = parentId;
+  while (ancestorId) {
+    const ancestor = getNodeDataById(ancestorId);
+    const grandparentId = ancestor?.parentId;
+    
+    if (!grandparentId) break; // Reached root
+    
+    const grandparent = getNodeDataById(grandparentId);
+    const ancestorSiblings = grandparent?.children || [];
+    const ancestorIndex = ancestorSiblings.indexOf(ancestorId);
+    
+    if (ancestorIndex < ancestorSiblings.length - 1) {
+      // Found an ancestor with a next sibling
+      return ancestorSiblings[ancestorIndex + 1];
+    }
+    
+    // Move up to next ancestor
+    ancestorId = grandparentId;
+  }
+  
+  return null; // No target found
+}
+
+/**
  * Get information about a node's position and possible edit operations
  * 
  * @param {string} nodeId - ID of the node to analyze

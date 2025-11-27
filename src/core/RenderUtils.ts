@@ -44,6 +44,8 @@ export interface RenderUtilsContextValue {
   splitToNextSibling: (nodeId: string, splitPosition: number) => { code: number; message: string; data: { newNodeId: string; leftText: string; rightText: string } | null };
   mergeWithPrevSibling: (nodeId: string) => { code: number; message: string; data: { prevSiblingId: string; cursorPosition: number } | null };
   deleteNode: (nodeId: string) => { code: number; message: string; data: { previousSiblingId: string | null } | null };
+  indentNode: (nodeId: string) => { code: number; message: string; data: { prevSiblingId: string } | null };
+  outdentNode: (nodeId: string) => { code: number; message: string; data: { grandparentId: string; nextSiblings: string[] } | null };
   
   // Configuration
   BULLET_DIMENSIONS: typeof BULLET_DIMENSIONS;
@@ -579,6 +581,246 @@ export const createRenderUtilsContextValue = ({
         code: 0, 
         message: `Node ${nodeId} deleted successfully`,
         data: { previousSiblingId }
+      };
+    },
+    
+    /**
+     * Indent a node by making it a child of its previous sibling
+     * @param {string} nodeId - The ID of the node to indent
+     * @returns {object} - Result object with code, message, and data
+     */
+    indentNode: (nodeId: string) => {
+      console.log(`🔄 Indent operation started for node: ${nodeId}`);
+      if (!docId) return { code: -1, message: 'No docId available', data: null };
+      
+      const nodeAtom = docsData.getNodeData(docId, nodeId);
+      const currentNode = docsData.getAtomValue(nodeAtom) as any;
+      
+      if (!currentNode) {
+        return { code: -1, message: `Node ${nodeId} not found`, data: null };
+      }
+      
+      const parentId = currentNode.parentId;
+      if (!parentId) {
+        return { code: -1, message: 'Cannot indent root node', data: null };
+      }
+      
+      // Get parent's children to find previous sibling
+      const parentNodeAtom = docsData.getNodeData(docId, parentId);
+      const parentNode = docsData.getAtomValue(parentNodeAtom) as any;
+      const siblings = parentNode?.children || [];
+      const currentIndex = siblings.indexOf(nodeId);
+      
+      if (currentIndex <= 0) {
+        return { code: -1, message: 'No previous sibling to indent under', data: null };
+      }
+      
+      const prevSiblingId = siblings[currentIndex - 1];
+      const prevSiblingAtom = docsData.getNodeData(docId, prevSiblingId);
+      const prevSibling = docsData.getAtomValue(prevSiblingAtom) as any;
+      
+      console.log(`🔄 Indenting ${nodeId} under previous sibling ${prevSiblingId}`);
+      
+      // Check if previous sibling is a text node
+      if (prevSibling?.type !== 'text') {
+        return { code: -1, message: 'Previous sibling is not a text node', data: null };
+      }
+      
+      // Get the node's children before moving it
+      const nodeChildren = currentNode.children || [];
+      
+      // Remove node from current parent's children
+      docsData.setAtom(parentNodeAtom, (prev: any) =>
+        immer(prev, (draft: any) => {
+          if (draft && draft.children) {
+            const idx = draft.children.indexOf(nodeId);
+            if (idx !== -1) {
+              draft.children.splice(idx, 1);
+            }
+          }
+        })
+      );
+      
+      // Update parentId for all of the node's children (they become siblings of the indented node)
+      nodeChildren.forEach((childId: string) => {
+        const childAtom = docsData.getNodeData(docId, childId);
+        docsData.setAtom(childAtom, (prev: any) =>
+          immer(prev, (draft: any) => {
+            if (draft) {
+              draft.parentId = prevSiblingId; // Same parent as the indented node
+            }
+          })
+        );
+      });
+      
+      // Update node's parentId and clear its children
+      docsData.setAtom(nodeAtom, (prev: any) =>
+        immer(prev, (draft: any) => {
+          if (draft) {
+            draft.parentId = prevSiblingId;
+            draft.children = []; // Clear children since they're now siblings
+          }
+        })
+      );
+      
+      // Add node and its children to previous sibling's children
+      docsData.setAtom(prevSiblingAtom, (prev: any) =>
+        immer(prev, (draft: any) => {
+          if (draft) {
+            if (!draft.children) {
+              draft.children = [];
+            }
+            // Add the indented node first, then its former children
+            draft.children.push(nodeId, ...nodeChildren);
+            
+            // Set default childDisplay to 'ul' if not already set
+            if (!draft.attr) {
+              draft.attr = {};
+            }
+            if (!draft.attr.childDisplay) {
+              draft.attr.childDisplay = 'ul';
+            }
+          }
+        })
+      );
+      
+      console.log(`✅ Indent operation completed for ${nodeId}, now child of ${prevSiblingId}${nodeChildren.length > 0 ? `, unwrapped ${nodeChildren.length} children` : ''}`);
+      
+      // Restore focus to the indented node
+      docsState.triggerFocus(docId, nodeId, 'indented');
+      
+      // Trigger bullet position recalculation for the indented node
+      // Use setTimeout to ensure DOM has updated before recalculating
+      setTimeout(() => {
+        if (docStore) {
+          const store = docStore.getState();
+          // Check if there are any bullet positioning requests for this node
+          const requests = store.getBulletYPosReqs?.(docId, nodeId);
+          if (requests && Object.keys(requests).length > 0) {
+            // Increment request counter for each container to trigger recalculation
+            Object.keys(requests).forEach(containerClassName => {
+              store.incReqCounter(docId, nodeId, containerClassName);
+            });
+            console.log(`🔄 Triggered bullet recalculation for ${nodeId}`);
+          }
+        }
+      }, 0);
+      
+      return {
+        code: 0,
+        message: `Node ${nodeId} indented under ${prevSiblingId}`,
+        data: { prevSiblingId }
+      };
+    },
+    
+    /**
+     * Outdent a node by making it a sibling of its parent
+     * @param {string} nodeId - The ID of the node to outdent
+     * @returns {object} - Result object with code, message, and data
+     */
+    outdentNode: (nodeId: string) => {
+      console.log(`🔄 Outdent operation started for node: ${nodeId}`);
+      if (!docId) return { code: -1, message: 'No docId available', data: null };
+      
+      const nodeAtom = docsData.getNodeData(docId, nodeId);
+      const currentNode = docsData.getAtomValue(nodeAtom) as any;
+      
+      if (!currentNode) {
+        return { code: -1, message: `Node ${nodeId} not found`, data: null };
+      }
+      
+      const parentId = currentNode.parentId;
+      if (!parentId) {
+        return { code: -1, message: 'Cannot outdent node without parent', data: null };
+      }
+      
+      // Get parent node
+      const parentNodeAtom = docsData.getNodeData(docId, parentId);
+      const parentNode = docsData.getAtomValue(parentNodeAtom) as any;
+      
+      const grandparentId = parentNode?.parentId;
+      if (!grandparentId) {
+        return { code: -1, message: 'Cannot outdent node without grandparent', data: null };
+      }
+      
+      console.log(`🔄 Outdenting ${nodeId} from parent ${parentId} to grandparent ${grandparentId}`);
+      
+      // Get current position in parent's children
+      const siblings = parentNode?.children || [];
+      const currentIndex = siblings.indexOf(nodeId);
+      
+      // Get all next siblings (after current node)
+      const nextSiblings = siblings.slice(currentIndex + 1);
+      
+      // Remove node and next siblings from parent's children
+      docsData.setAtom(parentNodeAtom, (prev: any) =>
+        immer(prev, (draft: any) => {
+          if (draft && draft.children) {
+            // Keep only previous siblings (before current node)
+            draft.children = draft.children.slice(0, currentIndex);
+          }
+        })
+      );
+      
+      // Update parentId for all next siblings (they become children of the outdented node)
+      nextSiblings.forEach((siblingId: string) => {
+        const siblingAtom = docsData.getNodeData(docId, siblingId);
+        docsData.setAtom(siblingAtom, (prev: any) =>
+          immer(prev, (draft: any) => {
+            if (draft) {
+              draft.parentId = nodeId;
+            }
+          })
+        );
+      });
+      
+      // Update node's parentId and add next siblings as its children
+      docsData.setAtom(nodeAtom, (prev: any) =>
+        immer(prev, (draft: any) => {
+          if (draft) {
+            draft.parentId = grandparentId;
+            // Add next siblings to the end of children array
+            draft.children = [...(draft.children || []), ...nextSiblings];
+            
+            // Set default childDisplay to 'ul' if has children and not already set
+            if (draft.children.length > 0) {
+              if (!draft.attr) {
+                draft.attr = {};
+              }
+              if (!draft.attr.childDisplay) {
+                draft.attr.childDisplay = 'ul';
+              }
+            }
+          }
+        })
+      );
+      
+      // Add node to grandparent's children (after parent)
+      const grandparentNodeAtom = docsData.getNodeData(docId, grandparentId);
+      docsData.setAtom(grandparentNodeAtom, (prev: any) =>
+        immer(prev, (draft: any) => {
+          if (draft && draft.children) {
+            const parentIndex = draft.children.indexOf(parentId);
+            if (parentIndex !== -1) {
+              // Insert after parent
+              draft.children.splice(parentIndex + 1, 0, nodeId);
+            } else {
+              // Fallback: add at end
+              draft.children.push(nodeId);
+            }
+          }
+        })
+      );
+      
+      console.log(`✅ Outdent operation completed for ${nodeId}, now child of ${grandparentId}${nextSiblings.length > 0 ? `, adopted ${nextSiblings.length} next siblings` : ''}`);
+      
+      // Restore focus to the outdented node
+      docsState.triggerFocus(docId, nodeId, 'outdented');
+      
+      return {
+        code: 0,
+        message: `Node ${nodeId} outdented to ${grandparentId}`,
+        data: { grandparentId, nextSiblings }
       };
     },
     

@@ -150,6 +150,7 @@ export const AddListBulletBeforeNode = React.memo(({ childNode, alignBullet = 'c
   const hasResult = result?.code === 0;
   const finalPreferredYPos = hasResult ? result.data : LIST_SETTINGS.bullet_y_pos_default;
 
+
   // Always use positioned rendering - simplified single branch
   const bulletEl = renderListBullet({parentInfo});
   
