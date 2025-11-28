@@ -115,7 +115,7 @@ export const loadMathJax = () => {
   
   // Get current state from Zustand store
   const store = useMathJaxStore.getState();
-  store.logMathJaxState();
+  // store.logMathJaxState();
   
   if (store.isMathJaxReady) {
     console.log("✅ MathJax already ready according to store");

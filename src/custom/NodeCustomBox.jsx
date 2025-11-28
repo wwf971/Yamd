@@ -13,7 +13,7 @@ import './NodeCustomBox.css';
  * @param {object} parentInfo - Parent context information
  * @param {object} globalInfo - Global context with helper methods
  */
-const NodeCustomBox = forwardRef(({ nodeId, nodeData, parentInfo, globalInfo }, ref) => {
+const NodeCustomBox = forwardRef(({ nodeId, nodeData, nodeState, parentInfo, globalInfo }, ref) => {
   const boxRef = useRef(null);
   const headerRef = useRef(null);
   

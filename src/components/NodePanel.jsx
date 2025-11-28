@@ -1,8 +1,8 @@
-import React, { useState, useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
+import React, { useState, useRef, useEffect, useLayoutEffect, forwardRef, useImperativeHandle } from 'react';
 import { getNodeClass } from '@/core/YamdNode.jsx';
 import { useRenderUtilsContext } from '@/core/RenderUtils.ts';
-// Store is now accessed via RenderUtils context
 import { createBulletEqualityFn } from '@/core/RenderUtils.ts';
+import { docsBulletState, nodeBulletState } from '@/core/DocStore.js';
 
 /**
  * Panel node renderer - displays collapsible panel with show/hide functionality
@@ -34,29 +34,43 @@ const NodePanel = forwardRef(({ nodeId, parentInfo, globalInfo }, ref) => {
     }
   }), [nodeId, docId, docStore]);
 
-  // ===== ZUSTAND LOGIC =====
+  // ===== JOTAI LOGIC =====
+  // Subscribe to request counters (only changes when reqCounter changes)
+  const reqCounters = docsBulletState.useReqCounters(docId, nodeId);
   
-  // Subscribe to request counter changes with custom equality function
-  useEffect(() => {
-    if (!nodeId || !docId || !docStore) return;
-    console.log('NodePanel noteId:', nodeId, 'useEffect subscribe');
-    const unsubscribe = docStore.subscribe(
-      (state) => state.bulletYPosReq[docId]?.[nodeId] || {},
-      (requests) => {
-        console.log('noteId:', nodeId, 'NodePanel useEffect subscribe triggered with requests:', requests);
-        // This will only fire if equalityFn returns false
-        calcBulletYPos(nodeId, docId, nodeRef, buttonRef, docStore);
-      },
-      {
-        equalityFn: createBulletEqualityFn(nodeId, 'NodePanel'),
-      }
-    );
+  // Track previous reqCounters to detect changes
+  // Key by docId to handle document reloads
+  const prevReqCountersRef = useRef({});
+  const lastDocIdRef = useRef(docId);
+  
+  // Reset ref when docId changes (document reload)
+  if (lastDocIdRef.current !== docId) {
+    prevReqCountersRef.current = {};
+    lastDocIdRef.current = docId;
+  }
+  
+  // Trigger calculation when reqCounters change
+  // Use useLayoutEffect to calculate BEFORE paint, preventing flash of wrong position
+  useLayoutEffect(() => {
+    if (!nodeId || !docId) return;
     
-    // Immediately check for existing requests
-    calcBulletYPos(nodeId, docId, nodeRef, buttonRef, docStore);
-    return unsubscribe;
-  }, [nodeId, docId, docStore]);
-  // ===== END ZUSTAND LOGIC =====
+    let shouldCalculate = false;
+    Object.keys(reqCounters).forEach(containerClassName => {
+      const currentReqCounter = reqCounters[containerClassName] || 0;
+      const prevReqCounter = prevReqCountersRef.current[containerClassName] || 0;
+      
+      if (currentReqCounter > prevReqCounter) {
+        shouldCalculate = true;
+        prevReqCountersRef.current[containerClassName] = currentReqCounter;
+      }
+    });
+    
+    if (shouldCalculate) {
+      console.log('NodePanel noteId:', nodeId, 'reqCounter increased');
+      calcBulletYPos(nodeId, docId, nodeRef, buttonRef, docStore);
+    }
+  }, [nodeId, docId, reqCounters, docStore]);
+  // ===== END JOTAI LOGIC =====
 
   // Subscribe to node data changes (especially children array changes)
   const nodeData = renderUtils.useNodeData(nodeId);
@@ -136,9 +150,8 @@ const NodePanel = forwardRef(({ nodeId, parentInfo, globalInfo }, ref) => {
 const calcBulletYPos = (nodeId, docId, nodeRef, buttonRef, docStore) => {
   if (!nodeRef.current || !buttonRef.current) return;
   
-  const store = docStore.getState();
-  // Get all requests for this node
-  const requests = store.getBulletYPosReqs(docId, nodeId);
+  // Get all requests for this node using Jotai
+  const requests = nodeBulletState.getAllBulletYPosReqs(docId, nodeId);
   console.log('noteId:', nodeId, 'NodePanel calcBulletYPos requests:', requests);
   
   // Update result for each requesting container
@@ -150,8 +163,7 @@ const calcBulletYPos = (nodeId, docId, nodeRef, buttonRef, docStore) => {
       
       if (!bulletContainer) {
         const result = { code: -1, message: `Panel: bullet container ${containerClassName} not found`, data: null };
-        store.updateReqResult(docId, nodeId, containerClassName, result);
-        store.incRespCounter(docId, nodeId, containerClassName);
+        nodeBulletState.updateBulletYPosResult(docId, nodeId, containerClassName, result);
         return;
       }
       
@@ -163,14 +175,11 @@ const calcBulletYPos = (nodeId, docId, nodeRef, buttonRef, docStore) => {
       
       const result = { code: 0, message: 'Panel button position', data: preferredYPos };
       
-      // Update result in the Zustand store
-      store.updateReqResult(docId, nodeId, containerClassName, result);
-      // Increment response counter in store
-      store.incRespCounter(docId, nodeId, containerClassName);
+      // Update result using Jotai
+      nodeBulletState.updateBulletYPosResult(docId, nodeId, containerClassName, result);
     } catch (error) {
       const result = { code: -1, message: `Panel positioning error: ${error.message}`, data: null };
-      store.updateReqResult(docId, nodeId, containerClassName, result);
-      store.incRespCounter(docId, nodeId, containerClassName);
+      nodeBulletState.updateBulletYPosResult(docId, nodeId, containerClassName, result);
     }
   });
 };

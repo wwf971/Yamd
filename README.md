@@ -3,4 +3,4 @@ This tool intentionally omits the process of parsing from raw text to markdown, 
 
 ### Design focus:
 - Support for infinitely nested lists (inspired by the design ideas of [RemNote](https://www.remnote.com/))
-- Allowing custom React.js components which manage their own data and render logic
+- Allowing custom React.js components that manage their own data and render logic

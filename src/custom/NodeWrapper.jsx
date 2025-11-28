@@ -1,5 +1,6 @@
-import React, { useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
+import React, { useRef, useEffect, useLayoutEffect, forwardRef, useImperativeHandle } from 'react';
 import { useRenderUtilsContext, createBulletEqualityFn } from '@/core/RenderUtils.ts';
+import { docsState, docsBulletState, nodeBulletState } from '@/core/DocStore.js';
 
 /**
  * YamdCustomNodeWrapper - Wrapper component for custom user nodes
@@ -16,6 +17,7 @@ import { useRenderUtilsContext, createBulletEqualityFn } from '@/core/RenderUtil
  * Props the custom component will receive:
  * - nodeId: string - The node ID
  * - nodeData: object - The node data from renderUtils.getNodeDataById(nodeId)
+ * - nodeState: object - The node state from docsState (focus, etc.)
  * - parentInfo: object - Parent context information
  * - globalInfo: object - Global info with utility functions
  * 
@@ -27,6 +29,13 @@ import { useRenderUtilsContext, createBulletEqualityFn } from '@/core/RenderUtil
 const YamdCustomNodeWrapper = forwardRef(({ nodeId, parentInfo, globalInfo, CustomComponent }, ref) => {
   const customNodeRef = useRef(null);
   
+  // Get render utils from context
+  const renderUtils = useRenderUtilsContext();
+  
+  // Subscribe to node state (focus, etc.) from Jotai
+  const docId = globalInfo?.docId;
+  const nodeState = renderUtils.useNodeState ? renderUtils.useNodeState(nodeId) : {};
+  
   // Expose calcBulletYPos to parent via ref
   useImperativeHandle(ref, () => ({
     calcBulletYPos: () => {
@@ -35,39 +44,48 @@ const YamdCustomNodeWrapper = forwardRef(({ nodeId, parentInfo, globalInfo, Cust
     }
   }), [nodeId, globalInfo]);
 
-  // ===== ZUSTAND LOGIC =====
-  const docId = globalInfo?.docId;
+  // ===== JOTAI LOGIC =====
+  // Subscribe to request counters (only changes when reqCounter changes)
+  const reqCounters = docsBulletState.useReqCounters(docId, nodeId);
   
-  // Subscribe to request counter changes with custom equality function
-  useEffect(() => {
+  // Track previous reqCounters to detect changes
+  // Key by docId to handle document reloads
+  const prevReqCountersRef = useRef({});
+  const lastDocIdRef = useRef(docId);
+  
+  // Reset ref when docId changes (document reload)
+  if (lastDocIdRef.current !== docId) {
+    prevReqCountersRef.current = {};
+    lastDocIdRef.current = docId;
+  }
+  
+  // Trigger calculation when reqCounters change
+  // Use useLayoutEffect to calculate BEFORE paint, preventing flash of wrong position
+  useLayoutEffect(() => {
     if (!nodeId || !docId) {
-      console.warn('nodeId:', nodeId, 'docId:', docId, 'YamdCustomNodeWrapper useEffect subscribe skipped');
+      console.warn('nodeId:', nodeId, 'docId:', docId, 'YamdCustomNodeWrapper useLayoutEffect subscribe skipped');
       return;
     }
-    console.log('nodeId:', nodeId, 'docId:', docId, 'YamdCustomNodeWrapper useEffect subscribe');
-    const unsubscribe = globalInfo.getDocStore().subscribe(
-      (state) => state.bulletYPosReq[docId]?.[nodeId] || {},
-      (requests) => {
-        console.log('nodeId:', nodeId, 'YamdCustomNodeWrapper useEffect subscribe triggered with requests:', requests);
-        // This will only fire if equalityFn returns false
-        calcBulletYPos(nodeId, docId, customNodeRef, globalInfo);
-      },
-      {
-        equalityFn: createBulletEqualityFn(nodeId, 'YamdCustomNodeWrapper'),
+    
+    let shouldCalculate = false;
+    Object.keys(reqCounters).forEach(containerClassName => {
+      const currentReqCounter = reqCounters[containerClassName] || 0;
+      const prevReqCounter = prevReqCountersRef.current[containerClassName] || 0;
+      
+      if (currentReqCounter > prevReqCounter) {
+        shouldCalculate = true;
+        prevReqCountersRef.current[containerClassName] = currentReqCounter;
       }
-    );
+    });
     
-    // Immediately check for existing requests
-    // React guarantees child effects run before parent effects,
-    // so CustomComponent's useImperativeHandle has already executed
-    calcBulletYPos(nodeId, docId, customNodeRef, globalInfo);
-    
-    return unsubscribe;
-  }, [nodeId, docId, globalInfo]);
-  // ===== END ZUSTAND LOGIC =====
-
-  // Get render utils from context
-  const renderUtils = useRenderUtilsContext();
+    if (shouldCalculate) {
+      console.log('nodeId:', nodeId, 'docId:', docId, 'YamdCustomNodeWrapper reqCounter increased');
+      // React guarantees child effects run before parent effects,
+      // so CustomComponent's useImperativeHandle has already executed
+      calcBulletYPos(nodeId, docId, customNodeRef, globalInfo);
+    }
+  }, [nodeId, docId, reqCounters, globalInfo]);
+  // ===== END JOTAI LOGIC =====
 
   const nodeData = renderUtils.getNodeDataById(nodeId);
   
@@ -85,6 +103,7 @@ const YamdCustomNodeWrapper = forwardRef(({ nodeId, parentInfo, globalInfo, Cust
       ref={customNodeRef}
       nodeId={nodeId}
       nodeData={nodeData}
+      nodeState={nodeState}
       parentInfo={parentInfo}
       globalInfo={globalInfo}
     />
@@ -111,9 +130,8 @@ const calcBulletYPos = (nodeId, docId, customNodeRef, globalInfo) => {
     return;
   }
 
-  const store = globalInfo.getDocStore().getState();
-  // Get all requests for this node
-  const requests = store.getBulletYPosReqs(docId, nodeId);
+  // Get all requests for this node using Jotai
+  const requests = nodeBulletState.getAllBulletYPosReqs(docId, nodeId);
   console.log('nodeId:', nodeId, 'YamdCustomNodeWrapper calcBulletYPos requests:', requests);
   
   // If no requests, nothing to do
@@ -136,15 +154,12 @@ const calcBulletYPos = (nodeId, docId, customNodeRef, globalInfo) => {
           message: 'Custom component returned invalid result format', 
           data: null 
         };
-        store.updateReqResult(docId, nodeId, containerClassName, errorResult);
-        store.incRespCounter(docId, nodeId, containerClassName);
+        nodeBulletState.updateBulletYPosResult(docId, nodeId, containerClassName, errorResult);
         return;
       }
       
-      // Update result in the Zustand store
-      store.updateReqResult(docId, nodeId, containerClassName, result);
-      // Increment response counter in store
-      store.incRespCounter(docId, nodeId, containerClassName);
+      // Update result in Jotai (automatically increments response counter)
+      nodeBulletState.updateBulletYPosResult(docId, nodeId, containerClassName, result);
       
       console.log('nodeId:', nodeId, 'YamdCustomNodeWrapper successfully processed result:', result);
     } catch (error) {
@@ -154,8 +169,7 @@ const calcBulletYPos = (nodeId, docId, customNodeRef, globalInfo) => {
         message: `Custom component error: ${error.message}`, 
         data: null 
       };
-      store.updateReqResult(docId, nodeId, containerClassName, errorResult);
-      store.incRespCounter(docId, nodeId, containerClassName);
+      nodeBulletState.updateBulletYPosResult(docId, nodeId, containerClassName, errorResult);
     }
   });
 };

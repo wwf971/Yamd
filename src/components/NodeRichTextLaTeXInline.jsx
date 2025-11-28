@@ -9,7 +9,7 @@ const NodeTextRichLaTeXInline = ({ segment, globalInfo }) => {
   // Get render utils from context
   const renderUtils = useRenderUtilsContext();
   
-  if (segment.type !== 'latex_inline' || !segment.assetId) {
+  if (segment.selfDisplay !== 'latex_inline' || !segment.assetId) {
     // Not a LaTeX segment, should not be handled by this component
     return (
       <span className="yamd-text-segment yamd-error">

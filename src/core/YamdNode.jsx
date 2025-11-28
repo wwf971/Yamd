@@ -40,7 +40,7 @@ const YamdNode = React.memo(({ nodeId, parentInfo = null, globalInfo = null }) =
   const selfDisplay = nodeData.attr?.selfDisplay || 
     (nodeData.textRaw !== undefined ? 'default' : 'default');
   const childDisplay = renderUtils.getChildDisplay(nodeData, false, parentInfo);
-  console.log('YamdNode rendering node:', nodeId, 'nodeData.type:', nodeData.type, 'selfDisplay:', selfDisplay, 'childDisplay:', childDisplay);
+  // console.log('YamdNode rendering node:', nodeId, 'nodeData.type:', nodeData.type, 'selfDisplay:', selfDisplay, 'childDisplay:', childDisplay);
   const getNodeContent = () => {
     // Handle special leaf node types first
     if (nodeData.type === 'latex') {

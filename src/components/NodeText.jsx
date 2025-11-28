@@ -1,9 +1,10 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useLayoutEffect, useState } from 'react';
 import { getNodeClass } from '@/core/YamdNode.jsx';
 import { useRenderUtilsContext } from '@/core/RenderUtils.ts';
 import NodeTextRich from './NodeRichText.jsx';
 import NodeTextPlain from './NodePlainText.jsx';
 import { createBulletEqualityFn } from '@/core/RenderUtils.ts';
+import { docsBulletState, nodeBulletState } from '@/core/DocStore.js';
 
 /**
  * render a text node, and then render its children nodes.
@@ -24,31 +25,44 @@ const YamdNodeText = React.memo(({ nodeId, parentInfo, globalInfo }) => {
   // ref to access NodeTextRich or NodeTextPlain methods
   const textContentRef = useRef(null);
   
-  // ===== ZUSTAND LOGIC =====
+  // ===== JOTAI LOGIC =====
   // get docId from globalInfo or use default
   const docId = globalInfo?.docId
 
-  // console.log('noteId:', nodeId, 'YamdNodeText docId:', docId);
-  // Subscribe to request counter changes with custom equality function
-  // Subscribe to bullet positioning requests from Zustand store
-  useEffect(() => {
+  // Subscribe to request counters (only changes when reqCounter changes)
+  const reqCounters = docsBulletState.useReqCounters(docId, nodeId);
+  
+  // Track previous reqCounters to detect changes
+  // Key by docId to handle document reloads
+  const prevReqCountersRef = useRef({});
+  const lastDocIdRef = useRef(docId);
+  
+  // Reset ref when docId changes (document reload)
+  if (lastDocIdRef.current !== docId) {
+    prevReqCountersRef.current = {};
+    lastDocIdRef.current = docId;
+  }
+  
+  // Trigger calculation when reqCounters change
+  // Use useLayoutEffect to calculate BEFORE paint
+  useLayoutEffect(() => {
     if (!nodeId || !docId) return;
     
-    const unsubscribe = globalInfo.getDocStore().subscribe(
-      (state) => state.bulletYPosReq[docId]?.[nodeId] || {},
-      (requests) => {
-        calcBulletYPos(nodeId, docId, nodeRef, textContentRef, globalInfo);
-      },
-      {
-        equalityFn: createBulletEqualityFn(nodeId, 'YamdNodeText'),
+    let shouldCalculate = false;
+    Object.keys(reqCounters).forEach(containerClassName => {
+      const currentReqCounter = reqCounters[containerClassName] || 0;
+      const prevReqCounter = prevReqCountersRef.current[containerClassName] || 0;
+      
+      if (currentReqCounter > prevReqCounter) {
+        shouldCalculate = true;
+        prevReqCountersRef.current[containerClassName] = currentReqCounter;
       }
-    );
+    });
     
-    // Calculate initial bullet positions
-    calcBulletYPos(nodeId, docId, nodeRef, textContentRef, globalInfo);
-    
-    return unsubscribe;
-  }, [nodeId, docId, globalInfo]);
+    if (shouldCalculate) {
+      calcBulletYPos(nodeId, docId, nodeRef, textContentRef, globalInfo);
+    }
+  }, [nodeId, docId, reqCounters, globalInfo]);
 
   // Subscribe to node data changes (especially children array changes)
   const nodeData = renderUtils.useNodeData(nodeId);
@@ -59,11 +73,11 @@ const YamdNodeText = React.memo(({ nodeId, parentInfo, globalInfo }) => {
 
   // Use ?? instead of || to handle empty strings correctly
   const selfText = nodeData.textRaw ?? nodeData.textOriginal ?? '';
-  const textRich = nodeData.textRich; // Rich text segments if LaTeX was processed
+  const segments = nodeData.segments; // Array of segment node IDs
   
-  // Determine if this is plain text (no textRich, or textRich with only one text segment)
-  const isPlainText = !textRich || 
-    (Array.isArray(textRich) && textRich.length === 1 && textRich[0].type === 'text');
+  // Determine if this is plain text (no segments, or only one text segment)
+  const isPlainText = !segments || segments.length === 0 || 
+    (segments.length === 1 && renderUtils.getNodeDataById(segments[0])?.selfDisplay === 'text');
   
   const childDisplay = renderUtils.getChildDisplay(nodeData, false, parentInfo);
   const childClass = nodeData.attr?.childClass;
@@ -91,8 +105,7 @@ const YamdNodeText = React.memo(({ nodeId, parentInfo, globalInfo }) => {
       {hasTextContent && !isPlainText && (
         <NodeTextRich 
           ref={textContentRef}
-          text={selfText}
-          textRich={textRich}
+          nodeId={nodeId}
           className={nodeClass}
           parentInfo={parentInfo}
           globalInfo={globalInfo}
@@ -125,14 +138,12 @@ const calcBulletYPos = (nodeId, docId, nodeRef, textContentRef, globalInfo) => {
     return;
   }
 
-  const store = globalInfo.getDocStore().getState();
-  const requests = store.getBulletYPosReqs(docId, nodeId);
+  const requests = nodeBulletState.getAllBulletYPosReqs(docId, nodeId);
   
   // Update result for each requesting container
   Object.keys(requests).forEach(containerClassName => {
     const result = textContentRef.current.calcBulletYPos(containerClassName);
-    store.updateReqResult(docId, nodeId, containerClassName, result);
-    store.incRespCounter(docId, nodeId, containerClassName);
+    nodeBulletState.updateBulletYPosResult(docId, nodeId, containerClassName, result);
   });
 };
 

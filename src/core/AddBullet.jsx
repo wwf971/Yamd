@@ -1,6 +1,7 @@
 import React from 'react';
 import { BULLET_DIMENSIONS, LIST_SETTINGS } from '@/config/RenderConfig.js';
 import { formatYPos, useRenderUtilsContext } from './RenderUtils.ts';
+import { docsBulletState, nodeBulletState } from './DocStore.js';
 
 /**
  * Utility function to render bullet inline for components that need precise control
@@ -98,36 +99,17 @@ export const AddListBulletBeforeNode = React.memo(({ childNode, alignBullet = 'c
   React.useLayoutEffect(() => {
     if (!shouldRenderBullet || !nodeId || !docId) return;
     
-    const store = globalInfo.getDocStore().getState();
-    store.addBulletYPosReq(docId, nodeId, containerClassName);
-    store.incReqCounter(docId, nodeId, containerClassName);
-  }, [shouldRenderBullet, nodeId, docId, containerClassName, globalInfo]);
+    // Register and request initial calculation using Jotai
+    nodeBulletState.registerBulletYPosReq(docId, nodeId, containerClassName);
+    nodeBulletState.reqCalcBulletYPos(docId, nodeId, containerClassName);
+  }, [shouldRenderBullet, nodeId, docId, containerClassName]);
 
-  // subscribe to result changes with custom equality function
-  const [result, setResult] = React.useState(null);
+  // Subscribe to results (only changes when result changes, not reqCounter)
+  // IMPORTANT: Always call the hook (Rules of Hooks), but only use result if shouldRenderBullet
+  const results = docsBulletState.useResults(docId, nodeId);
   
-  // Subscribe to bullet positioning results
-  React.useEffect(() => {
-    if (!shouldRenderBullet || !nodeId || !docId) return;
-    
-    const unsubscribe = globalInfo.getDocStore().subscribe(
-      (state) => state.bulletYPosReq[docId]?.[nodeId]?.[containerClassName]?.responseCounter,
-      (responseCounter) => {
-        const store = globalInfo.getDocStore().getState();
-        const requestData = store.getBulletYPosReqs(docId, nodeId)[containerClassName];
-        const result = requestData?.result;
-        setResult(result);
-      }
-    );
-
-    // Get initial value
-    const store = globalInfo.getDocStore().getState();
-    const initialRequests = store.getBulletYPosReqs(docId, nodeId);
-    const initialRequest = initialRequests[containerClassName];
-    setResult(initialRequest?.result || null);
-    
-    return unsubscribe;
-  }, [shouldRenderBullet, nodeId, docId, containerClassName, globalInfo]);
+  // Extract result for this specific container (only use if shouldRenderBullet)
+  const result = (shouldRenderBullet && nodeId && docId) ? results?.[containerClassName] : undefined;
 
   // create enhanced parentInfo with bullet info (no callback needed for Zustand-only approach)
   const childParentInfo = React.useMemo(() => injectIntoParentInfo(parentInfo, {
@@ -146,7 +128,7 @@ export const AddListBulletBeforeNode = React.memo(({ childNode, alignBullet = 'c
     return childNode; // Just render childNode without bullet
   }
 
-  // Use Zustand result for positioning, fallback to default if no result
+  // Use Jotai result for positioning, fallback to default if no result
   const hasResult = result?.code === 0;
   const finalPreferredYPos = hasResult ? result.data : LIST_SETTINGS.bullet_y_pos_default;
 

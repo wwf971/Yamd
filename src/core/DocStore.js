@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
 import { subscribeWithSelector } from 'zustand/middleware';
-import { atom, createStore, getDefaultStore } from 'jotai';
+import { atom, createStore, getDefaultStore, useAtomValue } from 'jotai';
 
 /**
  * DocsData - Class-based store for fine-grained node reactivity
@@ -54,7 +54,7 @@ class DocsData {
    */
   fromFlattenedData(docId, flattenedData) {
     if (!flattenedData?.nodes) {
-      console.warn('fromFlattenedData: Invalid flattenedData, missing nodes');
+      // console.warn('fromFlattenedData: Invalid flattenedData, missing nodes');
       return null;
     }
 
@@ -68,12 +68,6 @@ class DocsData {
 
     // Create atoms for each node
     const nodeIds = Object.keys(flattenedData.nodes);
-    console.log(`📦 fromFlattenedData: Creating ${nodeIds.length} node atoms for docId: ${docId}`);
-    console.log(`  Sample nodes:`, nodeIds.slice(0, 3).map(id => ({ 
-      id, 
-      type: flattenedData.nodes[id].type, 
-      textRaw: flattenedData.nodes[id].textRaw?.substring(0, 50) 
-    })));
     nodeIds.forEach(nodeId => {
       const nodeData = flattenedData.nodes[nodeId];
       // Create atom with initial node data
@@ -89,7 +83,7 @@ class DocsData {
       bibsLookup: atom(flattenedData.bibsLookup || {})
     };
 
-    console.log(`✅ fromFlattenedData: Initialized docId: ${docId}, rootNodeId: ${flattenedData.rootNodeId}`);
+    // console.log(`✅ fromFlattenedData: Initialized docId: ${docId}, rootNodeId: ${flattenedData.rootNodeId}`);
 
     // Return metadata about the loaded document
     return {
@@ -117,6 +111,44 @@ class DocsData {
       this._data[docId]._meta.bibs = atom({});
     }
     return this._data[docId]._meta.bibs;
+  }
+
+  /**
+   * Get references atom for a document
+   * @param {string} docId - Document ID
+   * @returns {object} Reactive reference for refs (internal: Jotai atom)
+   */
+  getRefs(docId) {
+    if (!this._data[docId]?._meta?.refs) {
+      // Create default empty refs atom if doesn't exist
+      if (!this._data[docId]) {
+        this._data[docId] = {};
+      }
+      if (!this._data[docId]._meta) {
+        this._data[docId]._meta = {};
+      }
+      this._data[docId]._meta.refs = atom({});
+    }
+    return this._data[docId]._meta.refs;
+  }
+
+  /**
+   * Get assets atom for a document
+   * @param {string} docId - Document ID
+   * @returns {object} Reactive reference for assets (internal: Jotai atom)
+   */
+  getAssets(docId) {
+    if (!this._data[docId]?._meta?.assets) {
+      // Create default empty assets atom if doesn't exist
+      if (!this._data[docId]) {
+        this._data[docId] = {};
+      }
+      if (!this._data[docId]._meta) {
+        this._data[docId]._meta = {};
+      }
+      this._data[docId]._meta.assets = atom({});
+    }
+    return this._data[docId]._meta.assets;
   }
 
   /**
@@ -306,6 +338,277 @@ class DocsState {
 export const docsState = new DocsState();
 
 /**
+ * DocsBulletState - Class-based store for bullet positioning communication
+ * Manages bullet Y position requests and responses using Jotai atoms with derived atoms
+ * 
+ * Key design:
+ * - Base atom stores all data: { [containerClassName]: { result, reqCounter, respCounter } }
+ * - Derived "request atom" only changes when reqCounter changes (for responders)
+ * - Derived "response atom" only changes when result changes (for requesters)
+ * - Components never directly access base atom, only derived atoms
+ */
+class DocsBulletState {
+  constructor() {
+    // Base atoms: { [docId]: { [nodeId]: { base: atom, request: derivedAtom, response: derivedAtom } } }
+    this._bulletStates = {};
+    // Use the same Jotai store as DocsData
+    this._store = docsData.getStore();
+  }
+
+  /**
+   * Get or create bullet state atoms for a node (base + derived)
+   * @param {string} docId - Document ID
+   * @param {string} nodeId - Node ID
+   * @returns {object} { base, request, response } atoms
+   */
+  _getOrCreateAtoms(docId, nodeId) {
+    if (!this._bulletStates[docId]) {
+      this._bulletStates[docId] = {};
+    }
+    
+    if (!this._bulletStates[docId][nodeId]) {
+      // Base atom stores all data
+      const baseAtom = atom({});
+      
+      // Derived atom for responders: only changes when reqCounters change
+      const requestAtom = atom((get) => {
+        const state = get(baseAtom);
+        const reqCounters = {};
+        Object.keys(state).forEach(key => {
+          reqCounters[key] = state[key]?.reqCounter || 0;
+        });
+        return reqCounters;
+      });
+      
+      // Derived atom for requesters: only changes when results change
+      const respAtom = atom((get) => {
+        const state = get(baseAtom);
+        const results = {};
+        Object.keys(state).forEach(key => {
+          results[key] = state[key]?.result || null;
+        });
+        return results;
+      });
+      
+      this._bulletStates[docId][nodeId] = { base: baseAtom, request: requestAtom, response: respAtom };
+    }
+    
+    return this._bulletStates[docId][nodeId];
+  }
+
+  /**
+   * Get request atom for responders (only changes when reqCounter changes)
+   * Returns a safe atom (never null) for use with useAtomValue
+   * @param {string} docId - Document ID
+   * @param {string} nodeId - Node ID
+   * @returns {object} Jotai derived atom (safe to use with useAtomValue)
+   */
+  reqAtom(docId, nodeId) {
+    if (!docId || !nodeId) return atom({});
+    return this._getOrCreateAtoms(docId, nodeId).request;
+  }
+
+  /**
+   * Get response atom for requesters (only changes when result changes)
+   * Returns a safe atom (never null) for use with useAtomValue
+   * @param {string} docId - Document ID
+   * @param {string} nodeId - Node ID
+   * @returns {object} Jotai derived atom (safe to use with useAtomValue)
+   */
+  respAtom(docId, nodeId) {
+    if (!docId || !nodeId) return atom({});
+    return this._getOrCreateAtoms(docId, nodeId).response;
+  }
+  
+  /**
+   * React hook: Subscribe to request counters (for responders)
+   * Only triggers when reqCounter changes, not when result/respCounter changes
+   * @param {string} docId - Document ID
+   * @param {string} nodeId - Node ID
+   * @returns {object} { [containerClassName]: reqCounter }
+   */
+  useReqCounters(docId, nodeId) {
+    return useAtomValue(this.reqAtom(docId, nodeId));
+  }
+  
+  /**
+   * React hook: Subscribe to results (for requesters)
+   * Only triggers when result changes, not when reqCounter/respCounter changes
+   * @param {string} docId - Document ID
+   * @param {string} nodeId - Node ID
+   * @returns {object} { [containerClassName]: result }
+   */
+  useResults(docId, nodeId) {
+    return useAtomValue(this.respAtom(docId, nodeId));
+  }
+  
+  // Backward compatibility aliases
+  getReqAtom(docId, nodeId) {
+    return this.reqAtom(docId, nodeId);
+  }
+  
+  getrespAtom(docId, nodeId) {
+    return this.respAtom(docId, nodeId);
+  }
+
+  /**
+   * Remove bullet state for a node (cleanup on node deletion)
+   * @param {string} docId - Document ID
+   * @param {string} nodeId - Node ID
+   */
+  removeNodeBulletState(docId, nodeId) {
+    if (this._bulletStates[docId]?.[nodeId]) {
+      delete this._bulletStates[docId][nodeId];
+      
+      // Clean up empty doc entries
+      if (Object.keys(this._bulletStates[docId]).length === 0) {
+        delete this._bulletStates[docId];
+      }
+    }
+  }
+
+  /**
+   * Register a bullet Y position request for a specific container
+   * Creates the container entry if it doesn't exist
+   * @param {string} docId - Document ID
+   * @param {string} nodeId - Node ID
+   * @param {string} containerClassName - CSS class name (e.g., '.yamd-bullet-container')
+   */
+  registerBulletYPosReq(docId, nodeId, containerClassName) {
+    const { base } = this._getOrCreateAtoms(docId, nodeId);
+    const currentState = this._store.get(base);
+    
+    // Only create if doesn't exist
+    if (!currentState[containerClassName]) {
+      this._store.set(base, {
+        ...currentState,
+        [containerClassName]: {
+          result: null,
+          reqCounter: 0,
+          respCounter: 0
+        }
+      });
+    }
+  }
+
+  /**
+   * Increment request counter to trigger bullet Y position recalculation
+   * @param {string} docId - Document ID
+   * @param {string} nodeId - Node ID
+   * @param {string} containerClassName - CSS class name
+   */
+  reqCalcBulletYPos(docId, nodeId, containerClassName) {
+    const { base } = this._getOrCreateAtoms(docId, nodeId);
+    const currentState = this._store.get(base);
+    
+    if (currentState[containerClassName]) {
+      this._store.set(base, {
+        ...currentState,
+        [containerClassName]: {
+          ...currentState[containerClassName],
+          reqCounter: currentState[containerClassName].reqCounter + 1
+        }
+      });
+    }
+  }
+
+  /**
+   * Update bullet Y position result and increment response counter
+   * @param {string} docId - Document ID
+   * @param {string} nodeId - Node ID
+   * @param {string} containerClassName - CSS class name
+   * @param {number} result - The calculated Y position
+   */
+  updateBulletYPosResult(docId, nodeId, containerClassName, result) {
+    const { base } = this._getOrCreateAtoms(docId, nodeId);
+    const currentState = this._store.get(base);
+    
+    if (currentState[containerClassName]) {
+      this._store.set(base, {
+        ...currentState,
+        [containerClassName]: {
+          ...currentState[containerClassName],
+          result,
+          respCounter: currentState[containerClassName].respCounter + 1
+        }
+      });
+    }
+  }
+
+  /**
+   * Get all bullet requests for a node (non-reactive, for responders)
+   * @param {string} docId - Document ID
+   * @param {string} nodeId - Node ID
+   * @returns {object} Object with container class names as keys
+   */
+  getAllBulletYPosReqs(docId, nodeId) {
+    const { base } = this._getOrCreateAtoms(docId, nodeId);
+    return this._store.get(base);
+  }
+
+  /**
+   * Remove a specific bullet request
+   * @param {string} docId - Document ID
+   * @param {string} nodeId - Node ID
+   * @param {string} containerClassName - CSS class name
+   */
+  removeBulletYPosReq(docId, nodeId, containerClassName) {
+    const { base } = this._getOrCreateAtoms(docId, nodeId);
+    const currentState = this._store.get(base);
+    
+    if (currentState[containerClassName]) {
+      const newState = { ...currentState };
+      delete newState[containerClassName];
+      this._store.set(base, newState);
+    }
+  }
+
+  /**
+   * Clear all bullet requests for a node
+   * @param {string} docId - Document ID
+   * @param {string} nodeId - Node ID
+   */
+  clearNodeBulletReqs(docId, nodeId) {
+    if (this._bulletStates[docId]?.[nodeId]) {
+      const { base } = this._bulletStates[docId][nodeId];
+      this._store.set(base, {});
+    }
+  }
+
+
+
+  /**
+   * Remove all bullet states for a document
+   * @param {string} docId - Document ID
+   */
+  removeDocBulletStates(docId) {
+    if (this._bulletStates[docId]) {
+      delete this._bulletStates[docId];
+    }
+  }
+
+  /**
+   * Check if a node has any bullet requests
+   * @param {string} docId - Document ID
+   * @param {string} nodeId - Node ID
+   * @returns {boolean} True if node has any bullet requests
+   */
+  hasAnyBulletReqs(docId, nodeId) {
+    if (!this._bulletStates[docId]?.[nodeId]) {
+      return false;
+    }
+    const { base } = this._bulletStates[docId][nodeId];
+    const currentState = this._store.get(base);
+    return Object.keys(currentState).length > 0;
+  }
+}
+
+// Create singleton instance
+export const docsBulletState = new DocsBulletState();
+// Keep old name for backward compatibility during migration
+export const nodeBulletState = docsBulletState;
+
+/**
  * DocStore - Zustand store for managing document data and states
  * Each document instance is identified by a unique docId
  * Stores both document metadata and the actual node data (docData.nodes)
@@ -316,169 +619,6 @@ export const useDocStore = create(
   // Store data for each document instance
   // Structure: { [docId]: { docData: { nodes: {...}, rootNodeId: '...' }, ...other metadata } }
   docs: {},
-
-  // List bullet preferred Y position requests
-  // Structure: { [docId]: { [nodeId]: { [containerClassName]: { result: null, requestCounter: number, responseCounter: number } } } }
-  // Example:
-  // {
-  //   "doc-1": {
-  //     "node-123": {
-  //       ".yamd-bullet-container": { result: null, requestCounter: 0, responseCounter: 0 },
-  //       ".yamd-timeline-item": { result: null, requestCounter: 0, responseCounter: 0 }
-  //     },
-  //     "node-456": {
-  //       ".yamd-bullet-container": { result: null, requestCounter: 0, responseCounter: 0 }
-  //     }
-  //   }
-  // }
-  bulletYPosReq: {},
-  /**
-   * Add a list bullet preferred Y position request using Immer
-   * @param {string} docId - Document ID
-   * @param {string} nodeId - Node ID that should provide preferred Y position
-   * @param {string} containerClassName - CSS class name of the container (starting with dot)
-   */
-  addBulletYPosReq: (docId, nodeId, containerClassName) => {
-    set((state) => {
-      // Ensure the document exists in the requests structure
-      if (!state.bulletYPosReq[docId]) {
-        state.bulletYPosReq[docId] = {};
-      }
-      
-      // Ensure the node exists in the document's requests
-      if (!state.bulletYPosReq[docId][nodeId]) {
-        state.bulletYPosReq[docId][nodeId] = {};
-      }
-      
-      // Add the request using containerClassName as key
-      if (!state.bulletYPosReq[docId][nodeId][containerClassName]) {
-        state.bulletYPosReq[docId][nodeId][containerClassName] = {
-          result: null,
-          requestCounter: 0,
-          responseCounter: 0
-        };
-      }
-    });
-  },
-
-
-  /**
-   * Update result for a specific request (using Immer)
-   * @param {string} docId - Document ID
-   * @param {string} nodeId - Node ID
-   * @param {string} containerClassName - CSS class name of the container (starting with dot)
-   * @param {any} result - The result to store
-   */
-  updateReqResult: (docId, nodeId, containerClassName, result) => {
-    set((state) => {
-      if (state.bulletYPosReq[docId]?.[nodeId]?.[containerClassName]) {
-        state.bulletYPosReq[docId][nodeId][containerClassName].result = result;
-      }
-    });
-  },
-
-  /**
-   * Increment request counter for a specific request (using Immer)
-   * @param {string} docId - Document ID
-   * @param {string} nodeId - Node ID
-   * @param {string} containerClassName - CSS class name of the container (starting with dot)
-   */
-  incReqCounter: (docId, nodeId, containerClassName) => {
-    set((state) => {
-      if (state.bulletYPosReq[docId]?.[nodeId]?.[containerClassName]) {
-        state.bulletYPosReq[docId][nodeId][containerClassName].requestCounter++;
-      }
-    });
-  },
-
-  /**
-   * Increment response counter for a specific request (using Immer)
-   * @param {string} docId - Document ID
-   * @param {string} nodeId - Node ID
-   * @param {string} containerClassName - CSS class name of the container (starting with dot)
-   */
-  incRespCounter: (docId, nodeId, containerClassName) => {
-    set((state) => {
-      if (state.bulletYPosReq[docId]?.[nodeId]?.[containerClassName]) {
-        state.bulletYPosReq[docId][nodeId][containerClassName].responseCounter++;
-      }
-    });
-  },
-
-  /**
-   * Get all requests for a specific node
-   * @param {string} docId - Document ID
-   * @param {string} nodeId - Node ID
-   * @returns {object} Object with container class names as keys and request data as values
-   */
-  getBulletYPosReqs: (docId, nodeId) => {
-    return get().bulletYPosReq[docId]?.[nodeId] || {};
-  },
-
-  /**
-   * Remove a specific request (using Immer)
-   * @param {string} docId - Document ID
-   * @param {string} nodeId - Node ID
-   * @param {string} containerClassName - CSS class name of the container (starting with dot)
-   */
-  removeBulletYPosReq: (docId, nodeId, containerClassName) => {
-    set((state) => {
-      if (state.bulletYPosReq[docId]?.[nodeId]?.[containerClassName]) {
-        delete state.bulletYPosReq[docId][nodeId][containerClassName];
-        
-        // If no more requests for this node, remove the node entry
-        if (Object.keys(state.bulletYPosReq[docId][nodeId]).length === 0) {
-          delete state.bulletYPosReq[docId][nodeId];
-        }
-        
-        // If no more nodes for this doc, remove the doc entry
-        if (Object.keys(state.bulletYPosReq[docId]).length === 0) {
-          delete state.bulletYPosReq[docId];
-        }
-      }
-    });
-  },
-
-  /**
-   * Clear all requests for a specific node (using Immer)
-   * @param {string} docId - Document ID
-   * @param {string} nodeId - Node ID
-   */
-  clearBulletYPosReqForDoc: (docId, nodeId) => {
-    set((state) => {
-      if (state.bulletYPosReq[docId]?.[nodeId]) {
-        delete state.bulletYPosReq[docId][nodeId];
-        
-        // If no more nodes for this doc, remove the doc entry
-        if (Object.keys(state.bulletYPosReq[docId]).length === 0) {
-          delete state.bulletYPosReq[docId];
-        }
-      }
-    });
-  },
-
-  /**
-   * Clear all requests for a document (using Immer)
-   * @param {string} docId - Document ID
-   */
-  clearBulletYPosReqForDoc: (docId) => {
-    set((state) => {
-      if (state.bulletYPosReq[docId]) {
-        delete state.bulletYPosReq[docId];
-      }
-    });
-  },
-
-  /**
-   * Check if there are any requests for a node
-   * @param {string} docId - Document ID
-   * @param {string} nodeId - Node ID
-   * @returns {boolean} True if there are requests for this node
-   */
-  hasPreferredYPosRequests: (docId, nodeId) => {
-    const requests = get().bulletYPosReq[docId]?.[nodeId];
-    return requests && Object.keys(requests).length > 0;
-  },
 
   // ===== Document Management Methods =====
 

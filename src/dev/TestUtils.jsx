@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { useAtomValue } from 'jotai';
+import { useAtomValue, atom } from 'jotai';
 import { docsData } from '@/core/DocStore.js';
 
 /**
@@ -7,8 +7,12 @@ import { docsData } from '@/core/DocStore.js';
  * Used in test/dev components to show flattened node data with automatic reactivity
  */
 export const NodeDataDisplay = ({ docId, nodeId, onUpdate }) => {
-  const nodeAtom = docsData.getNodeData(docId, nodeId);
-  const nodeData = useAtomValue(nodeAtom);
+  // Check if doc exists BEFORE calling getNodeData to avoid warnings
+  const docExists = docId && docsData.getNodeIds(docId).length > 0;
+  
+  // Only get nodeData if doc exists
+  const nodeAtom = docExists ? docsData.getNodeData(docId, nodeId) : null;
+  const nodeData = useAtomValue(nodeAtom || atom(null)); // Use dummy atom if no doc
   const elementRef = useRef(null);
   const prevDataRef = useRef(nodeData);
   const [isHighlighted, setIsHighlighted] = useState(false);
@@ -28,6 +32,12 @@ export const NodeDataDisplay = ({ docId, nodeId, onUpdate }) => {
       }
     }
   }, [nodeData, nodeId, onUpdate]);
+  
+  // Skip rendering if doc or nodeData doesn't exist (cleaned up or not loaded yet)
+  // IMPORTANT: This check must come AFTER all hooks to avoid Rules of Hooks violation
+  if (!docExists || !nodeData) {
+    return null;
+  }
   
   return (
     <div 
@@ -72,6 +82,10 @@ export const DocDataDisplay = ({ docId, nodeIds, isLoading }) => {
   const containerRef = useRef(null);
   const updateQueueRef = useRef([]);
   const scrollTimeoutRef = useRef(null);
+  
+  // Check if doc exists by trying to get its atom (without creating warnings)
+  // If nodeIds is empty or undefined, the doc probably doesn't exist yet
+  const hasValidData = docId && nodeIds && nodeIds.length > 0;
   
   // Handle node update notifications
   const handleNodeUpdate = (nodeId, element) => {
@@ -123,7 +137,7 @@ export const DocDataDisplay = ({ docId, nodeIds, isLoading }) => {
         position: 'relative'
       }}
     >
-      {docId && nodeIds && nodeIds.length > 0 ? (
+      {hasValidData ? (
         <>
           <div style={{
             position: 'sticky',
@@ -140,7 +154,7 @@ export const DocDataDisplay = ({ docId, nodeIds, isLoading }) => {
           </div>
           {nodeIds.map(nodeId => (
             <NodeDataDisplay 
-              key={nodeId} 
+              key={`${docId}-${nodeId}`}
               docId={docId} 
               nodeId={nodeId}
               onUpdate={handleNodeUpdate}

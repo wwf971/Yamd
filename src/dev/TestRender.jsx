@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import YamdDoc from '@/core/YamdDoc.jsx';
-import { docsData, useDocStore } from '@/core/DocStore.js';
+import { docsData, docsState, nodeBulletState, useDocStore } from '@/core/DocStore.js';
 import { loadMathJax } from '@/mathjax/MathJaxLoad.js';
 import { 
   parseYamlToJson, 
@@ -17,7 +17,7 @@ import './TestRender.css';
 
 const TestRender = () => {
   const sampleNames = getSampleYamlSeries();
-  const defaultSample = "rich-text";
+  const defaultSample = "text-rich";
   const [selectedSample, setSelectedSample] = useState(defaultSample);
   const [yamlInput, setYamlInput] = useState(getSampleYaml(defaultSample));
   const [jsonOutput, setJsonOutput] = useState('');
@@ -37,13 +37,13 @@ const TestRender = () => {
     });
   }, []);
 
-  const handleParse = async () => {
+  const handleParse = async (yamlText) => {
     setIsLoading(true);
     setParseError('');
     
     try {
       // Step 1: YAML → JSON
-      const yamlResult = parseYamlToJson(yamlInput);
+      const yamlResult = parseYamlToJson(yamlText);
       
       if (yamlResult.code === 0) {
         const rawJson = yamlResult.data;
@@ -73,6 +73,15 @@ const TestRender = () => {
         // Generate docId and initialize both Jotai and Zustand stores
         const newDocId = `doc_${Math.random().toString(36).substr(2, 9)}_${Date.now()}`;
         const docInfo = docsData.fromFlattenedData(newDocId, finalResult);
+        
+        // Clean up OLD document atoms (for memory management)
+        const oldDocId = docId;
+        if (oldDocId) {
+          docsData.removeDoc(oldDocId);
+          docsState.removeDocStates(oldDocId);
+          nodeBulletState.removeDocBulletStates(oldDocId);
+        }
+        
         setNodeIds(docInfo.nodeIds);
         useDocStore.getState().setDocData(newDocId, {
           docId: newDocId,
@@ -117,14 +126,18 @@ const TestRender = () => {
     setParseError('');
   };
 
-  const handleSampleChange = (sampleName) => {
+  const handleSampleChange = async (sampleName) => {
     setSelectedSample(sampleName);
-    setYamlInput(getSampleYaml(sampleName));
+    const newYaml = getSampleYaml(sampleName);
+    setYamlInput(newYaml);
     setJsonOutput('');
     setProcessedOutput('');
     setFlattenedOutput('');
     setFlattenedData(null);
     setParseError('');
+    
+    // Parse immediately with the new YAML (don't wait for state update)
+    handleParse(newYaml);
   };
 
   const handleLoadCornerCases = () => {
@@ -137,14 +150,16 @@ const TestRender = () => {
   };
 
   useEffect(() => {
-    // click parse button automatically after 1 second
-    setTimeout(() => {
+    // Auto-click parse button once on initial mount after 1 second
+    const timer = setTimeout(() => {
       const parseButton = document.getElementById('parse-button');
       if (parseButton) {
         parseButton.click();
       }
     }, 1000);
-  }, [yamlInput]);
+    
+    return () => clearTimeout(timer);
+  }, []); // Empty array = run only once on mount
 
   return (
     <div className="test-render-container">
@@ -156,7 +171,7 @@ const TestRender = () => {
       <div className="button-controls">
         <button 
           id="parse-button"
-          onClick={handleParse} 
+          onClick={() => handleParse(yamlInput)} 
           disabled={isLoading}
           className="btn btn-parse"
         >
@@ -214,7 +229,7 @@ const TestRender = () => {
             className="panel-textarea panel-textarea-input"
           />
           <div className="panel-info">
-            Lines: {yamlInput.split('\n').length} | Chars: {yamlInput.length}
+            Lines: {yamlInput?.split('\n').length || 0} | Chars: {yamlInput?.length || 0}
           </div>
         </div>
 
@@ -262,11 +277,14 @@ const TestRender = () => {
             borderRadius: '4px',
             overflow: 'hidden'
           }}>
-            <DocDataDisplay 
-              docId={docId} 
-              nodeIds={nodeIds} 
-              isLoading={isLoading}
-            />
+            {docId && nodeIds.length > 0 && (
+              <DocDataDisplay 
+                key={docId}
+                docId={docId} 
+                nodeIds={nodeIds} 
+                isLoading={isLoading}
+              />
+            )}
           </div>
         </div>
       </div>

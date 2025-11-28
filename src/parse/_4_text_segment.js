@@ -35,9 +35,9 @@ export function parseTextSegments(text, assets, refs, bibs, bibsLookup, sourceNo
   
   // Combined pattern to match LaTeX, asset references, and bibliography citations
   // 1. LaTeX: $...$ but NOT $ref{...} (negative lookahead)
-  // 2. Asset References: \ref{linkText}{linkId}
+  // 2. Asset References: \ref{linkText}{linkId} OR \ref{linkId} (single bracket = empty linkText)
   // 3. Bibliography Citations: \bib{key1,key2,...}
-  const combinedPattern = /(\$(?!ref\{)([^$]*)\$)|(\\ref\{([^}]*)\}\{([^}]*)\})|(\\bib\{([\w\d-]+(?:,[\w\d-]+)*)\})/g;
+  const combinedPattern = /(\$(?!ref\{)([^$]*)\$)|(\\ref\{([^}]*)\}(?:\{([^}]*)\})?)|(\\bib\{([\w\d-]+(?:,[\w\d-]+)*)\})/g;
   
   let match;
   while ((match = combinedPattern.exec(text)) !== null) {
@@ -78,9 +78,21 @@ export function parseTextSegments(text, assets, refs, bibs, bibsLookup, sourceNo
         segments.push({ type: 'text', textRaw: match[0] });
       }
     } else if (match[3]) {
-      // This is a reference match: \ref{linkText}{linkId}
-      const linkText = match[4];
-      const linkId = match[5];
+      // This is a reference match: \ref{linkText}{linkId} OR \ref{linkId}
+      const firstArg = match[4];
+      const secondArg = match[5];
+      
+      // Determine linkText and linkId based on number of arguments
+      let linkText, linkId;
+      if (secondArg !== undefined) {
+        // Two arguments: \ref{linkText}{linkId}
+        linkText = firstArg;
+        linkId = secondArg;
+      } else {
+        // One argument: \ref{linkId} - treat as empty linkText
+        linkText = '';
+        linkId = firstArg;
+      }
       
       if (linkId && linkId.trim()) {
         const refId = `ref_${String(++refCounter).padStart(3, '0')}`;
@@ -479,9 +491,11 @@ export function parseLatexInline(nodeData, assets = {}, allNodes = {}) {
  * @param {object} refs - References dictionary
  * @param {string} nodeId - ID of the node being processed
  * @param {object} allNodes - All nodes for reference resolution
+ * @param {object} segmentNodes - Dictionary to store created segment nodes
+ * @param {function} generateSegmentId - Function to generate segment IDs
  * @returns {object} - Enhanced node data
  */
-function parseTextSegmentsInNode(nodeData, assets, refs, bibs, bibsLookup, nodeId, allNodes) {
+function parseTextSegmentsInNode(nodeData, assets, refs, bibs, bibsLookup, nodeId, allNodes, segmentNodes, generateSegmentId) {
   // Handle LaTeX blocks - register as assets
   if (nodeData.type === 'latex') {
     return registerLatexBlock(nodeData, assets, allNodes);
@@ -507,10 +521,32 @@ function parseTextSegmentsInNode(nodeData, assets, refs, bibs, bibsLookup, nodeI
   // Parse into segments and register in assets, refs, and bibs
   const segments = parseTextSegments(textString, assets, refs, bibs, bibsLookup, nodeId);
   
-  // Return enhanced node data
+  // Create segment nodes with IDs
+  const segmentIds = [];
+  segments.forEach((segment, index) => {
+    const segmentId = generateSegmentId();
+    
+    // Determine segment display type based on original segment.type
+    let segmentDisplay = segment.type; // 'text', 'latex_inline', 'ref-asset', 'ref-bib'
+    
+    // Create segment node - spread all segment properties and override with node metadata
+    const segmentNode = {
+      ...segment, // Copy all properties from segment
+      id: segmentId, // Override with segment node ID
+      type: 'segment', // All segments have type 'segment'
+      selfDisplay: segmentDisplay, // Store original type as selfDisplay
+      parentId: nodeId // Set parent node ID
+    };
+    
+    // Store segment node
+    segmentNodes[segmentId] = segmentNode;
+    segmentIds.push(segmentId);
+  });
+  
+  // Return enhanced node data with segments array
   return {
     ...nodeData,
-    textRich: segments
+    segments: segmentIds // Array of segment node IDs
   };
 }
 
@@ -525,8 +561,13 @@ export async function processAllTextSegments(flattenedData) {
   const bibs = {}; // New bibs dictionary for bibliography entries
   const bibsLookup = {}; // New bibsLookup dictionary for key->id mapping
   const processedNodes = {};
+  const segmentNodes = {}; // New: dictionary to store segment nodes
   
   console.log('🔄 Step 4: Processing text segments (LaTeX, refs, and bibs) for all nodes...');
+  
+  // Segment ID counter
+  let segmentIdCounter = 0;
+  const generateSegmentId = () => `seg_${String(++segmentIdCounter).padStart(3, '0')}`;
   
   // Process each node that might contain LaTeX or references
   const nodeIds = Object.keys(nodes);
@@ -534,7 +575,17 @@ export async function processAllTextSegments(flattenedData) {
   
   for (const nodeId of nodeIds) {
     const nodeData = nodes[nodeId];
-    const processedNode = parseTextSegmentsInNode(nodeData, assets, refs, bibs, bibsLookup, nodeId, nodes);
+    const processedNode = parseTextSegmentsInNode(
+      nodeData, 
+      assets, 
+      refs, 
+      bibs, 
+      bibsLookup, 
+      nodeId, 
+      nodes, 
+      segmentNodes, 
+      generateSegmentId
+    );
     
     if (processedNode.textRich) {
       segmentNodesFound++;
@@ -543,7 +594,22 @@ export async function processAllTextSegments(flattenedData) {
     processedNodes[nodeId] = processedNode;
   }
   
-  console.log(`🔍 Text segment parsing complete: ${segmentNodesFound} nodes with segments found`);
+  // console.log(`🔍 Text segment parsing complete: ${segmentNodesFound} nodes with segments found`);
+  // console.log(`🔍 Created ${Object.keys(segmentNodes).length} segment nodes`);
+  
+  // Set selfDisplay='text-rich' for nodes that have segments
+  for (const nodeId of Object.keys(processedNodes)) {
+    const node = processedNodes[nodeId];
+    if (node.segments && node.segments.length > 0) {
+      // Only set if not already set
+      if (!node.attr) {
+        node.attr = {};
+      }
+      if (!node.attr.selfDisplay) {
+        node.attr.selfDisplay = 'text-rich';
+      }
+    }
+  }
   
   // Now convert LaTeX assets to HTML
   console.log('🔄 Step 4b: Converting LaTeX assets to HTML...');
@@ -575,8 +641,11 @@ export async function processAllTextSegments(flattenedData) {
   
   console.log(`🔍 LaTeX conversion complete: ${convertedCount}/${latexAssets.length} assets converted`);
   
+  // Merge segment nodes into the main nodes dictionary
+  const allNodes = { ...processedNodes, ...segmentNodes };
+  
   return {
-    nodes: processedNodes,
+    nodes: allNodes,
     rootNodeId,
     assets,
     refs,

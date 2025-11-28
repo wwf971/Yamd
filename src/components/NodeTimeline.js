@@ -2,6 +2,7 @@ import React from 'react';
 import { TIMELINE_BULLET_SETTINGS, BULLET_DIMENSIONS } from '@/config/RenderConfig.js';
 import { useRenderUtilsContext } from '@/core/RenderUtils.ts';
 import { formatYPos } from '@/core/RenderUtils.ts';
+import { docsBulletState, nodeBulletState } from '@/core/DocStore.js';
 
 /**
  * Bullet component registry for timeline
@@ -160,14 +161,14 @@ export const calcConnectLineHeights = (bulletRefs) => {
         const lineEndY = nextSvgRect.top - connectLineGap;
         const lineHeight = lineEndY - lineStartY;
         
-        console.log(`Line ${i}: currentSvgBottom=${currentSvgRect.bottom}, nextSvgTop=${nextSvgRect.top}, lineHeight=${lineHeight}`);
+        // console.log(`Line ${i}: currentSvgBottom=${currentSvgRect.bottom}, nextSvgTop=${nextSvgRect.top}, lineHeight=${lineHeight}`);
         heights.push(Math.max(lineHeight, 8)); // Use minimum height of 8px
       } else {
-        console.log(`Line ${i}: Invalid SVG bounding rects - using fallback height`);
+        // console.log(`Line ${i}: Invalid SVG bounding rects - using fallback height`);
         heights.push(20); // Fallback height
       }
     } else {
-      console.log(`Line ${i}: Missing current or next bullet SVG - using fallback height`);
+      // console.log(`Line ${i}: Missing current or next bullet SVG - using fallback height`);
       heights.push(20); // Fallback for missing bullets
     }
   }
@@ -221,44 +222,23 @@ export const AddTimelineBulletBeforeYamdNode = React.memo(({
     }
   }
 
-  // ===== ZUSTAND LOGIC =====
+  // ===== JOTAI LOGIC =====
   // Set up request when component mounts
   React.useEffect(() => {
-    if (!nodeId || !docId || !docStore) {
+    if (!nodeId || !docId) {
       console.warn('nodeId:', nodeId, 'docId:', docId, 'AddTimelineBulletBeforeYamdNode useEffect skipped');
       return; 
     }
-    const store = docStore.getState();
-    // Add request to store
-    store.addBulletYPosReq(docId, nodeId, containerClassName);
-    // Increment request counter to notify the node
-    store.incReqCounter(docId, nodeId, containerClassName);
-  }, [nodeId, docId, containerClassName, docStore]);
+    // Register and request initial calculation using Jotai
+    docsBulletState.registerBulletYPosReq(docId, nodeId, containerClassName);
+    docsBulletState.reqCalcBulletYPos(docId, nodeId, containerClassName);
+  }, [nodeId, docId, containerClassName]);
 
-  // Subscribe to child bullet Y position result changes 
-  const [childBulletYPosResult, setChildBulletYPosResult] = React.useState(null);
+  // Subscribe to child bullet Y position result changes using Jotai
+  const results = docsBulletState.useResults(docId, nodeId);
   
-  React.useEffect(() => {
-    if (!nodeId || !docId || !docStore) return;
-    // Subscribe to changes in the result
-    const unsubscribe = docStore.subscribe(
-      (state) => state.bulletYPosReq[docId]?.[nodeId]?.[containerClassName]?.responseCounter,
-      (responseCounter) => {
-        const store = docStore.getState();
-        const result = store.getBulletYPosReqs(docId, nodeId)[containerClassName];
-        console.log('nodeId:', nodeId, 'AddTimelineBulletBeforeYamdNode useEffect responseCounter:', responseCounter, 'childBulletYPosResult:', result);
-        setChildBulletYPosResult(result);
-      }
-    );
-
-    // Get initial value
-    const store = docStore.getState();
-    const initialRequests = store.getBulletYPosReqs(docId, nodeId);
-    const initialRequest = initialRequests[containerClassName];
-    setChildBulletYPosResult(initialRequest?.result || null);
-    
-    return unsubscribe;
-  }, [nodeId, docId, containerClassName, docStore]);
+  // Extract result for this specific container
+  const childBulletYPosResult = results?.[containerClassName];
   
   // Trigger timeline replot when child bullet position changes
   React.useEffect(() => {

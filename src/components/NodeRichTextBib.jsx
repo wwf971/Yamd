@@ -5,8 +5,7 @@ import React from 'react';
  * Renders ref-bib segments with click handling for navigation to bibliography list
  */
 const NodeTextRichBib = ({ segment, globalInfo }) => {
-  if (!segment || segment.type !== 'ref-bib') {
-    console.warn('NodeTextRichBib received invalid segment:', segment);
+  if (!segment || segment.selfDisplay !== 'ref-bib') {
     return <span className="yamd-bib-fallback">{segment?.textRaw || '[Invalid Bib]'}</span>;
   }
 

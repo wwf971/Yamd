@@ -1,5 +1,6 @@
 import React, { useRef, useEffect, useLayoutEffect, forwardRef, useImperativeHandle } from 'react';
 import { createBulletEqualityFn, useRenderUtilsContext } from '@/core/RenderUtils.ts';
+import { docsBulletState, nodeBulletState } from '@/core/DocStore.js';
 
 /**
  * Anonymous node renderer - skips title completely and renders only children (for nodes with empty textRaw)
@@ -11,7 +12,7 @@ const YamdNodeAnonym = forwardRef(({ nodeId, parentInfo, globalInfo }, ref) => {
   // Get render utils from context
   const renderUtils = useRenderUtilsContext();
 
-  console.log('nodeId:', nodeId, 'YamdNodeAnonym parentInfo:', parentInfo);
+  // console.log('nodeId:', nodeId, 'YamdNodeAnonym parentInfo:', parentInfo);
   // Expose calcBulletYPos to parent via ref
   useImperativeHandle(ref, () => ({
     calcBulletYPos: () => {
@@ -20,39 +21,51 @@ const YamdNodeAnonym = forwardRef(({ nodeId, parentInfo, globalInfo }, ref) => {
     }
   }), [nodeId, globalInfo, renderUtils]);
 
-  // ===== ZUSTAND LOGIC =====
+  // ===== JOTAI LOGIC =====
   const docId = globalInfo?.docId;
   
-  // Subscribe to request counter changes with custom equality function
-  useEffect(() => {
-    if (!nodeId || !docId) {
-      console.warn('noteId:', nodeId, 'docId:', docId, 'YamdNodeAnonym useEffect subscribe skipped');
-      return;
-    }
-    console.log('noteId:', nodeId, 'docId:', docId, 'YamdNodeAnonym useEffect subscribe');
-    const unsubscribe = globalInfo.getDocStore().subscribe(
-      (state) => state.bulletYPosReq[docId]?.[nodeId] || {},
-      (requests) => {
-        console.log('noteId:', nodeId, 'YamdNodeAnonym useEffect subscribe triggered with requests:', requests);
-        // this will only fire if equalityFn returns false
-        calcBulletYPos(nodeId, docId, globalInfo, childSubscriptionsRef, renderUtils);
-      },
-      {
-        equalityFn: createBulletEqualityFn(nodeId, 'YamdNodeAnonym'),
+  // Subscribe to request counters (only changes when reqCounter changes)
+  const reqCounters = docsBulletState.useReqCounters(docId, nodeId);
+  
+  // Track previous reqCounters to detect changes
+  // Key by docId to handle document reloads
+  const prevReqCountersRef = useRef({});
+  const lastDocIdRef = useRef(docId);
+  
+  // Reset ref when docId changes (document reload)
+  if (lastDocIdRef.current !== docId) {
+    prevReqCountersRef.current = {};
+    lastDocIdRef.current = docId;
+  }
+  
+  // Trigger calculation when reqCounters change
+  // Use useLayoutEffect to calculate BEFORE paint, preventing flash of wrong position
+  useLayoutEffect(() => {
+    if (!nodeId || !docId) return;
+    
+    let shouldCalculate = false;
+    Object.keys(reqCounters).forEach(containerClassName => {
+      const currentReqCounter = reqCounters[containerClassName] || 0;
+      const prevReqCounter = prevReqCountersRef.current[containerClassName] || 0;
+      
+      if (currentReqCounter > prevReqCounter) {
+        shouldCalculate = true;
+        prevReqCountersRef.current[containerClassName] = currentReqCounter;
       }
-    );
+    });
     
-    // Immediately check for existing requests
-    calcBulletYPos(nodeId, docId, globalInfo, childSubscriptionsRef, renderUtils);
+    if (shouldCalculate) {
+      console.log('noteId:', nodeId, 'YamdNodeAnonym reqCounter increased');
+      calcBulletYPos(nodeId, docId, globalInfo, childSubscriptionsRef, renderUtils);
+    }
     
+    // Clean up child subscriptions on unmount
     return () => {
-      unsubscribe();
-      // Clean up all child subscriptions on unmount
       childSubscriptionsRef.current.forEach(unsub => unsub());
       childSubscriptionsRef.current.clear();
     };
-  }, [nodeId, docId, globalInfo, renderUtils]);
-  // ===== END ZUSTAND LOGIC =====
+  }, [nodeId, docId, reqCounters, globalInfo, renderUtils]);
+  // ===== END JOTAI LOGIC =====
 
   // Subscribe to node data changes (especially children array changes)
   const nodeData = renderUtils.useNodeData(nodeId);
@@ -91,25 +104,14 @@ const YamdNodeAnonym = forwardRef(({ nodeId, parentInfo, globalInfo }, ref) => {
  * @returns {void}
  */
 const calcBulletYPos = (nodeId, docId, globalInfo, childSubscriptionsRef, renderUtils) => {
-  const store = globalInfo.getDocStore().getState();
-  // Get all requests for this node
-  const requests = store.getBulletYPosReqs(docId, nodeId);
+  // Get all requests for this node using Jotai
+  const requests = nodeBulletState.getAllBulletYPosReqs(docId, nodeId);
   console.log('noteId:', nodeId, 'YamdNodeAnonym calcBulletYPos requests:', requests);
   
   // Update result for each requesting container
   Object.keys(requests).forEach(containerClassName => {
     try {
-      // OLD LOGIC (commented out): Try to forward request to first child using imperative handle
-      // if (firstChildRef.current?.calcBulletYPos) {
-      //   firstChildRef.current.calcBulletYPos();
-      //   // Since the first child will handle the positioning, we don't need to update store here
-      //   // The child will update the store with its own result
-      //   console.log('noteId:', nodeId, 'YamdNodeAnonym forwarded to first child');
-      //   return;
-      // }
-      
-      // NEW LOGIC: Forward request through Zustand store
-      // Get the first child node data to forward the request
+      // Forward request to first child through Jotai
       const nodeData = renderUtils.getNodeDataById(nodeId);
       if (nodeData?.children && nodeData.children.length > 0) {
         const firstChildId = nodeData.children[0];
@@ -126,29 +128,30 @@ const calcBulletYPos = (nodeId, docId, globalInfo, childSubscriptionsRef, render
         // Forward the positioning request to the first child
         console.log('YamdNodeAnonym noteId:', nodeId, 'firstChildId:', firstChildId);
         
-        // Add request for the first child with the same container class
-        store.addBulletYPosReq(docId, firstChildId, containerClassName);
-        store.incReqCounter(docId, firstChildId, containerClassName);
+        // Register and request calculation for the first child
+        nodeBulletState.registerBulletYPosReq(docId, firstChildId, containerClassName);
+        nodeBulletState.reqCalcBulletYPos(docId, firstChildId, containerClassName);
         
-        // Subscribe to the first child's response and forward it back
-        const unsubscribeChild = globalInfo.getDocStore().subscribe(
-          (state) => state.bulletYPosReq[docId]?.[firstChildId]?.[containerClassName]?.responseCounter,
-          (responseCounter) => {
-            // Always use fresh store reference to avoid stale closures
-            const freshStore = globalInfo.getDocStore().getState();
-            const childResult = freshStore.getBulletYPosReqs(docId, firstChildId)[containerClassName]?.result;
-            console.log('noteId:', nodeId, 'YamdNodeAnonym received result from first child:', childResult);
-            if (childResult) {
-              // Forward the child's result as our own result
-              freshStore.updateReqResult(docId, nodeId, containerClassName, childResult);
-              freshStore.incRespCounter(docId, nodeId, containerClassName);
-              
-              // Clean up subscription after successful response
-              unsubscribeChild();
-              childSubscriptionsRef.current.delete(subscriptionKey);
-            }
+        // Subscribe to the first child's response atom and forward it back
+        // Use the response atom which only changes when result changes
+        const childRespAtom = docsBulletState.respAtom(docId, firstChildId);
+        const store = docsBulletState._store;
+        
+        // Manual subscription to child's response atom (since we're outside React component)
+        const unsubscribeChild = store.sub(childRespAtom, () => {
+          const childResults = store.get(childRespAtom);
+          const childResult = childResults[containerClassName];
+          
+          console.log('noteId:', nodeId, 'YamdNodeAnonym received result from first child:', childResult);
+          if (childResult) {
+            // Forward the child's result as our own result
+            nodeBulletState.updateBulletYPosResult(docId, nodeId, containerClassName, childResult);
+            
+            // Clean up subscription after successful response
+            unsubscribeChild();
+            childSubscriptionsRef.current.delete(subscriptionKey);
           }
-        );
+        });
         
         // Track this subscription for cleanup
         childSubscriptionsRef.current.set(subscriptionKey, unsubscribeChild);
@@ -157,13 +160,11 @@ const calcBulletYPos = (nodeId, docId, globalInfo, childSubscriptionsRef, render
       } else {
         // No children to forward to
         const result = { code: -2, message: 'Anonymous node: no children to forward positioning request to', data: null };
-        store.updateReqResult(docId, nodeId, containerClassName, result);
-        store.incRespCounter(docId, nodeId, containerClassName);
+        nodeBulletState.updateBulletYPosResult(docId, nodeId, containerClassName, result);
       }
     } catch (error) {
       const result = { code: -1, message: `Anonymous node positioning error: ${error.message}`, data: null };
-      store.updateReqResult(docId, nodeId, containerClassName, result);
-      store.incRespCounter(docId, nodeId, containerClassName);
+      nodeBulletState.updateBulletYPosResult(docId, nodeId, containerClassName, result);
     }
   });
 };

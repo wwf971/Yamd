@@ -172,6 +172,7 @@ const TestEdit = () => {
         <div className="flattened-panel">
           <h3 className="flattened-panel-title">Flattened Data (Real-time Updates)</h3>
           <DocDataDisplay 
+            key={docId}
             docId={docId} 
             nodeIds={nodeIds} 
             isLoading={isLoading}

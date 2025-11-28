@@ -823,17 +823,18 @@ function processNode(node) {
 /**
  * Determine node type based on attributes
  * @param {object} attr - Parsed attributes
- * @returns {string} - Node type
+ * @returns {string} - Node type ('node' for regular nodes, or special types like 'latex', 'image', etc.)
  */
 function determineNodeType(attr) {
-  // Check for explicit type first (like [latex], [image], [image-list])
+  // Check for explicit special types first (like [latex], [image], [image-list])
+  // These will be preserved as special types
   if (attr.type) {
-    return attr.type;
-  } else if (attr.selfDisplay) {
-    return 'node';
-  } else if (attr.childDisplay || attr.childClass || attr.valueNum !== null) {
-    return 'node';
-  } else {
-    return 'node'; // Default type
+    const specialTypes = ['latex', 'image', 'video', 'image-list', 'video-list', 'custom'];
+    if (specialTypes.includes(attr.type)) {
+      return attr.type;
+    }
   }
+  
+  // All other nodes are type 'node'
+  return 'node';
 }

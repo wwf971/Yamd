@@ -1,7 +1,7 @@
 import React, { createContext, useContext } from 'react';
 import { useAtomValue } from 'jotai';
 import { produce as immer } from 'immer';
-import { docsData, docsState } from '@/core/DocStore.js';
+import { docsData, docsState, nodeBulletState } from '@/core/DocStore.js';
 import { deleteNode as _deleteNode } from '@/core/EditUtils.js';
 
 /**
@@ -175,7 +175,7 @@ export const formatYPos = (value: any) => {
 };
 
 /**
- * Equality function for Zustand subscriptions that only triggers when requestCounter increases
+ * Equality function for Zustand subscriptions that only triggers when reqCounter increases
  * @param {string} nodeId - Node ID for debugging
  * @param {string} componentName - Component name for debugging
  * @returns {function} Equality function for Zustand subscribe
@@ -184,10 +184,10 @@ export const createBulletEqualityFn = (nodeId: any, componentName: any) => {
   return (prev: any, next: any) => {
     // console.log(`noteId: ${nodeId} ${componentName} equalityFn prev:`, prev, "next:", next);
 
-    // Only trigger if requestCounter has increased (ignore responseCounter changes)
+    // Only trigger if reqCounter has increased (ignore respCounter changes)
     const keys = new Set([...Object.keys(prev), ...Object.keys(next)]);
     const hasNewRequests = Array.from(keys).some((key) => 
-      (next[key]?.requestCounter || 0) > (prev[key]?.requestCounter || 0)
+      (next[key]?.reqCounter || 0) > (prev[key]?.reqCounter || 0)
     );
     // child almost always mounts before parent mounts
 
@@ -692,17 +692,14 @@ export const createRenderUtilsContextValue = ({
       // Trigger bullet position recalculation for the indented node
       // Use setTimeout to ensure DOM has updated before recalculating
       setTimeout(() => {
-        if (docStore) {
-          const store = docStore.getState();
-          // Check if there are any bullet positioning requests for this node
-          const requests = store.getBulletYPosReqs?.(docId, nodeId);
-          if (requests && Object.keys(requests).length > 0) {
-            // Increment request counter for each container to trigger recalculation
-            Object.keys(requests).forEach(containerClassName => {
-              store.incReqCounter(docId, nodeId, containerClassName);
-            });
-            console.log(`🔄 Triggered bullet recalculation for ${nodeId}`);
-          }
+        // Check if there are any bullet positioning requests for this node
+        if (nodeBulletState.hasAnyBulletReqs(docId, nodeId)) {
+          const requests = nodeBulletState.getAllBulletYPosReqs(docId, nodeId);
+          // Increment request counter for each container to trigger recalculation
+          Object.keys(requests).forEach(containerClassName => {
+            nodeBulletState.reqCalcBulletYPos(docId, nodeId, containerClassName);
+          });
+          console.log(`🔄 Triggered bullet recalculation for ${nodeId}`);
         }
       }, 0);
       

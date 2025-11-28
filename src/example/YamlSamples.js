@@ -4,7 +4,7 @@ export function getSampleYamlSeries(series='normal'){
     return [
       'timeline',
       'latex',
-      'rich-text',
+      'text-rich',
     ];
   }
   if(series === 'custom') {
@@ -16,6 +16,7 @@ export function getSampleYamlSeries(series='normal'){
   if(series === 'edit') {
     return [
       'text-simple',
+      'text-rich',
       'ul-add-remove'
     ]
   }
@@ -79,7 +80,7 @@ export function getSampleYaml(name) {
     `
   }
 
-  if(name === 'rich-text') {
+  if(name === 'text-rich') {
     return `
       # Rich Text Examples
       - "Basic text: This is a basic text example"

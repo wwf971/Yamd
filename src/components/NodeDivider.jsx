@@ -1,8 +1,8 @@
 import React, { useRef, useEffect, useLayoutEffect, forwardRef, useImperativeHandle } from 'react';
 import { getNodeClass } from '@/core/YamdNode.jsx';
 import { useRenderUtilsContext } from '@/core/RenderUtils.ts';
-// Store is now accessed via RenderUtils context
 import { createBulletEqualityFn } from '@/core/RenderUtils.ts';
+import { docsBulletState, nodeBulletState } from '@/core/DocStore.js';
 
 /**
  * Divider node renderer - displays title as a divider line with text
@@ -29,32 +29,45 @@ const NodeDivider = forwardRef(({ nodeId, parentInfo, globalInfo }, ref) => {
     }
   }), [nodeId, docId, docStore]);
 
-  // ===== ZUSTAND LOGIC =====
+  // ===== JOTAI LOGIC =====
+  // Subscribe to request counters (only changes when reqCounter changes)
+  const reqCounters = docsBulletState.useReqCounters(docId, nodeId);
   
-  // Subscribe to request counter changes with custom equality function
+  // Track previous reqCounters to detect changes
+  // Key by docId to handle document reloads
+  const prevReqCountersRef = useRef({});
+  const lastDocIdRef = useRef(docId);
+  
+  // Reset ref when docId changes (document reload)
+  if (lastDocIdRef.current !== docId) {
+    prevReqCountersRef.current = {};
+    lastDocIdRef.current = docId;
+  }
+  
+  // Trigger calculation when reqCounters change
   useLayoutEffect(() => {
-    if (!nodeId || !docId || !docStore) {
+    if (!nodeId || !docId) {
       console.warn('noteId:', nodeId, 'docId:', docId, 'NodeDivider useLayoutEffect subscribe skipped');
       return;
     }
-    console.log('noteId:', nodeId, 'docId:', docId, 'NodeDivider useLayoutEffect subscribe');
-    const unsubscribe = docStore.subscribe(
-      (state) => state.bulletYPosReq[docId]?.[nodeId] || {},
-      (requests) => {
-        console.log('noteId:', nodeId, 'NodeDivider useLayoutEffect subscribe triggered with requests:', requests);
-        // This will only fire if equalityFn returns false
-        calcBulletYPos(nodeId, docId, nodeRef, dividerRef, docStore);
-      },
-      {
-        equalityFn: createBulletEqualityFn(nodeId, 'NodeDivider'),
-      }
-    );
     
-    // Immediately check for existing requests
-    calcBulletYPos(nodeId, docId, nodeRef, dividerRef, docStore);
-    return unsubscribe;
-  }, [nodeId, docId, docStore]);
-  // ===== END ZUSTAND LOGIC =====
+    let shouldCalculate = false;
+    Object.keys(reqCounters).forEach(containerClassName => {
+      const currentReqCounter = reqCounters[containerClassName] || 0;
+      const prevReqCounter = prevReqCountersRef.current[containerClassName] || 0;
+      
+      if (currentReqCounter > prevReqCounter) {
+        shouldCalculate = true;
+        prevReqCountersRef.current[containerClassName] = currentReqCounter;
+      }
+    });
+    
+    if (shouldCalculate) {
+      console.log('noteId:', nodeId, 'docId:', docId, 'NodeDivider reqCounter increased');
+      calcBulletYPos(nodeId, docId, nodeRef, dividerRef, docStore);
+    }
+  }, [nodeId, docId, reqCounters, docStore]);
+  // ===== END JOTAI LOGIC =====
 
   // Subscribe to node data changes (especially children array changes)
   const nodeData = renderUtils.useNodeData(nodeId);
@@ -141,9 +154,8 @@ const NodeDivider = forwardRef(({ nodeId, parentInfo, globalInfo }, ref) => {
 const calcBulletYPos = (nodeId, docId, nodeRef, dividerRef, docStore) => {
   if (!nodeRef.current || !dividerRef.current) return;
   
-  const store = docStore.getState();
-  // get all requests for this node
-  const requests = store.getBulletYPosReqs(docId, nodeId);
+  // Get all requests for this node using Jotai
+  const requests = nodeBulletState.getAllBulletYPosReqs(docId, nodeId);
   console.log('noteId:', nodeId, 'NodeDivider calcBulletYPos requests:', requests);
   
   // update result for each requesting container
@@ -155,8 +167,7 @@ const calcBulletYPos = (nodeId, docId, nodeRef, dividerRef, docStore) => {
        
        if (!bulletContainer || !dividerContainer) {
          const result = { code: -1, message: `Divider: bullet container ${containerClassName} not found`, data: null };
-         store.updateReqResult(docId, nodeId, containerClassName, result);
-         store.incRespCounter(docId, nodeId, containerClassName);
+         nodeBulletState.updateBulletYPosResult(docId, nodeId, containerClassName, result);
          return;
        }
        
@@ -169,14 +180,11 @@ const calcBulletYPos = (nodeId, docId, nodeRef, dividerRef, docStore) => {
       
       const result = { code: 0, message: 'Divider line center position', data: preferredYPos };
       
-      // update result in the Zustand store
-      store.updateReqResult(docId, nodeId, containerClassName, result);
-      // increment response counter in store
-      store.incRespCounter(docId, nodeId, containerClassName);
+      // Update result using Jotai
+      nodeBulletState.updateBulletYPosResult(docId, nodeId, containerClassName, result);
     } catch (error) {
       const result = { code: -1, message: `Divider positioning error: ${error.message}`, data: null };
-      store.updateReqResult(docId, nodeId, containerClassName, result);
-      store.incRespCounter(docId, nodeId, containerClassName);
+      nodeBulletState.updateBulletYPosResult(docId, nodeId, containerClassName, result);
     }
   });
 };

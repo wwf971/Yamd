@@ -6,7 +6,7 @@ import YamdRefHandler from '@/components/NodeRefHandler.jsx';
 import YamdBibsList from '@/components/NodeBibsList.jsx';
 import NodeWrapper from '@/custom/NodeWrapper.jsx';
 import { handleRefClick, handleBibClick, handleBackToSource } from '@/core/YamdDoc.js';
-import { useDocStore, generateDocId, docsData } from '@/core/DocStore.js';
+import { useDocStore, generateDocId, docsData, docsState, nodeBulletState } from '@/core/DocStore.js';
 // Import RenderUtils context for direct usage
 import { RenderUtilsContext, createRenderUtilsContextValue } from '@/core/RenderUtils.ts';
 
@@ -26,13 +26,8 @@ const YamdDoc = ({
     return <div className="yamd-error">Error: docId is required</div>;
   }
   
-  // Clean up bullet position data when component unmounts or docId changes
-  useEffect(() => {
-    // Cleanup function runs when docId changes or component unmounts
-    return () => {
-      useDocStore.getState().clearBulletYPosReqForDoc(docId);
-    };
-  }, [docId]);
+  // Clean up all Jotai atoms when component unmounts
+  // No cleanup here - TestRender cleans up old atoms before creating new document
 
   const containerRef = useRef(null);
   const nodeRefsMap = useRef(new Map()); // Map from nodeId to DOM element reference
@@ -70,15 +65,11 @@ const YamdDoc = ({
 
   // Get node reference by ID
   const getNodeRefById = useCallback((nodeId) => {
-    const nodeRef = nodeRefsMap.current.get(nodeId);
-    console.log(`🔍 Retrieved node ref for ${nodeId}:`, nodeRef);
-    return nodeRef;
+    return nodeRefsMap.current.get(nodeId);
   }, []);
 
   // Create stable globalInfo object to prevent infinite re-renders
   const globalInfo = useMemo(() => {
-    console.log('🔍 globalInfo re-created');
-    
     // Create the globalInfo object (will be used recursively)
     const globalInfo = { 
       docId: docId, // Include docId for Zustand positioning
