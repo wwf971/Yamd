@@ -42,10 +42,14 @@ export interface RenderUtilsContextValue {
   getRefById: (refId: string) => any;
   createNodeAfter: (nodeId: string, newNodeData?: any) => {code: number; message: string; data: { newNodeId: string } | null };
   splitToNextSibling: (nodeId: string, splitPosition: number) => { code: number; message: string; data: { newNodeId: string; leftText: string; rightText: string } | null };
-  mergeWithPrevSibling: (nodeId: string) => { code: number; message: string; data: { prevSiblingId: string; cursorPosition: number } | null };
+  mergeWithPrevSibling: (nodeId: string) => { code: number; message: string; data: { prevSiblingId: string; cursorPos: number } | null };
   deleteNode: (nodeId: string) => { code: number; message: string; data: { previousSiblingId: string | null } | null };
   indentNode: (nodeId: string) => { code: number; message: string; data: { prevSiblingId: string } | null };
   outdentNode: (nodeId: string) => { code: number; message: string; data: { grandparentId: string; nextSiblings: string[] } | null };
+  
+  // Focus management
+  triggerFocus: (nodeId: string, type: string, extraData?: any) => void;
+  triggerUnfocus: (nodeId: string, from: string, type: string, extraData?: any) => void;
   
   // Configuration
   BULLET_DIMENSIONS: typeof BULLET_DIMENSIONS;
@@ -482,7 +486,7 @@ export const createRenderUtilsContextValue = ({
       const currentText = currentNode.textRaw ?? currentNode.textOriginal ?? '';
       const prevText = prevSibling.textRaw ?? prevSibling.textOriginal ?? '';
       const mergedText = prevText + currentText;
-      const cursorPosition = prevText.length; // Cursor should be at the merge point
+      const cursorPos = prevText.length; // Cursor should be at the merge point
       
       // Update previous sibling with merged text
       docsData.setAtom(prevSiblingAtom, (prev: any) =>
@@ -514,12 +518,12 @@ export const createRenderUtilsContextValue = ({
       docsState.removeNodeState(docId, nodeId);
       
       // Focus previous sibling with cursor at merge point
-      docsState.triggerFocus(docId, prevSiblingId, 'mergedFromNext', { cursorPosition });
+      docsState.triggerFocus(docId, prevSiblingId, 'mergedFromNext', { cursorPos });
       
       return {
         code: 0,
         message: `Node ${nodeId} merged with ${prevSiblingId}`,
-        data: { prevSiblingId, cursorPosition }
+        data: { prevSiblingId, cursorPos }
       };
     },
     
@@ -819,6 +823,17 @@ export const createRenderUtilsContextValue = ({
         message: `Node ${nodeId} outdented to ${grandparentId}`,
         data: { grandparentId, nextSiblings }
       };
+    },
+    
+    // Focus management
+    triggerFocus: (nodeId: string, type: string, extraData: any = {}) => {
+      if (!docId) return;
+      docsState.triggerFocus(docId, nodeId, type, extraData);
+    },
+    
+    triggerUnfocus: (nodeId: string, from: string, type: string, extraData: any = {}) => {
+      if (!docId) return;
+      docsState.triggerUnfocus(docId, nodeId, from, type, extraData);
     },
     
     // Settings/Configuration

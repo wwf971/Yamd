@@ -2,7 +2,6 @@ import React, { useRef, useEffect, useLayoutEffect, useState } from 'react';
 import { getNodeClass } from '@/core/YamdNode.jsx';
 import { useRenderUtilsContext } from '@/core/RenderUtils.ts';
 import NodeTextRich from './NodeRichText.jsx';
-import NodeTextPlain from './NodePlainText.jsx';
 import { createBulletEqualityFn } from '@/core/RenderUtils.ts';
 import { docsBulletState, nodeBulletState } from '@/core/DocStore.js';
 
@@ -22,7 +21,7 @@ const YamdNodeText = React.memo(({ nodeId, parentInfo, globalInfo }) => {
     }
   }, [nodeId, renderUtils.registerNodeRef]);
   
-  // ref to access NodeTextRich or NodeTextPlain methods
+  // ref to access NodeTextRich methods (for bullet positioning)
   const textContentRef = useRef(null);
   
   // ===== JOTAI LOGIC =====
@@ -75,34 +74,20 @@ const YamdNodeText = React.memo(({ nodeId, parentInfo, globalInfo }) => {
   const selfText = nodeData.textRaw ?? nodeData.textOriginal ?? '';
   const segments = nodeData.segments; // Array of segment node IDs
   
-  // Determine if this is plain text (no segments, or only one text segment)
-  const isPlainText = !segments || segments.length === 0 || 
-    (segments.length === 1 && renderUtils.getNodeDataById(segments[0])?.selfDisplay === 'text');
-  
   const childDisplay = renderUtils.getChildDisplay(nodeData, false, parentInfo);
   const childClass = nodeData.attr?.childClass;
   const shouldRenderBullet = parentInfo?.childDisplay === 'ul' || parentInfo?.childDisplay === 'ol';
   
   // Use the utility function to get appropriate CSS class
   const nodeClass = getNodeClass(nodeData, parentInfo) || 'yamd-title-default';
-  // console.log("textRich:", textRich, "isPlainText:", isPlainText);
   
   // Check if text node has content (including empty string for editable mode)
   const hasTextContent = nodeData.textRaw !== undefined || nodeData.textOriginal !== undefined;
 
   return (
     <div ref={nodeRef} className="yamd-node-text">
-      {/* self content */}
-      {hasTextContent && isPlainText && (
-        <NodeTextPlain 
-          ref={textContentRef}
-          nodeId={nodeId}
-          className={nodeClass}
-          parentInfo={parentInfo}
-          globalInfo={globalInfo}
-        />
-      )}
-      {hasTextContent && !isPlainText && (
+      {/* self content - always use NodeTextRich */}
+      {hasTextContent && (
         <NodeTextRich 
           ref={textContentRef}
           nodeId={nodeId}

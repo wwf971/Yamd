@@ -285,6 +285,11 @@ class DocsState {
         focus: {
           counter: 0,
           type: null // 'prevSiblingDeleted', 'nextSiblingDeleted', 'parentCommand', etc.
+        },
+        unfocus: {
+          counter: 0,
+          from: null, // segment ID that wants to unfocus
+          type: null  // 'left', 'right', 'up', 'down'
         }
       });
     }
@@ -302,14 +307,35 @@ class DocsState {
     const stateAtom = this.getNodeState(docId, nodeId);
     const currentState = this._store.get(stateAtom);
     
-    this._store.set(stateAtom, {
-      ...currentState,
-      focus: {
-        counter: currentState.focus.counter + 1,
-        type,
-        ...extraData
-      }
-    });
+    // Mutate the focus object directly
+    currentState.focus.counter++;
+    currentState.focus.type = type;
+    Object.assign(currentState.focus, extraData);
+    
+    // Set with a new state reference so Jotai detects the change
+    this._store.set(stateAtom, {...currentState});
+  }
+
+  /**
+   * Trigger unfocus on a node (for segments to request exit)
+   * @param {string} docId - Document ID
+   * @param {string} nodeId - Node ID (parent rich text node)
+   * @param {string} from - Segment ID that wants to unfocus
+   * @param {string} type - Unfocus type ('left', 'right', 'up', 'down')
+   * @param {object} extraData - Additional data (e.g., cursorPageX)
+   */
+  triggerUnfocus(docId, nodeId, from, type, extraData = {}) {
+    const stateAtom = this.getNodeState(docId, nodeId);
+    const currentState = this._store.get(stateAtom);
+    
+    // Mutate the unfocus object directly
+    currentState.unfocus.counter++;
+    currentState.unfocus.from = from;
+    currentState.unfocus.type = type;
+    Object.assign(currentState.unfocus, extraData);
+    
+    // Set with a new state reference so Jotai detects the change
+    this._store.set(stateAtom, {...currentState});
   }
 
   /**
