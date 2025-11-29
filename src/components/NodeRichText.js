@@ -18,21 +18,21 @@ export const calcBulletYPos = (textEl, segments, containerClassName) => {
 
     // For rich text, find the first text segment span
     // segments is now an array of segment IDs, so we just query the DOM
-    const textSegments = textEl.querySelectorAll('.yamd-text-segment');
+      const textSegments = textEl.querySelectorAll('.yamd-text-segment');
     
-    if (textSegments.length > 0) {
-      const firstTextSegment = textSegments[0];
-      const rect = firstTextSegment.getBoundingClientRect();
+      if (textSegments.length > 0) {
+        const firstTextSegment = textSegments[0];
+        const rect = firstTextSegment.getBoundingClientRect();
 
-      const bulletContainer = textEl.closest(containerClassName);
-      if (!bulletContainer) {
+        const bulletContainer = textEl.closest(containerClassName);
+        if (!bulletContainer) {
         return { code: -1, message: `Bullet container ${containerClassName} not found`, data: null };
-      }
-      const containerRect = bulletContainer.getBoundingClientRect();
-      
+        }
+        const containerRect = bulletContainer.getBoundingClientRect();
+        
       // Calculate vertical middle of first text segment
-      const relativeY = rect.top - containerRect.top + (rect.height * 0.55);
-      return { code: 0, message: 'Success', data: relativeY };
+        const relativeY = rect.top - containerRect.top + (rect.height * 0.55);
+        return { code: 0, message: 'Success', data: relativeY };
     }
     
     // Fallback: use line height estimation

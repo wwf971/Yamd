@@ -84,10 +84,10 @@ const SegmentText = forwardRef(({ segmentId, parentNodeId, className, globalInfo
       const isAtBeginning = isCursorAtBeginning(textElRef.current);
       console.log(`⬅️ SegmentText [${segmentId}] ArrowLeft: isAtBeginning=${isAtBeginning}`);
       if (isAtBeginning) {
-        e.preventDefault();
-        console.log(`⬅️ SegmentText [${segmentId}] triggering unfocus: left`);
-        renderUtils.triggerUnfocus(parentNodeId, segmentId, 'left');
-        return;
+      e.preventDefault();
+      console.log(`⬅️ SegmentText [${segmentId}] triggering unfocus: left`);
+      renderUtils.triggerUnfocus(parentNodeId, segmentId, 'left');
+      return;
       }
     }
     
@@ -96,10 +96,10 @@ const SegmentText = forwardRef(({ segmentId, parentNodeId, className, globalInfo
       const isAtEnd = isCursorAtEnd(textElRef.current);
       console.log(`➡️ SegmentText [${segmentId}] ArrowRight: isAtEnd=${isAtEnd}, textContent="${textElRef.current?.textContent}"`);
       if (isAtEnd) {
-        e.preventDefault();
-        console.log(`➡️ SegmentText [${segmentId}] triggering unfocus: right`);
-        renderUtils.triggerUnfocus(parentNodeId, segmentId, 'right');
-        return;
+      e.preventDefault();
+      console.log(`➡️ SegmentText [${segmentId}] triggering unfocus: right`);
+      renderUtils.triggerUnfocus(parentNodeId, segmentId, 'right');
+      return;
       }
     }
     
@@ -193,7 +193,7 @@ const SegmentText = forwardRef(({ segmentId, parentNodeId, className, globalInfo
         display: 'inline',
         outline: 'none',
         cursor: 'text',
-        padding: '0px 2px',
+        padding: '0px 0px',
         borderRadius: '2px',
         transition: 'background-color 0.2s, border 0.2s',
         userSelect: 'text',

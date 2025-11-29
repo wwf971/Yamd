@@ -248,6 +248,8 @@ const NodeTextRich = forwardRef(({ nodeId, className, parentInfo, globalInfo = n
           segmentComponent = (
             <SegmentRef
               segment={segmentNode}
+              segmentId={segmentId}
+              parentNodeId={nodeId}
               globalInfo={globalInfo}
             />
           );
@@ -256,6 +258,8 @@ const NodeTextRich = forwardRef(({ nodeId, className, parentInfo, globalInfo = n
           segmentComponent = (
             <NodeTextRichBib
               segment={segmentNode}
+              segmentId={segmentId}
+              parentNodeId={nodeId}
               globalInfo={globalInfo}
             />
           );

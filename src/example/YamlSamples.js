@@ -17,7 +17,7 @@ export function getSampleYamlSeries(series='normal'){
     return [
       'text-simple',
       'text-rich',
-      'ul-add-remove'
+      'ul-add-remove',
     ]
   }
 }
@@ -85,7 +85,7 @@ export function getSampleYaml(name) {
       # Rich Text Examples
       - "Basic text: This is a basic text example"
       - "Rich text: This is a rich text example with \\\\ref{1a} and \\\\bib{1b}[child=ul]":
-        - "Child 1"
+        - "Child 1 $x = \\\\frac{-b \\\\pm \\\\sqrt{b^2-4ac}}{2a}$"
         - "Child 2"
     `
   }

@@ -831,7 +831,7 @@ function determineNodeType(attr) {
   if (attr.type) {
     const specialTypes = ['latex', 'image', 'video', 'image-list', 'video-list', 'custom'];
     if (specialTypes.includes(attr.type)) {
-      return attr.type;
+    return attr.type;
     }
   }
   

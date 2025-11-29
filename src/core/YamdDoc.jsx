@@ -26,9 +26,6 @@ const YamdDoc = ({
     return <div className="yamd-error">Error: docId is required</div>;
   }
   
-  // Clean up all Jotai atoms when component unmounts
-  // No cleanup here - TestRender cleans up old atoms before creating new document
-
   const containerRef = useRef(null);
   const nodeRefsMap = useRef(new Map()); // Map from nodeId to DOM element reference
   const [refState, setRefState] = useState({

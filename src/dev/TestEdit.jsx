@@ -20,7 +20,7 @@ import './TestEdit.css';
  */
 const TestEdit = () => {
   const sampleNames = getSampleYamlSeries('edit');
-  const defaultSample = "text-simple";
+  const defaultSample = "text-rich";
   const [selectedSample, setSelectedSample] = useState(defaultSample);
   const [yamlInput, setYamlInput] = useState(getSampleYaml(defaultSample));
   const [flattenedData, setFlattenedData] = useState(null);

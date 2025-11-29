@@ -1,25 +1,33 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { useRenderUtilsContext } from '@/core/RenderUtils.ts';
 import { docsState } from '@/core/DocStore.js';
+import './SegmentRef.css';
 
 /**
  * Segment component for asset references (images, videos, latex blocks, etc)
  * Handles \ref{linkText}{linkId} patterns with inline editing support
+ * Supports focus/unfocus protocol for navigation between segments
  */
-const SegmentRef = ({ segment, globalInfo }) => {
+const SegmentRef = ({ segment, segmentId: segmentIdProp, parentNodeId, globalInfo }) => {
   // Get render utils from context
   const renderUtils = useRenderUtilsContext();
   
+  // Use segmentId from props if provided, otherwise use segment.id
+  const effectiveSegmentId = segmentIdProp || segment?.id;
+  
   // Subscribe to segment node data for reactive updates
-  const segmentData = renderUtils.useNodeData(segment.id);
+  const segmentData = renderUtils.useNodeData(effectiveSegmentId);
   
   // Subscribe to segment node state for focus/edit management
-  const segmentState = renderUtils.useNodeState ? renderUtils.useNodeState(segment.id) : {};
-  const isEditing = segmentState?.focus?.type === 'editing';
+  const segmentState = renderUtils.useNodeState ? renderUtils.useNodeState(effectiveSegmentId) : {};
   
-  // Refs for editable spans
+  // Local state for edit mode (controllable)
+  const [isEditing, setIsEditing] = useState(false);
+  
+  // Refs for editable spans and link element
   const linkTextRef = useRef(null);
   const linkIdRef = useRef(null);
+  const linkRef = useRef(null);
   
   // Backup state for cancel
   const [editBackup, setEditBackup] = useState(null);
@@ -60,6 +68,133 @@ const SegmentRef = ({ segment, globalInfo }) => {
     }
   }, [isEditing, editBackup, linkText, targetId]);
   
+  // Handle focus requests from parent NodeRichText
+  useEffect(() => {
+    if (!segmentState?.focus) return;
+    
+    const { counter, type } = segmentState.focus;
+    
+    // Skip if counter is 0 (initial state)
+    if (counter === 0) return;
+    
+    console.log(`🎯 SegmentRef [${effectiveSegmentId}] received focus:`, { counter, type });
+    
+    // Check if this is a navigation focus (fromLeft, fromRight, fromUp, fromDown)
+    const isNavigationFocus = ['fromLeft', 'fromRight', 'fromUp', 'fromDown'].includes(type);
+    
+    if (isNavigationFocus) {
+      // Auto-enter edit mode for keyboard navigation
+      console.log(`✏️ SegmentRef [${effectiveSegmentId}] entering edit mode from ${type}`);
+      
+      if (!isEditing) {
+        setIsEditing(true);
+        
+        // Store backup for cancel
+        setEditBackup({
+          linkText: segmentData?.linkText || '',
+          targetId: segmentData?.targetId || ''
+        });
+      }
+      
+      // Field focusing is handled by separate useEffect that watches isEditing
+      return;
+    }
+    
+    // Handle 'editing' focus type - enter edit mode (for explicit edit requests)
+    if (type === 'editing') {
+      if (!isEditing) {
+        console.log(`✏️ SegmentRef [${effectiveSegmentId}] entering edit mode`);
+        setIsEditing(true);
+        
+        // Store backup for cancel
+        setEditBackup({
+          linkText: segmentData?.linkText || '',
+          targetId: segmentData?.targetId || ''
+        });
+        
+        // Focus the first field by default
+        setTimeout(() => {
+          if (linkTextRef.current) {
+            linkTextRef.current.focus();
+            // Select all text
+            const range = document.createRange();
+            const sel = window.getSelection();
+            range.selectNodeContents(linkTextRef.current);
+            range.collapse(false);
+            sel.removeAllRanges();
+            sel.addRange(range);
+          }
+        }, 0);
+      }
+      return;
+    }
+    
+    // Other focus types - just focus the link element (non-editing)
+    if (!isEditing) {
+      if (linkRef.current) {
+        linkRef.current.focus();
+      }
+    }
+    
+  }, [segmentState?.focus?.counter, effectiveSegmentId, globalInfo, segmentData]);
+  
+  // Handle focusing fields when entering edit mode
+  useEffect(() => {
+    if (!isEditing) return;
+    if (!segmentState?.focus) return;
+    
+    const { type } = segmentState.focus;
+    const isNavigationFocus = ['fromLeft', 'fromRight', 'fromUp', 'fromDown'].includes(type);
+    
+    if (!isNavigationFocus) return;
+    
+    // Focus appropriate field based on navigation direction
+    const shouldFocusLinkId = (type === 'fromRight');
+    
+    if (shouldFocusLinkId && linkIdRef.current) {
+      console.log(`📍 SegmentRef [${effectiveSegmentId}] (useEffect) focusing linkId (last field)`);
+      linkIdRef.current.focus();
+      // Move cursor to end - use textContent length for reliable positioning
+      const textLength = linkIdRef.current.textContent?.length || 0;
+      const range = document.createRange();
+      const sel = window.getSelection();
+      const textNode = linkIdRef.current.firstChild;
+      
+      if (textNode && textNode.nodeType === Node.TEXT_NODE) {
+        // Position at end of text node
+        range.setStart(textNode, textLength);
+        range.collapse(true);
+      } else {
+        // Empty or no text node - position at end of element
+        range.selectNodeContents(linkIdRef.current);
+        range.collapse(false);
+      }
+      
+      sel.removeAllRanges();
+      sel.addRange(range);
+    } else if (linkTextRef.current) {
+      console.log(`📍 SegmentRef [${effectiveSegmentId}] (useEffect) focusing linkText (first field)`);
+      linkTextRef.current.focus();
+      // Move cursor to beginning - use textContent length for reliable positioning
+      const range = document.createRange();
+      const sel = window.getSelection();
+      const textNode = linkTextRef.current.firstChild;
+      
+      if (textNode && textNode.nodeType === Node.TEXT_NODE) {
+        // Position at start of text node
+        range.setStart(textNode, 0);
+        range.collapse(true);
+      } else {
+        // Empty or no text node - position at start of element
+        range.selectNodeContents(linkTextRef.current);
+        range.collapse(true);
+      }
+      
+      sel.removeAllRanges();
+      sel.addRange(range);
+    }
+  }, [isEditing, effectiveSegmentId, segmentState?.focus]);
+  
   // Handle keyboard events in edit mode
   const handleKeyDown = (e, field) => {
     if (!isEditing) return;
@@ -70,6 +205,17 @@ const SegmentRef = ({ segment, globalInfo }) => {
     } else if (e.key === 'Escape') {
       e.preventDefault();
       cancelEdit();
+    } else if (e.key === 'ArrowLeft' && field === 'linkText') {
+      // Check if cursor is at the beginning of linkText (first field)
+      const selection = window.getSelection();
+      if (selection.anchorOffset === 0) {
+        e.preventDefault();
+        // Trigger unfocus to move to previous segment
+        if (parentNodeId) {
+          console.log(`⬅️ SegmentRef [${effectiveSegmentId}] triggering unfocus: left`);
+          renderUtils.triggerUnfocus(parentNodeId, effectiveSegmentId, 'left');
+        }
+      }
     } else if (e.key === 'ArrowLeft' && field === 'linkId') {
       // Check if cursor is at the beginning of linkId
       const selection = window.getSelection();
@@ -82,6 +228,20 @@ const SegmentRef = ({ segment, globalInfo }) => {
         range.collapse(false);
         selection.removeAllRanges();
         selection.addRange(range);
+      }
+    } else if (e.key === 'ArrowRight' && field === 'linkId') {
+      // Check if cursor is at the end of linkId (last field)
+      const selection = window.getSelection();
+      const textLength = linkIdRef.current?.textContent?.length || 0;
+      const cursorPos = selection.anchorOffset;
+      console.log(`➡️ SegmentRef [${effectiveSegmentId}] ArrowRight in linkId: cursorPos=${cursorPos}, textLength=${textLength}`);
+      if (cursorPos === textLength) {
+        e.preventDefault();
+        // Trigger unfocus to move to next segment
+        if (parentNodeId) {
+          console.log(`➡️ SegmentRef [${effectiveSegmentId}] triggering unfocus: right`);
+          renderUtils.triggerUnfocus(parentNodeId, effectiveSegmentId, 'right');
+        }
       }
     } else if (e.key === 'ArrowRight' && field === 'linkText') {
       // Check if cursor is at the end of linkText
@@ -97,6 +257,18 @@ const SegmentRef = ({ segment, globalInfo }) => {
         selection.removeAllRanges();
         selection.addRange(range);
       }
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (parentNodeId) {
+        console.log(`⬆️ SegmentRef [${effectiveSegmentId}] triggering unfocus: up`);
+        renderUtils.triggerUnfocus(parentNodeId, effectiveSegmentId, 'up', { cursorPageX: 0 });
+      }
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (parentNodeId) {
+        console.log(`⬇️ SegmentRef [${effectiveSegmentId}] triggering unfocus: down`);
+        renderUtils.triggerUnfocus(parentNodeId, effectiveSegmentId, 'down', { cursorPageX: 0 });
+      }
     }
   };
   
@@ -107,8 +279,8 @@ const SegmentRef = ({ segment, globalInfo }) => {
     
     // Update segment node data
     const docId = globalInfo?.docId;
-    if (docId && segmentId) {
-      renderUtils.updateNodeData(segmentId, (draft) => {
+    if (docId && effectiveSegmentId) {
+      renderUtils.updateNodeData(effectiveSegmentId, (draft) => {
         draft.linkText = newLinkText;
         draft.targetId = newTargetId;
         // Regenerate textRaw from core data
@@ -119,7 +291,7 @@ const SegmentRef = ({ segment, globalInfo }) => {
     }
     
     // Exit edit mode
-    docsState.triggerFocus(docId, segmentId, 'blur');
+    setIsEditing(false);
   };
   
   // Cancel edit and restore backup
@@ -135,8 +307,7 @@ const SegmentRef = ({ segment, globalInfo }) => {
     }
     
     // Exit edit mode
-    const docId = globalInfo?.docId;
-    docsState.triggerFocus(docId, segmentId, 'blur');
+    setIsEditing(false);
   };
   
   // Handle blur (save changes)
@@ -163,7 +334,7 @@ const SegmentRef = ({ segment, globalInfo }) => {
     
     // TEMPORARY: Always enter edit mode on click for debugging
     const docId = globalInfo?.docId;
-    docsState.triggerFocus(docId, segmentId, 'editing');
+    docsState.triggerFocus(docId, effectiveSegmentId, 'editing');
     
     // TODO: Restore navigation logic after debugging
     // Check if we should enter edit mode (e.g., double-click or Ctrl+click)
@@ -179,6 +350,34 @@ const SegmentRef = ({ segment, globalInfo }) => {
     //     sourceElement: e.target
     //   });
     // }
+  };
+  
+  // Handle arrow key navigation in non-editing mode (display mode)
+  const handleLinkKeyDown = (e) => {
+    if (isEditing || !parentNodeId) return;
+    
+    if (e.key === 'ArrowLeft') {
+      e.preventDefault();
+      console.log(`⬅️ SegmentRef [${effectiveSegmentId}] (display mode) triggering unfocus: left`);
+      renderUtils.triggerUnfocus(parentNodeId, effectiveSegmentId, 'left');
+    } else if (e.key === 'ArrowRight') {
+      e.preventDefault();
+      console.log(`➡️ SegmentRef [${effectiveSegmentId}] (display mode) triggering unfocus: right`);
+      renderUtils.triggerUnfocus(parentNodeId, effectiveSegmentId, 'right');
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      console.log(`⬆️ SegmentRef [${effectiveSegmentId}] (display mode) triggering unfocus: up`);
+      renderUtils.triggerUnfocus(parentNodeId, effectiveSegmentId, 'up', { cursorPageX: 0 });
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      console.log(`⬇️ SegmentRef [${effectiveSegmentId}] (display mode) triggering unfocus: down`);
+      renderUtils.triggerUnfocus(parentNodeId, effectiveSegmentId, 'down', { cursorPageX: 0 });
+    } else if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      // Enter edit mode
+      const docId = globalInfo?.docId;
+      docsState.triggerFocus(docId, effectiveSegmentId, 'editing');
+    }
   };
   
   // Render edit mode
@@ -251,6 +450,7 @@ const SegmentRef = ({ segment, globalInfo }) => {
 
   return (
     <a 
+      ref={linkRef}
       id={refId}
       href={`#${targetId}`}
       className="yamd-ref-link"
@@ -258,6 +458,9 @@ const SegmentRef = ({ segment, globalInfo }) => {
       data-ref-id={refId}
       title={`Reference to ${targetId} (Double-click to edit)`}
       onClick={handleClick}
+      onKeyDown={handleLinkKeyDown}
+      tabIndex={0}
+      style={{ outline: 'none', cursor: 'pointer' }}
     >
       {displayText}
     </a>

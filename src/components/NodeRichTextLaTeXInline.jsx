@@ -17,7 +17,7 @@ const NodeTextRichLaTeXInline = ({ segment, globalInfo }) => {
       </span>
     );
   }
-  
+
   const asset = renderUtils.getAssetById(segment.assetId);
   
   if (!asset) {

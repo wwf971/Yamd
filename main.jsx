@@ -21,7 +21,7 @@ const App = () => {
       </Tab>
 
       <Tab label="Document Editor">
-        <SubTab label="Main Editor">
+        <SubTab label="Main Editor" isDefault>
           <TestEdit />
         </SubTab>
       </Tab>

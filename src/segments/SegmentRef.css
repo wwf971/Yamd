@@ -1,0 +1,38 @@
+/* SegmentRef Component Styles */
+
+/* Editable spans - both linkText and linkId */
+.yamd-ref-editable {
+  display: inline-block;
+  outline: none;
+  cursor: text;
+  padding: 0px 2px;
+  border-radius: 2px;
+  transition: background-color 0.2s, border 0.2s;
+  user-select: text;
+  border: 1px solid transparent;
+}
+
+/* Minimum width only when empty */
+.yamd-ref-editable:empty {
+  min-width: 0.5em;
+}
+
+/* Focus state - light blue background with green border (same as text segment) */
+.yamd-ref-editable:focus {
+  background-color: #f0f8ff;
+  border: 1px solid #4CAF50;
+  outline: none; /* Suppress browser default outline */
+}
+
+/* Syntax elements (braces, etc.) - inherit font from parent */
+.yamd-ref-syntax {
+  color: #666;
+  user-select: none;
+}
+
+/* Container for the entire ref in edit mode - inherit font from parent */
+.yamd-ref-edit-mode {
+  display: inline;
+}
+
+

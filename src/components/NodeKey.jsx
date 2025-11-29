@@ -8,7 +8,7 @@ import { renderListBullet, useRenderUtilsContext } from '@/core/RenderUtils.ts';
 const YamdNodeKey = ({ nodeId, parentInfo, globalInfo }) => {
   // Get render utils from context
   const renderUtils = useRenderUtilsContext();
-
+  
   // Subscribe to node data changes (especially children array changes)
   const nodeData = renderUtils.useNodeData(nodeId);
   

@@ -80,13 +80,13 @@ const YamdCustomNodeWrapper = forwardRef(({ nodeId, parentInfo, globalInfo, Cust
     
     if (shouldCalculate) {
       console.log('nodeId:', nodeId, 'docId:', docId, 'YamdCustomNodeWrapper reqCounter increased');
-      // React guarantees child effects run before parent effects,
-      // so CustomComponent's useImperativeHandle has already executed
-      calcBulletYPos(nodeId, docId, customNodeRef, globalInfo);
+    // React guarantees child effects run before parent effects,
+    // so CustomComponent's useImperativeHandle has already executed
+    calcBulletYPos(nodeId, docId, customNodeRef, globalInfo);
     }
   }, [nodeId, docId, reqCounters, globalInfo]);
   // ===== END JOTAI LOGIC =====
-
+  
   const nodeData = renderUtils.getNodeDataById(nodeId);
   
   if (!nodeData) {
