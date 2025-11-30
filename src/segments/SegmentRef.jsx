@@ -11,7 +11,10 @@ import './SegmentRef.css';
 const SegmentRef = ({ segment, segmentId: segmentIdProp, parentNodeId, globalInfo }) => {
   // Get render utils from context
   const renderUtils = useRenderUtilsContext();
-  
+
+  const isFocusedRef = useRef(false);
+  const [isEditing, setIsEditing] = useState(false);
+
   // Use segmentId from props if provided, otherwise use segment.id
   const effectiveSegmentId = segmentIdProp || segment?.id;
   
@@ -21,13 +24,13 @@ const SegmentRef = ({ segment, segmentId: segmentIdProp, parentNodeId, globalInf
   // Subscribe to segment node state for focus/edit management
   const segmentState = renderUtils.useNodeState ? renderUtils.useNodeState(effectiveSegmentId) : {};
   
-  // Local state for edit mode (controllable)
-  const [isEditing, setIsEditing] = useState(false);
+
   
   // Refs for editable spans and link element
   const linkTextRef = useRef(null);
   const linkIdRef = useRef(null);
   const linkRef = useRef(null);
+
   
   // Backup state for cancel
   const [editBackup, setEditBackup] = useState(null);
@@ -40,6 +43,9 @@ const SegmentRef = ({ segment, segmentId: segmentIdProp, parentNodeId, globalInf
   }
 
   const { id: segmentId, refId, targetId, linkText } = currentSegment;
+  
+  // Debug: log render with isEditing state
+  console.log(`🔄 SegmentRef [${effectiveSegmentId}] rendering: isEditing=${isEditing}`);
   
   // Handle entering edit mode
   useEffect(() => {
@@ -68,7 +74,7 @@ const SegmentRef = ({ segment, segmentId: segmentIdProp, parentNodeId, globalInf
     }
   }, [isEditing, editBackup, linkText, targetId]);
   
-  // Handle focus requests from parent NodeRichText
+  // Handle focus requests
   useEffect(() => {
     if (!segmentState?.focus) return;
     
@@ -106,6 +112,9 @@ const SegmentRef = ({ segment, segmentId: segmentIdProp, parentNodeId, globalInf
         console.log(`✏️ SegmentRef [${effectiveSegmentId}] entering edit mode`);
         setIsEditing(true);
         
+        // Mark as focused when entering edit mode
+        isFocusedRef.current = true;
+        
         // Store backup for cancel
         setEditBackup({
           linkText: segmentData?.linkText || '',
@@ -136,7 +145,7 @@ const SegmentRef = ({ segment, segmentId: segmentIdProp, parentNodeId, globalInf
       }
     }
     
-  }, [segmentState?.focus?.counter, effectiveSegmentId, globalInfo, segmentData]);
+  }, [segmentState?.focus?.counter, effectiveSegmentId]);
   
   // Handle focusing fields when entering edit mode
   useEffect(() => {
@@ -147,6 +156,9 @@ const SegmentRef = ({ segment, segmentId: segmentIdProp, parentNodeId, globalInf
     const isNavigationFocus = ['fromLeft', 'fromRight', 'fromUp', 'fromDown'].includes(type);
     
     if (!isNavigationFocus) return;
+    
+    // Mark as focused when entering edit mode
+    isFocusedRef.current = true;
     
     // Focus appropriate field based on navigation direction
     const shouldFocusLinkId = (type === 'fromRight');
@@ -195,13 +207,56 @@ const SegmentRef = ({ segment, segmentId: segmentIdProp, parentNodeId, globalInf
     }
   }, [isEditing, effectiveSegmentId, segmentState?.focus]);
   
+  // Unified unfocus handler
+  const handleUnfocus = (saveChanges = true, shouldBlur = false) => {
+    console.log(`🔌 SegmentRef [${effectiveSegmentId}] handleUnfocus called: saveChanges=${saveChanges}, shouldBlur=${shouldBlur}, currentIsEditing=${isEditing}`);
+    
+    // Mark as no longer focused
+    isFocusedRef.current = false;
+    
+    if (saveChanges && isEditing) {
+      // Save changes
+      const newLinkText = linkTextRef.current?.textContent || '';
+      const newTargetId = linkIdRef.current?.textContent || '';
+      
+      console.log(`💾 SegmentRef [${effectiveSegmentId}] saving: linkText="${newLinkText}", targetId="${newTargetId}"`);
+      
+      // Update segment node data
+      const docId = globalInfo?.docId;
+      if (docId && effectiveSegmentId) {
+        renderUtils.updateNodeData(effectiveSegmentId, (draft) => {
+          draft.linkText = newLinkText;
+          draft.targetId = newTargetId;
+          // Regenerate textRaw from core data
+          draft.textRaw = newLinkText 
+            ? `\\ref{${newLinkText}}{${newTargetId}}`
+            : `\\ref{${newTargetId}}`;
+        });
+      }
+    }
+    
+    // Explicitly blur any focused field if requested (only for arrow keys, not for blur events)
+    if (shouldBlur) {
+      if (document.activeElement === linkTextRef.current) {
+        linkTextRef.current.blur();
+      }
+      if (document.activeElement === linkIdRef.current) {
+        linkIdRef.current.blur();
+      }
+    }
+    
+    // Exit edit mode
+    console.log(`🚪 SegmentRef [${effectiveSegmentId}] calling setIsEditing(false)`);
+    setIsEditing(false);
+  };
+  
   // Handle keyboard events in edit mode
   const handleKeyDown = (e, field) => {
     if (!isEditing) return;
     
     if (e.key === 'Enter') {
       e.preventDefault();
-      saveChanges();
+      handleUnfocus(true, true); // Save on Enter and blur
     } else if (e.key === 'Escape') {
       e.preventDefault();
       cancelEdit();
@@ -210,6 +265,8 @@ const SegmentRef = ({ segment, segmentId: segmentIdProp, parentNodeId, globalInf
       const selection = window.getSelection();
       if (selection.anchorOffset === 0) {
         e.preventDefault();
+        // Save and unfocus before moving to previous segment
+        handleUnfocus(true, true); // Save and blur
         // Trigger unfocus to move to previous segment
         if (parentNodeId) {
           console.log(`⬅️ SegmentRef [${effectiveSegmentId}] triggering unfocus: left`);
@@ -237,6 +294,8 @@ const SegmentRef = ({ segment, segmentId: segmentIdProp, parentNodeId, globalInf
       console.log(`➡️ SegmentRef [${effectiveSegmentId}] ArrowRight in linkId: cursorPos=${cursorPos}, textLength=${textLength}`);
       if (cursorPos === textLength) {
         e.preventDefault();
+        // Save and unfocus before moving to next segment
+        handleUnfocus(true, true); // Save and blur
         // Trigger unfocus to move to next segment
         if (parentNodeId) {
           console.log(`➡️ SegmentRef [${effectiveSegmentId}] triggering unfocus: right`);
@@ -259,39 +318,21 @@ const SegmentRef = ({ segment, segmentId: segmentIdProp, parentNodeId, globalInf
       }
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
+      // Save and unfocus before moving up
+      handleUnfocus(true, true); // Save and blur
       if (parentNodeId) {
         console.log(`⬆️ SegmentRef [${effectiveSegmentId}] triggering unfocus: up`);
         renderUtils.triggerUnfocus(parentNodeId, effectiveSegmentId, 'up', { cursorPageX: 0 });
       }
     } else if (e.key === 'ArrowDown') {
       e.preventDefault();
+      // Save and unfocus before moving down
+      handleUnfocus(true, true); // Save and blur
       if (parentNodeId) {
         console.log(`⬇️ SegmentRef [${effectiveSegmentId}] triggering unfocus: down`);
         renderUtils.triggerUnfocus(parentNodeId, effectiveSegmentId, 'down', { cursorPageX: 0 });
       }
     }
-  };
-  
-  // Save changes to segment node
-  const saveChanges = () => {
-    const newLinkText = linkTextRef.current?.textContent || '';
-    const newTargetId = linkIdRef.current?.textContent || '';
-    
-    // Update segment node data
-    const docId = globalInfo?.docId;
-    if (docId && effectiveSegmentId) {
-      renderUtils.updateNodeData(effectiveSegmentId, (draft) => {
-        draft.linkText = newLinkText;
-        draft.targetId = newTargetId;
-        // Regenerate textRaw from core data
-        draft.textRaw = newLinkText 
-          ? `\\ref{${newLinkText}}{${newTargetId}}`
-          : `\\ref{${newTargetId}}`;
-      });
-    }
-    
-    // Exit edit mode
-    setIsEditing(false);
   };
   
   // Cancel edit and restore backup
@@ -306,21 +347,26 @@ const SegmentRef = ({ segment, segmentId: segmentIdProp, parentNodeId, globalInf
       }
     }
     
-    // Exit edit mode
+    // Mark as no longer focused and exit edit mode without saving
+    isFocusedRef.current = false;
     setIsEditing(false);
   };
   
-  // Handle blur (save changes)
+  // Handle blur (only save if still marked as focused)
   const handleBlur = (e) => {
     // Check if focus moved to another editable span within this ref
     const relatedTarget = e.relatedTarget;
     if (relatedTarget === linkTextRef.current || relatedTarget === linkIdRef.current) {
-      return; // Don't save yet, still editing
+      return; // Don't save yet, still editing within this ref
     }
     
-    // Save changes when blurring out of the ref component
-    if (isEditing) {
-      saveChanges();
+    // Only call handleUnfocus if we're still marked as focused
+    // (if isFocusedRef is false, it means we already handled unfocus via arrow keys)
+    if (isFocusedRef.current) {
+      console.log(`🔵 SegmentRef [${effectiveSegmentId}] handleBlur: isFocused=true, calling handleUnfocus(true, false)`);
+      handleUnfocus(true, false); // Save changes on blur, but don't call .blur() again (we're already in blur!)
+    } else {
+      console.log(`⚪ SegmentRef [${effectiveSegmentId}] handleBlur: isFocused=false, skipping`);
     }
   };
   

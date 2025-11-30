@@ -50,7 +50,7 @@ const SegmentText = forwardRef(({ segmentId, parentNodeId, className, globalInfo
     // Skip if counter is 0 (initial state)
     if (counter === 0) return;
     
-    console.log(`🎯 SegmentText [${segmentId}] received focus:`, { counter, type });
+    // console.log(`🎯 SegmentText [${segmentId}] received focus:`, { counter, type });
     
     // Focus the element
     textElRef.current.focus();
@@ -177,8 +177,6 @@ const SegmentText = forwardRef(({ segmentId, parentNodeId, className, globalInfo
   
   // Check if text is empty
   const isEmpty = text === '';
-  
-  console.log(`📝 SegmentText [${segmentId}] rendering: text="${text}"`);
   
   // Single contentEditable span
   return (

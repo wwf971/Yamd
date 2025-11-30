@@ -1,6 +1,6 @@
 import React, { useRef, forwardRef, useImperativeHandle, useEffect } from 'react';
 import SegmentText from '@/segments/SegmentText.jsx';
-import NodeTextRichLaTeXInline from './NodeRichTextLaTeXInline.jsx';
+import SegmentLaTeX from '@/segments/SegmentLaTeX.jsx';
 import SegmentRef from '@/segments/SegmentRef.jsx';
 import NodeTextRichBib from './NodeRichTextBib.jsx';
 import { calcBulletYPos as _calcBulletYPos} from './NodeRichText.js';
@@ -236,10 +236,12 @@ const NodeTextRich = forwardRef(({ nodeId, className, parentInfo, globalInfo = n
         let segmentComponent;
         
         if (segmentType === 'latex_inline') {
-          // Use dedicated LaTeX component - NO MathJax fallback!
+          // Use dedicated LaTeX segment component with focus/unfocus support
           segmentComponent = (
-            <NodeTextRichLaTeXInline 
+            <SegmentLaTeX
               segment={segmentNode}
+              segmentId={segmentId}
+              parentNodeId={nodeId}
               globalInfo={globalInfo}
             />
           );

@@ -34,11 +34,13 @@ export interface RenderUtilsContextValue {
   // Jotai-based reactive data access (hook - must be called in React components)
   useNodeData: (nodeId: string) => any;
   useNodeState: (nodeId: string) => any;
+  useAsset: (assetId: string) => any;
   
   // Non-reactive data access methods
   getNodeDataById: (nodeId: string) => any;
   updateNodeData: (nodeId: string, producer: (draft: any) => void) => void;
   getAssetById: (assetId: string) => any;
+  updateAsset: (assetId: string, producer: (draft: any) => void) => void;
   getRefById: (refId: string) => any;
   createNodeAfter: (nodeId: string, newNodeData?: any) => {code: number; message: string; data: { newNodeId: string } | null };
   splitToNextSibling: (nodeId: string, splitPosition: number) => { code: number; message: string; data: { newNodeId: string; leftText: string; rightText: string } | null };
@@ -68,6 +70,9 @@ export interface RenderUtilsContextValue {
   getAlignmentStrategy?: any;
   formatYPos?: any;
   createBulletEqualityFn?: any;
+  
+  // Allow any additional properties
+  [key: string]: any;
 }
 
 // Re-export for backward compatibility
@@ -303,6 +308,24 @@ export const createRenderUtilsContextValue = ({
       if (!docId) return null;
       const assetsAtom = (docsData as any).getAssets(docId);
       return docsData.getAtomValue(assetsAtom)?.[assetId];
+    },
+    
+    useAsset: (assetId: string) => {
+      if (!docId) return null;
+      const assetsAtom = (docsData as any).getAssets(docId) as any;
+      // eslint-disable-next-line react-hooks/rules-of-hooks
+      const assets = useAtomValue(assetsAtom) as any;
+      return assets?.[assetId];
+    },
+    
+    updateAsset: (assetId: string, producer: (draft: any) => void) => {
+      if (!docId) return;
+      const assetsAtom = (docsData as any).getAssets(docId);
+      docsData.setAtom(assetsAtom, (prev: any) => immer(prev, (draft: any) => {
+        if (draft[assetId]) {
+          producer(draft[assetId]);
+        }
+      }));
     },
     
     getRefById: (refId: string) => {

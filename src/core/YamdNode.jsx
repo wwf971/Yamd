@@ -6,7 +6,7 @@ import YamdNodeKey from '@/components/NodeKey.jsx';
 import YamdNodeTopRight from '@/components/NodeTopRight.jsx';
 import YamdNodeAnonym from '@/components/NodeAnonym.jsx';
 import YamdNodeText from '@/components/NodeText.jsx';
-import NodeLaTeX from '@/components/NodeLaTeX.jsx';
+import SegmentLaTeX from '@/segments/SegmentLaTeX.jsx';
 import NodeImage from '@/components/NodeImage.jsx';
 import NodeVideo from '@/components/NodeVideo.jsx';
 import YamdImageList from '@/components/NodeImageList.jsx';
@@ -47,7 +47,7 @@ const YamdNode = React.memo(({ nodeId, parentInfo = null, globalInfo = null }) =
       return (
         <AddListBulletBeforeNode 
           childNode={
-            <NodeLaTeX
+            <SegmentLaTeX
               nodeId={nodeId}
               parentInfo={parentInfo}
               globalInfo={globalInfo}

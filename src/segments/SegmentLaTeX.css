@@ -1,0 +1,82 @@
+/* Container for LaTeX segment (needed for relative positioning) */
+.yamd-latex-segment-container {
+  position: relative;
+  display: inline;
+}
+
+/* Floating editor container */
+.yamd-latex-editor {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  margin-bottom: 8px;
+  background: white;
+  border: 1px solid #90caf9;
+  border-radius: 4px;
+  padding: 4px 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  z-index: 1000;
+  min-width: 200px;
+  font-family: 'Courier New', monospace;
+  font-size: 14px;
+}
+
+/* Small triangle pointing down - centered on editor bottom, will point to SVG center */
+.yamd-latex-editor-triangle {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-top: 6px solid #90caf9;
+}
+
+.yamd-latex-editor-triangle::after {
+  content: '';
+  position: absolute;
+  top: -7px;
+  left: -5px;
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 5px solid white;
+}
+
+/* Editor input */
+.yamd-latex-editor-input {
+  display: block;
+  outline: none;
+  background: #f5f5f5;
+  border: 1px solid #e0e0e0;
+  border-radius: 2px;
+  padding: 2px 4px;
+  min-width: 180px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.yamd-latex-editor-input:focus {
+  background: #e3f2fd;
+  border-color: #42a5f5;
+}
+
+.yamd-latex-editor-input:empty::before {
+  content: 'LaTeX content...';
+  color: #999;
+}
+
+/* Display mode styles */
+.yamd-latex-inline {
+  display: inline;
+  vertical-align: middle;
+}
+
+.yamd-latex-inline.yamd-latex-raw {
+  font-family: 'Courier New', monospace;
+  color: #666;
+}
+
