@@ -10,6 +10,8 @@
   transition: background-color 0.2s, border 0.2s;
   user-select: text;
   border: 1px solid transparent;
+  min-height: 1.2em; /* Ensure height even when empty */
+  vertical-align: top; /* Align with text baseline */
 }
 
 /* Minimum width only when empty */

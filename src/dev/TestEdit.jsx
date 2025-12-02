@@ -28,6 +28,8 @@ const TestEdit = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [docId, setDocId] = useState(null);
   const [nodeIds, setNodeIds] = useState([]);
+  const [currentSegmentId, setCurrentSegmentId] = useState(null);
+  const [activeElement, setActiveElement] = useState(null);
 
   // Initialize MathJax
   useEffect(() => {
@@ -35,6 +37,25 @@ const TestEdit = () => {
     loadMathJax().catch(err => {
       console.error('Failed to load MathJax in TestEdit:', err);
     });
+  }, []);
+
+  // Track actively focused element
+  useEffect(() => {
+    const updateActiveElement = () => {
+      setActiveElement(document.activeElement);
+    };
+
+    // Update on focus/blur events
+    document.addEventListener('focusin', updateActiveElement);
+    document.addEventListener('focusout', updateActiveElement);
+    
+    // Initial update
+    updateActiveElement();
+
+    return () => {
+      document.removeEventListener('focusin', updateActiveElement);
+      document.removeEventListener('focusout', updateActiveElement);
+    };
   }, []);
 
   // Auto-parse when YAML input changes
@@ -159,6 +180,7 @@ const TestEdit = () => {
                 docId={docId}
                 disableRefJump={false} 
                 isEditable={true}
+                onCurrentSegmentChange={setCurrentSegmentId}
               />
             ) : (
               <div className="rendered-panel-placeholder">
@@ -171,6 +193,32 @@ const TestEdit = () => {
         {/* Right Panel: Flattened Data */}
         <div className="flattened-panel">
           <h3 className="flattened-panel-title">Flattened Data (Real-time Updates)</h3>
+          <div style={{ 
+            padding: '8px 12px', 
+            backgroundColor: '#f0f0f0', 
+            borderBottom: '1px solid #ddd',
+            fontFamily: 'monospace',
+            fontSize: '12px'
+          }}>
+            <div><strong>Current Segment:</strong> {currentSegmentId || 'none'}</div>
+            <div style={{ marginTop: '4px' }}>
+              <strong>Active Element:</strong> {
+                activeElement 
+                  ? `<${activeElement.tagName.toLowerCase()}${
+                      activeElement.id ? ` id="${activeElement.id}"` : ''
+                    }${
+                      activeElement.className ? ` class="${activeElement.className}"` : ''
+                    }${
+                      activeElement.dataset?.segmentId ? ` data-segment-id="${activeElement.dataset.segmentId}"` : ''
+                    }${
+                      activeElement.dataset?.docId ? ` data-doc-id="${activeElement.dataset.docId}"` : ''
+                    }${
+                      activeElement.contentEditable === 'true' ? ' contenteditable="true"' : ''
+                    }>`
+                  : 'none'
+              }
+            </div>
+          </div>
           <DocDataDisplay 
             key={docId}
             docId={docId} 

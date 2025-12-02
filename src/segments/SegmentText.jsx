@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, forwardRef } from 'react';
+import React, { useRef, useEffect, useCallback, forwardRef } from 'react';
 import { useRenderUtilsContext } from '@/core/RenderUtils.ts';
 import {
   isCursorAtEnd, isCursorAtBeginning,
@@ -22,8 +22,10 @@ const SegmentText = forwardRef(({ segmentId, parentNodeId, className, globalInfo
   // Get segment data from store
   const segmentData = renderUtils.useNodeData(segmentId);
   
-  // Subscribe to segment's focus state
-  const segmentState = renderUtils.useNodeState(segmentId);
+  // Subscribe ONLY to counters to avoid unnecessary re-renders
+  const focusCounter = renderUtils.useNodeFocusCounter(segmentId);
+  const unfocusCounter = renderUtils.useNodeUnfocusCounter(segmentId);
+  const keyboardCounter = renderUtils.useNodeKeyboardCounter(segmentId);
   
   // Get text from segmentData
   const text = segmentData?.textRaw ?? '';
@@ -31,31 +33,42 @@ const SegmentText = forwardRef(({ segmentId, parentNodeId, className, globalInfo
   // Ref for the contentEditable span
   const textElRef = useRef(null);
   
-  // Track if user is currently editing
-  const isEditingRef = useRef(false);
+  // Track if this segment is theoretically focused (for styling)
+  const isLogicallyFocused = useRef(false);
   
-  // Update DOM content when text prop changes externally (but not while user is editing)
+  // Update DOM content when text prop changes externally (but not while user is focused)
   useEffect(() => {
-    if (textElRef.current && !isEditingRef.current) {
+    if (textElRef.current && !isLogicallyFocused.current) {
       textElRef.current.textContent = text;
     }
   }, [text]);
 
   // Handle focus requests from parent NodeRichText
   useEffect(() => {
-    if (!segmentState?.focus || !textElRef.current) return;
-    
-    const { counter, type, cursorPageX } = segmentState.focus;
+    if (!textElRef.current) return;
     
     // Skip if counter is 0 (initial state)
-    if (counter === 0) return;
+    if (focusCounter === 0) return;
     
-    // console.log(`🎯 SegmentText [${segmentId}] received focus:`, { counter, type });
+    // Fetch the full state non-reactively to get the type and cursorPageX
+    const state = renderUtils.getNodeStateById?.(segmentId);
+    if (!state?.focus) return;
     
-    // Focus the element
-    textElRef.current.focus();
+    const { type, cursorPageX } = state.focus;
     
-    // Set cursor position based on focus type
+    console.log(`🎯 SegmentText [${segmentId}] received FOCUS from ${type}`);
+    
+    // Mark as logically focused
+    isLogicallyFocused.current = true;
+    
+    // Apply focus styles
+    textElRef.current.style.backgroundColor = '#fff3cd';
+    textElRef.current.style.border = '1px solid #ffc107';
+    
+    // Report to parent that this segment is now focused
+    renderUtils.setCurrentSegmentId?.(segmentId);
+    
+    // Set cursor position based on focus type (theoretical focus - no .focus() call)
     if (type === 'fromLeft') {
       // Coming from left segment - position at beginning
       setCursorToBeginning(textElRef.current);
@@ -75,58 +88,89 @@ const SegmentText = forwardRef(({ segmentId, parentNodeId, className, globalInfo
       setCursorToBeginning(textElRef.current);
     }
     
-  }, [segmentState?.focus?.counter, segmentId]);
+  }, [focusCounter, segmentId, renderUtils]);
+  
+  // Handle unfocus requests (from clicking other segments)
+  useEffect(() => {
+    // Skip if counter is 0 (initial state)
+    if (unfocusCounter === 0) return;
+    
+    // Fetch the full state non-reactively to get the type
+    const state = renderUtils.getNodeStateById?.(segmentId);
+    if (!state?.unfocus) return;
+    
+    const { type } = state.unfocus;
+    
+    console.log(`🔕 SegmentText [${segmentId}] received UNFOCUS (${type})`);
+    
+    // Mark as not focused
+    isLogicallyFocused.current = false;
+    
+    // Remove focus styles
+    if (textElRef.current) {
+      textElRef.current.style.backgroundColor = 'transparent';
+      textElRef.current.style.border = '1px solid transparent';
+    }
+    
+  }, [unfocusCounter, segmentId, renderUtils]);
+  
+  // Handle keyboard events forwarded from YamdDoc (for backward compatibility)
+  useEffect(() => {
+    if (keyboardCounter === 0) return;
+    
+    const state = renderUtils.getNodeStateById?.(segmentId);
+    if (!state?.keyboard?.event) return;
+    
+    const { event } = state.keyboard;
+    
+    // Call handleKeyDown with synthetic event
+    handleKeyDown(event);
+    
+  }, [keyboardCounter, segmentId, renderUtils, handleKeyDown]);
 
-  // Handle key events - trigger unfocus for navigation
-  const handleKeyDown = (e) => {
+  // Handle key events forwarded from YamdDoc (theoretical focus model)
+  const handleKeyDown = useCallback((e) => {
     // Navigate left with Left arrow (at beginning)
     if (e.key === 'ArrowLeft') {
       const isAtBeginning = isCursorAtBeginning(textElRef.current);
-      console.log(`⬅️ SegmentText [${segmentId}] ArrowLeft: isAtBeginning=${isAtBeginning}`);
       if (isAtBeginning) {
-      e.preventDefault();
-      console.log(`⬅️ SegmentText [${segmentId}] triggering unfocus: left`);
-      renderUtils.triggerUnfocus(parentNodeId, segmentId, 'left');
-      return;
+        console.log(`🔔 SegmentText [${segmentId}] triggering unfocus LEFT`);
+        renderUtils.triggerUnfocus(parentNodeId, segmentId, 'left');
       }
+      return;
     }
     
     // Navigate right with Right arrow (at end)
     if (e.key === 'ArrowRight') {
       const isAtEnd = isCursorAtEnd(textElRef.current);
-      console.log(`➡️ SegmentText [${segmentId}] ArrowRight: isAtEnd=${isAtEnd}, textContent="${textElRef.current?.textContent}"`);
       if (isAtEnd) {
-      e.preventDefault();
-      console.log(`➡️ SegmentText [${segmentId}] triggering unfocus: right`);
-      renderUtils.triggerUnfocus(parentNodeId, segmentId, 'right');
-      return;
+        console.log(`🔔 SegmentText [${segmentId}] triggering unfocus RIGHT`);
+        renderUtils.triggerUnfocus(parentNodeId, segmentId, 'right');
       }
+      return;
     }
     
     // Navigate up with Up arrow
     if (e.key === 'ArrowUp') {
-      e.preventDefault();
       const cursorPageX = getCursorPageX(textElRef.current);
-      console.log(`⬆️ SegmentText [${segmentId}] triggering unfocus: up, cursorPageX=${cursorPageX}`);
+      console.log(`🔔 SegmentText [${segmentId}] triggering unfocus UP`);
       renderUtils.triggerUnfocus(parentNodeId, segmentId, 'up', { cursorPageX });
       return;
     }
     
     // Navigate down with Down arrow
     if (e.key === 'ArrowDown') {
-      e.preventDefault();
       const cursorPageX = getCursorPageX(textElRef.current);
-      console.log(`⬇️ SegmentText [${segmentId}] triggering unfocus: down, cursorPageX=${cursorPageX}`);
+      console.log(`🔔 SegmentText [${segmentId}] triggering unfocus DOWN`);
       renderUtils.triggerUnfocus(parentNodeId, segmentId, 'down', { cursorPageX });
       return;
     }
     
     // Blur on Escape
     if (e.key === 'Escape') {
-      e.preventDefault();
       textElRef.current?.blur();
     }
-  };
+  }, [segmentId, parentNodeId, renderUtils]);
 
   // Handle input changes in contentEditable span
   const handleInput = (e) => {
@@ -143,19 +187,23 @@ const SegmentText = forwardRef(({ segmentId, parentNodeId, className, globalInfo
     }
   };
    
-  // Handle blur to end editing
-  const handleBlur = (e) => {
-    isEditingRef.current = false;
+   // Handle mouse down/click to report theoretical focus
+  const handleMouseDown = (e) => {
+    if (!finalIsEditable) return;
     
-    // Apply blur styles
-    e.target.style.backgroundColor = 'transparent';
-    e.target.style.border = '1px solid transparent';
-  };
-  
-  const handleFocus = (e) => {
-    isEditingRef.current = true;
-    e.target.style.backgroundColor = '#f0f8ff';
-    e.target.style.border = '1px solid #4CAF50';
+    console.log(`🖱️ SegmentText [${segmentId}] mouseDown`);
+    
+    // Mark as theoretically focused
+    isLogicallyFocused.current = true;
+    
+    // Report to parent
+    renderUtils.setCurrentSegmentId(segmentId);
+    
+    // Apply focus styles immediately
+    if (textElRef.current) {
+      textElRef.current.style.backgroundColor = '#f0f8ff';
+      textElRef.current.style.border = '1px solid #4CAF50';
+    }
   };
 
   
@@ -175,16 +223,13 @@ const SegmentText = forwardRef(({ segmentId, parentNodeId, className, globalInfo
     }
   }, []);
   
-  // Check if text is empty
-  const isEmpty = text === '';
-  
-  // Single contentEditable span
+  // Editable mode: theoretical focus (allows cross-segment selection)
+  // No nested contentEditable - part of parent YamdDoc's contentEditable context
   return (
     <span
       ref={textElRef}
-      contentEditable={true}
       onInput={handleInput}
-      onKeyDown={handleKeyDown}
+      onMouseDown={handleMouseDown}
       suppressContentEditableWarning={true}
       className={`${className} yamd-text-segment`}
       style={{
@@ -200,8 +245,6 @@ const SegmentText = forwardRef(({ segmentId, parentNodeId, className, globalInfo
         msUserSelect: 'text',
         border: '1px solid transparent',
       }}
-      onFocus={handleFocus}
-      onBlur={handleBlur}
       title="Text segment (editable)"
       spellCheck={false}
     />

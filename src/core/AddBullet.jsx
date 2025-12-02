@@ -14,29 +14,35 @@ export const renderListBullet = ({parentInfo}) => {
   
   if (childDisplay === 'ul') {
     return (
-      <div style={{ 
-        flexShrink: 0,
-        width: BULLET_DIMENSIONS.width,
-        height: BULLET_DIMENSIONS.height,
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginRight: '0px'
-      }}>
+      <div 
+        contentEditable={false}
+        style={{ 
+          flexShrink: 0,
+          width: BULLET_DIMENSIONS.width,
+          height: BULLET_DIMENSIONS.height,
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          marginRight: '0px'
+        }}
+      >
         <div className="yamd-bullet-disc"></div>
       </div>
     );
   } else if (childDisplay === 'ol') {
     return (
-      <div style={{ 
-        flexShrink: 0,
-        width: BULLET_DIMENSIONS.width,
-        height: BULLET_DIMENSIONS.height,
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginRight: '0px'
-      }}>
+      <div 
+        contentEditable={false}
+        style={{ 
+          flexShrink: 0,
+          width: BULLET_DIMENSIONS.width,
+          height: BULLET_DIMENSIONS.height,
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          marginRight: '0px'
+        }}
+      >
         <span className="yamd-bullet-number">{(childIndex || 0) + 1}.</span>
       </div>
     );

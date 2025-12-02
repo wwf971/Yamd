@@ -264,6 +264,10 @@ class DocsState {
   constructor() {
     // Structure: { [docId]: { [nodeId]: atom(stateData) } }
     this._states = {};
+    // Cache for derived counter atoms
+    this._focusCounterAtoms = {};
+    this._unfocusCounterAtoms = {};
+    this._keyboardCounterAtoms = {};
     // Use the same Jotai store as DocsData
     this._store = docsData.getStore();
   }
@@ -290,11 +294,72 @@ class DocsState {
           counter: 0,
           from: null, // segment ID that wants to unfocus
           type: null  // 'left', 'right', 'up', 'down'
+        },
+        keyboard: {
+          counter: 0,
+          event: null // { key, ctrlKey, shiftKey, metaKey, altKey }
         }
       });
     }
     
     return this._states[docId][nodeId];
+  }
+
+  /**
+   * Get derived atom for focus counter only (cached)
+   * @param {string} docId - Document ID
+   * @param {string} nodeId - Node ID
+   * @returns {object} Jotai derived atom for focus counter
+   */
+  getFocusCounterAtom(docId, nodeId) {
+    if (!this._focusCounterAtoms[docId]) {
+      this._focusCounterAtoms[docId] = {};
+    }
+    
+    if (!this._focusCounterAtoms[docId][nodeId]) {
+      const stateAtom = this.getNodeState(docId, nodeId);
+      this._focusCounterAtoms[docId][nodeId] = atom((get) => get(stateAtom).focus.counter);
+    }
+    
+    return this._focusCounterAtoms[docId][nodeId];
+  }
+
+  /**
+   * Get derived atom for unfocus counter only (cached)
+   * @param {string} docId - Document ID
+   * @param {string} nodeId - Node ID
+   * @returns {object} Jotai derived atom for unfocus counter
+   */
+  getUnfocusCounterAtom(docId, nodeId) {
+    if (!this._unfocusCounterAtoms[docId]) {
+      this._unfocusCounterAtoms[docId] = {};
+    }
+    
+    if (!this._unfocusCounterAtoms[docId][nodeId]) {
+      const stateAtom = this.getNodeState(docId, nodeId);
+      this._unfocusCounterAtoms[docId][nodeId] = atom((get) => get(stateAtom).unfocus.counter);
+    }
+    
+    return this._unfocusCounterAtoms[docId][nodeId];
+  }
+
+  /**
+   * Get derived atom for keyboard counter only (cached)
+   * @param {string} docId - Document ID
+   * @param {string} nodeId - Node ID
+   * @returns {object} Jotai derived atom for keyboard counter
+   */
+  getKeyboardCounterAtom(docId, nodeId) {
+    if (!this._keyboardCounterAtoms[docId]) {
+      this._keyboardCounterAtoms[docId] = {};
+    }
+    
+    if (!this._keyboardCounterAtoms[docId][nodeId]) {
+      const stateAtom = this.getNodeState(docId, nodeId);
+      this._keyboardCounterAtoms[docId][nodeId] = atom((get) => get(stateAtom).keyboard.counter);
+    }
+    
+    return this._keyboardCounterAtoms[docId][nodeId];
   }
 
   /**
@@ -339,6 +404,26 @@ class DocsState {
   }
 
   /**
+   * Trigger keyboard event on a node/segment
+   * @param {string} docId - Document ID
+   * @param {string} nodeId - Node/Segment ID
+   * @param {object} eventData - Event data { key, ctrlKey, shiftKey, metaKey, altKey }
+   */
+  triggerKeyboard(docId, nodeId, eventData) {
+    const stateAtom = this.getNodeState(docId, nodeId);
+    const currentState = this._store.get(stateAtom);
+    
+    // Update keyboard state
+    currentState.keyboard = {
+      counter: (currentState.keyboard?.counter || 0) + 1,
+      event: eventData
+    };
+    
+    // Set with a new state reference so Jotai detects the change
+    this._store.set(stateAtom, {...currentState});
+  }
+
+  /**
    * Remove state for a node
    * @param {string} docId - Document ID
    * @param {string} nodeId - Node ID
@@ -356,6 +441,16 @@ class DocsState {
   removeDocStates(docId) {
     if (this._states[docId]) {
       delete this._states[docId];
+    }
+    // Also clean up derived counter atom caches
+    if (this._focusCounterAtoms[docId]) {
+      delete this._focusCounterAtoms[docId];
+    }
+    if (this._unfocusCounterAtoms[docId]) {
+      delete this._unfocusCounterAtoms[docId];
+    }
+    if (this._keyboardCounterAtoms[docId]) {
+      delete this._keyboardCounterAtoms[docId];
     }
   }
 }

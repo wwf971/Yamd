@@ -34,10 +34,14 @@ export interface RenderUtilsContextValue {
   // Jotai-based reactive data access (hook - must be called in React components)
   useNodeData: (nodeId: string) => any;
   useNodeState: (nodeId: string) => any;
+  useNodeFocusCounter: (nodeId: string) => number;
+  useNodeUnfocusCounter: (nodeId: string) => number;
+  useNodeKeyboardCounter: (nodeId: string) => number;
   useAsset: (assetId: string) => any;
   
   // Non-reactive data access methods
   getNodeDataById: (nodeId: string) => any;
+  getNodeStateById: (nodeId: string) => any;
   updateNodeData: (nodeId: string, producer: (draft: any) => void) => void;
   getAssetById: (assetId: string) => any;
   updateAsset: (assetId: string, producer: (draft: any) => void) => void;
@@ -52,6 +56,13 @@ export interface RenderUtilsContextValue {
   // Focus management
   triggerFocus: (nodeId: string, type: string, extraData?: any) => void;
   triggerUnfocus: (nodeId: string, from: string, type: string, extraData?: any) => void;
+  
+  // Cursor/selection utilities
+  getCurrentSegmentId: (containerRef: React.RefObject<HTMLElement>) => string | null;
+  
+  // Focused segment tracking
+  setCurrentSegmentId: (segmentId: string | null) => void;
+  cancelCurrentSegmentId: () => void;
   
   // Configuration
   BULLET_DIMENSIONS: typeof BULLET_DIMENSIONS;
@@ -248,12 +259,16 @@ export const createRenderUtilsContextValue = ({
   isEditable = false,
   docId = null,
   docStore = null, // Keep for backward compatibility (bullet positioning still uses Zustand)
+  setCurrentSegmentId = () => {},
+  cancelCurrentSegmentId = () => {},
 }: {
   registerNodeRef?: (nodeId: string, ref: any) => void;
   renderChildNodes?: (params: { childIds: string[]; parentInfo: any; globalInfo: any }) => React.ReactNode;
   isEditable?: boolean;
   docId?: string | null;
   docStore?: any;
+  setCurrentSegmentId?: (segmentId: string | null) => void;
+  cancelCurrentSegmentId?: () => void;
 } = {}): RenderUtilsContextValue => {
 
   return {
@@ -281,6 +296,13 @@ export const createRenderUtilsContextValue = ({
       return docsData.getAtomValue(nodeAtom);
     },
 
+    getNodeStateById: (nodeId: string) => {
+      if (!docId) return null;
+      const stateAtom = docsState.getNodeState(docId, nodeId);
+      const store = docsData.getStore() as any;
+      return store.get(stateAtom);
+    },
+
     // Hook to get node data reactively (must be called as a hook in components)
     // Usage: const nodeData = renderUtils.useNodeData(nodeId);
     useNodeData: (nodeId: string) => {
@@ -296,6 +318,28 @@ export const createRenderUtilsContextValue = ({
       const stateAtom = docsState.getNodeState(docId, nodeId) as any;
       // eslint-disable-next-line react-hooks/rules-of-hooks
       return useAtomValue(stateAtom);
+    },
+
+    // Subscribe to individual counters (avoids re-renders when other state fields change)
+    useNodeFocusCounter: (nodeId: string) => {
+      if (!docId) return 0;
+      const counterAtom = docsState.getFocusCounterAtom(docId, nodeId) as any;
+      // eslint-disable-next-line react-hooks/rules-of-hooks
+      return useAtomValue(counterAtom) as number;
+    },
+
+    useNodeUnfocusCounter: (nodeId: string) => {
+      if (!docId) return 0;
+      const counterAtom = docsState.getUnfocusCounterAtom(docId, nodeId) as any;
+      // eslint-disable-next-line react-hooks/rules-of-hooks
+      return useAtomValue(counterAtom) as number;
+    },
+
+    useNodeKeyboardCounter: (nodeId: string) => {
+      if (!docId) return 0;
+      const counterAtom = docsState.getKeyboardCounterAtom(docId, nodeId) as any;
+      // eslint-disable-next-line react-hooks/rules-of-hooks
+      return useAtomValue(counterAtom) as number;
     },
 
     updateNodeData: (nodeId: string, producer: (draft: any) => void) => {
@@ -858,6 +902,32 @@ export const createRenderUtilsContextValue = ({
       if (!docId) return;
       docsState.triggerUnfocus(docId, nodeId, from, type, extraData);
     },
+    
+    // Cursor/selection utilities
+    getCurrentSegmentId: (containerRef: React.RefObject<HTMLElement>) => {
+      const sel = window.getSelection();
+      if (!sel || !sel.anchorNode) return null;
+      
+      let node: Node | null = sel.anchorNode;
+      const containerElement = containerRef.current;
+      
+      if (!containerElement) return null;
+      
+      // Traverse up to find a node with data-segment-id
+      while (node && node !== containerElement) {
+        const segmentId = (node as HTMLElement).dataset?.segmentId;
+        if (segmentId) {
+          return segmentId;
+        }
+        node = node.parentNode;
+      }
+      
+      return null;
+    },
+    
+    // Focused segment tracking
+    setCurrentSegmentId,
+    cancelCurrentSegmentId,
     
     // Settings/Configuration
     BULLET_DIMENSIONS,

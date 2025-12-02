@@ -10,6 +10,8 @@ import { useDocStore, generateDocId, docsData, docsState, nodeBulletState } from
 // Import RenderUtils context for direct usage
 import { RenderUtilsContext, createRenderUtilsContextValue } from '@/core/RenderUtils.ts';
 
+
+
 /**
  * YamdDoc - Document container that manages global reference handling
  * Renders the root YamdNode and provides reference navigation functionality
@@ -20,6 +22,7 @@ const YamdDoc = ({
   disableBibsList = false,
   customNodeRenderer = null,
   isEditable = false,
+  onCurrentSegmentChange = null, // Callback for current segment ID changes
 }) => {
   if (!docId) {
     console.error('YamdDoc: docId is required');
@@ -36,6 +39,63 @@ const YamdDoc = ({
     clickY: 0,
     sourceElement: null
   });
+  
+  // Track currently focused segment (for editable mode)
+  const [currentSegmentId, setCurrentSegmentIdState] = useState(null);
+  const prevSegmentIdRef = useRef(null);
+  
+  // Notify previous segment to unfocus
+  const notifySegmentToUnfocus = useCallback((prevSegmentId, newSegmentId) => {
+    if (!isEditable || !prevSegmentId || prevSegmentId === newSegmentId) return;
+    
+    console.log(`🔔 Notifying segment ${prevSegmentId} to unfocus, new focus: ${newSegmentId}`);
+    docsState.triggerUnfocus(docId, prevSegmentId, prevSegmentId, 'clickAway');
+  }, [isEditable, docId]);
+  
+  // Wrapper for setCurrentSegmentId that also notifies previous segment
+  const setCurrentSegmentId = useCallback((newSegmentId) => {
+    const prevSegmentId = prevSegmentIdRef.current;
+    
+    // Skip if already the current segment (avoid double-notification from mousedown + focus)
+    if (prevSegmentId === newSegmentId) return;
+    
+    // Notify previous segment to unfocus
+    notifySegmentToUnfocus(prevSegmentId, newSegmentId);
+    
+    // Update state and ref
+    setCurrentSegmentIdState(newSegmentId);
+    prevSegmentIdRef.current = newSegmentId;
+    
+    // Notify parent component
+    if (onCurrentSegmentChange) {
+      onCurrentSegmentChange(newSegmentId);
+    }
+  }, [notifySegmentToUnfocus, onCurrentSegmentChange]);
+  
+  // Cancel current segment (set to null)
+  const cancelCurrentSegmentId = useCallback(() => {
+    const prevSegmentId = prevSegmentIdRef.current;
+    console.log(`🚫 YamdDoc canceling currentSegmentId (was: ${prevSegmentId})`);
+    
+    // Notify previous segment to unfocus before clearing
+    if (isEditable && prevSegmentId) {
+      console.log(`🔔 Notifying segment ${prevSegmentId} to unfocus (cancel)`);
+      docsState.triggerUnfocus(docId, prevSegmentId, prevSegmentId, 'clickAway');
+    }
+    
+    setCurrentSegmentIdState(null);
+    prevSegmentIdRef.current = null;
+    
+    // Notify parent component
+    if (onCurrentSegmentChange) {
+      onCurrentSegmentChange(null);
+    }
+  }, [isEditable, docId, onCurrentSegmentChange]);
+  
+  // Handle keyboard events at root level and forward to focused segment
+  const handleKeyDown = useCallback((e) => {
+    handleRootKeyDown(e, isEditable, currentSegmentId, docId);
+  }, [isEditable, currentSegmentId, docId]);
 
   // handle reference click from NodeTextRichRef components
   const handleRefClickCallback = useCallback((refData) => {
@@ -155,15 +215,18 @@ const YamdDoc = ({
   }, []);
 
   // Initialize render utils context value
+  // Note: currentSegmentId is intentionally NOT included - it would cause all segments to re-render on every click
   const renderUtilsContextValue = useMemo(() => 
     createRenderUtilsContextValue({ 
       registerNodeRef, 
       renderChildNodes,
       isEditable,
       docId: docId,
-      docStore: useDocStore
+      docStore: useDocStore,
+      setCurrentSegmentId,
+      cancelCurrentSegmentId
     }), 
-    [registerNodeRef, renderChildNodes, isEditable, docId]
+    [registerNodeRef, renderChildNodes, isEditable, docId, setCurrentSegmentId, cancelCurrentSegmentId]
   );
 
   // Get document data from Jotai atoms
@@ -177,7 +240,17 @@ const YamdDoc = ({
 
   return (
     <RenderUtilsContext.Provider value={renderUtilsContextValue}>
-      <div ref={containerRef} style={{ position: 'relative' }} data-doc-id={docId}>
+      <div 
+        ref={containerRef} 
+        style={{ 
+          position: 'relative',
+          outline: isEditable ? 'none' : undefined
+        }} 
+        data-doc-id={docId}
+        contentEditable={isEditable ? true : undefined}
+        suppressContentEditableWarning={isEditable ? true : undefined}
+        onKeyDown={handleKeyDown}
+      >
         
         {/* main document, rendering start from root node*/}
         <YamdNode
@@ -208,3 +281,51 @@ const YamdDoc = ({
 };
 
 export default YamdDoc;
+
+
+/**
+ * Handle keyboard events at root level and forward to focused segment
+ * @param {KeyboardEvent} e - The keyboard event
+ * @param {boolean} isEditable - Whether document is in editable mode
+ * @param {string|null} currentSegmentId - Currently focused segment ID
+ * @param {string} docId - Document ID
+ * @returns {void}
+ */
+const handleRootKeyDown = (e, isEditable, currentSegmentId, docId) => {
+  if (!isEditable || !currentSegmentId) return;
+
+  // Ignore events from child elements (nested contentEditable, buttons, etc.)
+  // Only handle events that originate from the root contentEditable itself
+  if (e.target !== e.currentTarget) {
+    return;
+  }
+
+  // Only forward events with modifier keys (Ctrl, Alt, Meta)
+  // OR arrow keys (for navigation in edit panels)
+  const hasModifier = e.ctrlKey || e.altKey || e.metaKey;
+  const isArrowKey = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key);
+  const isEnterOrEscape = ['Enter', 'Escape'].includes(e.key);
+  
+  if (!hasModifier && !isArrowKey && !isEnterOrEscape) {
+    // Let browser handle regular character input naturally
+    return;
+  }
+  
+  // Note: We don't call preventDefault() here for arrow keys
+  // Browser moves cursor in contentEditable before this handler runs
+  // Segments will preventDefault only when triggering unfocus
+  
+  // Extract important event attributes and add no-op methods
+  const eventData = {
+    key: e.key,
+    ctrlKey: e.ctrlKey,
+    shiftKey: e.shiftKey,
+    metaKey: e.metaKey,
+    altKey: e.altKey,
+    preventDefault: () => {}, // No-op (segments handle this)
+    stopPropagation: () => {} // No-op (event already at root)
+  };
+  
+  // Forward to currently focused segment
+  docsState.triggerKeyboard(docId, currentSegmentId, eventData);
+};

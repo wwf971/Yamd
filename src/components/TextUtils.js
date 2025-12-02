@@ -11,22 +11,19 @@ export const isCursorAtEnd = (element) => {
   if (!element) return false;
   
   const selection = window.getSelection();
-  if (!selection) return false;
+  if (!selection || selection.rangeCount === 0) return false;
   
+  // First check: is the selection actually inside this element?
   const anchorNode = selection.anchorNode;
-  const cursorPos = selection.anchorOffset || 0;
+  if (!element.contains(anchorNode)) {
+    return false; // Cursor is not inside this element
+  }
+  
   const textLength = element.textContent?.length || 0;
   
-  // Check if cursor is at the end
-  // Case 1: anchorNode is the contentEditable element itself - check if offset equals child count (at end)
-  // Case 2: cursor is at the end of the text node
-  // Case 3: fallback - cursor position >= total text length
-  const isAtEnd = 
-    (anchorNode === element && cursorPos >= element.childNodes.length) || 
-    (anchorNode?.nodeType === Node.TEXT_NODE && cursorPos >= (anchorNode.textContent?.length || 0)) ||
-    (anchorNode !== element && cursorPos >= textLength);
-  
-  return isAtEnd;
+  // Use getCursorPosition which handles all DOM structures correctly
+  const position = getCursorPosition(element);
+  return position >= textLength;
 };
 
 /**
@@ -38,18 +35,17 @@ export const isCursorAtBeginning = (element) => {
   if (!element) return false;
   
   const selection = window.getSelection();
-  if (!selection) return false;
+  if (!selection || selection.rangeCount === 0) return false;
   
+  // First check: is the selection actually inside this element?
   const anchorNode = selection.anchorNode;
-  const cursorPos = selection.anchorOffset || 0;
+  if (!element.contains(anchorNode)) {
+    return false; // Cursor is not inside this element
+  }
   
-  // Case 1: anchorNode is the contentEditable element itself - check if offset is 0
-  // Case 2: anchorNode is a text node - check if offset is 0
-  const isAtBeginning = 
-    (anchorNode === element && cursorPos === 0) ||
-    (anchorNode?.nodeType === Node.TEXT_NODE && cursorPos === 0 && anchorNode === element.firstChild);
-  
-  return isAtBeginning;
+  // Use getCursorPosition which handles all DOM structures correctly
+  const position = getCursorPosition(element);
+  return position === 0;
 };
 
 /**
@@ -122,6 +118,58 @@ export const setCursorToBeginning = (element) => {
   range.collapse(true); // true = collapse to start
   sel?.removeAllRanges();
   sel?.addRange(range);
+};
+
+/**
+ * Check if cursor is on the first visual line of a contentEditable element
+ * @param {HTMLElement} element - The contentEditable element
+ * @param {number} threshold - Distance threshold in pixels (default: 5)
+ * @returns {boolean} - True if cursor is on the first visual line
+ */
+export const isCursorOnFirstLine = (element, threshold = 5) => {
+  if (!element) return false;
+  
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0) return false;
+  
+  const range = selection.getRangeAt(0);
+  const cursorRect = range.getBoundingClientRect();
+  const containerRect = element.getBoundingClientRect();
+  
+  // Get container padding
+  const computedStyle = window.getComputedStyle(element);
+  const paddingTop = parseFloat(computedStyle.paddingTop) || 0;
+  
+  // Check if cursor Y is close to container top + padding (first visual line)
+  const isOnFirstLine = (cursorRect.top - containerRect.top - paddingTop) < threshold;
+  
+  return isOnFirstLine;
+};
+
+/**
+ * Check if cursor is on the last visual line of a contentEditable element
+ * @param {HTMLElement} element - The contentEditable element
+ * @param {number} threshold - Distance threshold in pixels (default: 5)
+ * @returns {boolean} - True if cursor is on the last visual line
+ */
+export const isCursorOnLastLine = (element, threshold = 5) => {
+  if (!element) return false;
+  
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0) return false;
+  
+  const range = selection.getRangeAt(0);
+  const cursorRect = range.getBoundingClientRect();
+  const containerRect = element.getBoundingClientRect();
+  
+  // Get container padding
+  const computedStyle = window.getComputedStyle(element);
+  const paddingBottom = parseFloat(computedStyle.paddingBottom) || 0;
+  
+  // Check if cursor Y is close to container bottom - padding (last visual line)
+  const isOnLastLine = (containerRect.bottom - paddingBottom - cursorRect.bottom) < threshold;
+  
+  return isOnLastLine;
 };
 
 /**

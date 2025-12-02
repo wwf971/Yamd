@@ -1,8 +1,17 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { useRenderUtilsContext } from '@/core/RenderUtils.ts';
 import { docsState } from '@/core/DocStore.js';
 import { LaTeX2Svg } from '@/mathjax/MathJaxConvert.js';
 import { useMathJaxStore } from '@/mathjax/MathJaxStore.js';
+import { 
+  isCursorOnFirstLine, 
+  isCursorOnLastLine,
+  isCursorAtEnd,
+  isCursorAtBeginning,
+  getClosestCharIndex,
+  setCursorPos,
+  getCursorPageX
+} from '@/components/TextUtils.js';
 import './SegmentLaTeX.css';
 
 /**
@@ -54,16 +63,18 @@ export const updateLaTeXSvg = async (renderUtils, assetId, latexContent) => {
  * Handles $...$ patterns with inline editing support
  * Supports focus/unfocus protocol for navigation between segments
  */
-const SegmentLaTeX = ({ segment, segmentId: segmentIdProp, parentNodeId, globalInfo }) => {
+const SegmentLaTeX = ({ segmentId, parentNodeId, globalInfo }) => {
   // Get render utils from context
   const renderUtils = useRenderUtilsContext();
 
-  const isFocusedRef = useRef(false);
+  const isLogicallyFocused = useRef(false);
   const [isEditing, setIsEditing] = useState(false);
   const editInputRef = useRef(null);
   const svgRef = useRef(null);
   const editorRef = useRef(null);
   const hasInitializedContentRef = useRef(false); // Track if we've set initial content
+  const lastFocusTypeRef = useRef(null); // Store focus type for cursor positioning
+  const lastCursorPageXRef = useRef(null); // Store cursorPageX for vertical navigation
   
   // Track render versions to handle async MathJax conversions
   const renderCountNextRef = useRef(1); // Next version number to assign
@@ -71,96 +82,89 @@ const SegmentLaTeX = ({ segment, segmentId: segmentIdProp, parentNodeId, globalI
 
   // Subscribe to MathJax readiness
   const isMathJaxReady = useMathJaxStore((state) => state.isMathJaxReady);
-
-  // Use segmentId from props if provided, otherwise use segment.id
-  const effectiveSegmentId = segmentIdProp || segment?.id;
   
   // Subscribe to segment node data for reactive updates
-  const segmentData = renderUtils.useNodeData?.(effectiveSegmentId);
+  const segmentData = renderUtils.useNodeData?.(segmentId);
   
-  // Subscribe to segment node state for focus/edit management
-  const segmentState = renderUtils.useNodeState ? renderUtils.useNodeState(effectiveSegmentId) : {};
+  // Subscribe ONLY to counters to avoid unnecessary re-renders
+  const focusCounter = renderUtils.useNodeFocusCounter(segmentId);
+  const unfocusCounter = renderUtils.useNodeUnfocusCounter(segmentId);
+  const keyboardCounter = renderUtils.useNodeKeyboardCounter(segmentId);
   
   // Backup state for cancel
   const [editBackup, setEditBackup] = useState(null);
 
-  // Use reactive segment data if available, fallback to prop
-  const currentSegment = segmentData || segment;
-
-  if (!currentSegment || currentSegment.selfDisplay !== 'latex_inline') {
-    return <span className="yamd-error">Invalid LaTeX segment</span>;
+  if (!segmentData || segmentData.selfDisplay !== 'latex_inline') {
+    return <span className="yamd-error">Invalid LaTeX segment: {segmentId}</span>;
   }
 
-  const { assetId, textRaw } = currentSegment;
+  const { assetId, textRaw } = segmentData;
   // Use reactive asset hook to ensure SVG updates when asset loads
   const asset = assetId && renderUtils.useAsset ? renderUtils.useAsset(assetId) : null;
   
   // Convert LaTeX to SVG if asset exists but htmlContent is missing AND MathJax is ready
   useEffect(() => {
     if (isMathJaxReady && assetId && asset && !asset.htmlContent && textRaw) {
-      console.log(`🔧 SegmentLaTeX [${effectiveSegmentId}] MathJax ready, converting LaTeX...`);
+      console.log(`🔧 SegmentLaTeX [${segmentId}] MathJax ready, converting LaTeX...`);
       updateLaTeXSvg(renderUtils, assetId, textRaw);
     }
-  }, [isMathJaxReady, assetId, asset?.htmlContent, textRaw, effectiveSegmentId, renderUtils]);
+  }, [isMathJaxReady, assetId, asset?.htmlContent, textRaw, segmentId, renderUtils]);
   
-  console.log(`🔄 SegmentLaTeX [${effectiveSegmentId}] rendering: isEditing=${isEditing}`);
+  console.log(`🔄 SegmentLaTeX [${segmentId}] rendering: isEditing=${isEditing}`);
 
   // Handle unfocus (save and exit edit mode)
-  const handleUnfocus = (saveChanges, shouldBlur) => {
-    console.log(`🔵 SegmentLaTeX [${effectiveSegmentId}] handleUnfocus: saveChanges=${saveChanges}, shouldBlur=${shouldBlur}`);
+  const handleUnfocus = useCallback((saveChanges) => {
+    console.log(`🔵 SegmentLaTeX [${segmentId}] handleUnfocus: saveChanges=${saveChanges}`);
     
+    // Save content FIRST before any DOM operations
+    let savedContent = '';
     if (saveChanges && editInputRef.current) {
-      const newLatex = editInputRef.current.textContent || '';
-      console.log(`💾 SegmentLaTeX [${effectiveSegmentId}] saving: "${newLatex}"`);
+      savedContent = editInputRef.current.textContent || '';
+      console.log(`💾 SegmentLaTeX [${segmentId}] saving: "${savedContent}"`);
       
       // Update segment data
-      renderUtils.updateNodeData?.(effectiveSegmentId, (draft) => {
-        draft.textRaw = newLatex;
-        draft.textOriginal = newLatex;
+      renderUtils.updateNodeData?.(segmentId, (draft) => {
+        draft.textRaw = savedContent;
+        draft.textOriginal = savedContent;
       });
     }
     
     // Mark as not focused
-    isFocusedRef.current = false;
-    
-    // Blur if requested
-    if (shouldBlur && editInputRef.current) {
-      editInputRef.current.blur();
-    }
+    isLogicallyFocused.current = false;
     
     // Exit edit mode
     setIsEditing(false);
-  };
+  }, [segmentId, renderUtils]);
 
-  // Handle input changes - update data and re-render LaTeX
-  const handleInput = async () => {
+  // Recompute LaTeX SVG from current input
+  const recomputeLaTeXSvg = useCallback(async () => {
     if (!editInputRef.current || !assetId) return;
     
     const newLatex = editInputRef.current.textContent || '';
-    console.log(`📝 SegmentLaTeX [${effectiveSegmentId}] input changed: "${newLatex}"`);
+    console.log(`🔧 SegmentLaTeX [${segmentId}] recomputing SVG for: "${newLatex}"`);
     
     // 1. Update segment data immediately
-    renderUtils.updateNodeData?.(effectiveSegmentId, (draft) => {
+    renderUtils.updateNodeData?.(segmentId, (draft) => {
       draft.textRaw = newLatex;
       draft.textOriginal = newLatex;
     });
     
     // 2. Attempt to re-render LaTeX with version tracking
     if (!isMathJaxReady) {
-      console.log(`⚠️ SegmentLaTeX [${effectiveSegmentId}] MathJax not ready, skipping render`);
+      console.log(`⚠️ SegmentLaTeX [${segmentId}] MathJax not ready, skipping render`);
       return;
     }
     
     const renderVersion = renderCountNextRef.current;
     renderCountNextRef.current += 1;
     
-    console.log(`🔧 SegmentLaTeX [${effectiveSegmentId}] attempting render v${renderVersion}`);
+    console.log(`🔧 SegmentLaTeX [${segmentId}] attempting render v${renderVersion}`);
     
     try {
       const htmlString = await LaTeX2Svg(newLatex, assetId);
       
       if (!htmlString) {
-        console.warn(`❌ SegmentLaTeX [${effectiveSegmentId}] render v${renderVersion} failed: null result`);
+        console.warn(`❌ SegmentLaTeX [${segmentId}] render v${renderVersion} failed: null result`);
         return;
       }
       
@@ -173,7 +177,7 @@ const SegmentLaTeX = ({ segment, segmentId: segmentIdProp, parentNodeId, globalI
       
       // Only update if this is a newer version than what's currently rendered
       if (renderVersion > latestRenderedCountRef.current) {
-        console.log(`✅ SegmentLaTeX [${effectiveSegmentId}] render v${renderVersion} succeeded, updating asset`);
+        console.log(`✅ SegmentLaTeX [${segmentId}] render v${renderVersion} succeeded, updating asset`);
         
         renderUtils.updateAsset?.(assetId, (asset) => {
           asset.latexContent = newLatex;
@@ -182,57 +186,116 @@ const SegmentLaTeX = ({ segment, segmentId: segmentIdProp, parentNodeId, globalI
         
         latestRenderedCountRef.current = renderVersion;
       } else {
-        console.log(`⏭️ SegmentLaTeX [${effectiveSegmentId}] render v${renderVersion} succeeded but outdated (latest: v${latestRenderedCountRef.current})`);
+        console.log(`⏭️ SegmentLaTeX [${segmentId}] render v${renderVersion} succeeded but outdated (latest: v${latestRenderedCountRef.current})`);
       }
       
     } catch (error) {
-      console.error(`❌ SegmentLaTeX [${effectiveSegmentId}] render v${renderVersion} failed:`, error);
+      console.error(`❌ SegmentLaTeX [${segmentId}] render v${renderVersion} failed:`, error);
     }
+  }, [segmentId, assetId, isMathJaxReady, renderUtils]);
+
+  // Handle input changes - update data and re-render LaTeX
+  const handleInput = async () => {
+    await recomputeLaTeXSvg();
   };
 
   // Cancel edit (restore backup)
   const cancelEdit = () => {
-    console.log(`❌ SegmentLaTeX [${effectiveSegmentId}] canceling edit`);
+    console.log(`❌ SegmentLaTeX [${segmentId}] canceling edit`);
     if (editBackup && editInputRef.current) {
       editInputRef.current.textContent = editBackup.textRaw;
     }
-    handleUnfocus(false, true);
+    handleUnfocus(false);
   };
 
+  // Handle unfocus requests (from clicking other segments)
+  useEffect(() => {
+    // Skip if counter is 0 (initial state)
+    if (unfocusCounter === 0) return;
+    
+    // Fetch the full state non-reactively to get the type
+    const state = renderUtils.getNodeStateById?.(segmentId);
+    if (!state?.unfocus) return;
+    
+    const { type } = state.unfocus;
+    
+    console.log(`🔕 SegmentLaTeX [${segmentId}] received unfocus:`, { counter: unfocusCounter, type, isEditing });
+    
+    // Exit edit mode and mark as not focused (always call handleUnfocus, let it handle the state)
+    handleUnfocus(true); // Save changes
+    
+  }, [unfocusCounter, segmentId, handleUnfocus, renderUtils]);
+  // Note: isEditing removed from deps to avoid re-processing when exiting edit mode
+  
+  // Handle keyboard events forwarded from YamdDoc
+  // This is a fallback for when keyboard events reach YamdDoc (shouldn't happen normally
+  // because edit input stops propagation, but needed for consistency)
+  useEffect(() => {
+    // Skip if counter is 0 (initial state) or not editing
+    if (keyboardCounter === 0 || !isEditing) return;
+    
+    // Skip if not actually focused (prevent handling stale events after unfocus)
+    if (!isLogicallyFocused.current) return;
+    
+    // Fetch the full state non-reactively to get the event
+    const state = renderUtils.getNodeStateById?.(segmentId);
+    if (!state?.keyboard?.event) return;
+    
+    const event = state.keyboard.event;
+    
+    console.log(`⌨️ SegmentLaTeX [${segmentId}] received keyboard event (fallback):`, event);
+    
+    // Handle the keyboard event with source='root' to indicate it's forwarded
+    handleKeyDown(event, 'root');
+    
+  }, [keyboardCounter, segmentId, renderUtils]);
+  
   // Handle focus requests
   useEffect(() => {
-    if (!segmentState?.focus) return;
-    
-    const { counter, type } = segmentState.focus;
-    
     // Skip if counter is 0 (initial state)
-    if (counter === 0) return;
+    if (focusCounter === 0) return;
     
-    console.log(`🎯 SegmentLaTeX [${effectiveSegmentId}] received focus:`, { counter, type });
+    // Fetch the full state non-reactively to get the type
+    const state = renderUtils.getNodeStateById?.(segmentId);
+    if (!state?.focus) return;
+    
+    const { type, cursorPageX } = state.focus;
+    
+    console.log(`🎯 SegmentLaTeX [${segmentId}] received focus:`, { counter: focusCounter, type, cursorPageX });
     
     // Check if this is a navigation focus (fromLeft, fromRight, fromUp, fromDown)
     const isNavigationFocus = ['fromLeft', 'fromRight', 'fromUp', 'fromDown'].includes(type);
     
-    if (isNavigationFocus || type === 'editing') {
+    if (isNavigationFocus || type === 'mouseClick') {
       // Enter edit mode
       if (!isEditing) {
-        console.log(`✏️ SegmentLaTeX [${effectiveSegmentId}] entering edit mode from ${type}`);
+        console.log(`✏️ SegmentLaTeX [${segmentId}] entering edit mode from ${type}`);
+        
+        // Report to YamdDoc that this segment is now focused
+        renderUtils.setCurrentSegmentId?.(segmentId);
+        
+        // Store focus type and cursorPageX for cursor positioning
+        lastFocusTypeRef.current = type;
+        lastCursorPageXRef.current = cursorPageX;
+        
         setIsEditing(true);
         
         // Mark as focused
-        isFocusedRef.current = true;
+        isLogicallyFocused.current = true;
         
         // Store backup for cancel
         setEditBackup({
-          textRaw: currentSegment.textRaw || ''
+          textRaw: segmentData.textRaw || ''
         });
       }
     }
     
-  }, [segmentState?.focus?.counter, effectiveSegmentId]);
+  }, [focusCounter, segmentId, renderUtils]);
 
   // Handle focusing the input when entering edit mode
   useEffect(() => {
+    console.log(`🔧 SegmentLaTeX [${segmentId}] focus effect running: isEditing=${isEditing}, hasInitialized=${hasInitializedContentRef.current}`);
+    
     if (!isEditing) {
       hasInitializedContentRef.current = false; // Reset when exiting edit mode
       return;
@@ -240,7 +303,10 @@ const SegmentLaTeX = ({ segment, segmentId: segmentIdProp, parentNodeId, globalI
     
     // Only run setup when first entering edit mode
     // avoid cursor/selection reset
-    if (hasInitializedContentRef.current) return;
+    if (hasInitializedContentRef.current) {
+      console.log(`⏭️ SegmentLaTeX [${segmentId}] skipping focus - already initialized`);
+      return;
+    }
     
     // Set initial content
     if (editInputRef.current) {
@@ -248,15 +314,42 @@ const SegmentLaTeX = ({ segment, segmentId: segmentIdProp, parentNodeId, globalI
       hasInitializedContentRef.current = true;
     }
     
-    setTimeout(() => {
+    // Use requestAnimationFrame for better timing after DOM updates
+    requestAnimationFrame(() => {
       if (editInputRef.current) {
-        editInputRef.current.focus();
-        // Select all text only on initial entry
-        const range = document.createRange();
-        range.selectNodeContents(editInputRef.current);
-        const selection = window.getSelection();
-        selection.removeAllRanges();
-        selection.addRange(range);
+        console.log(`🎯 SegmentLaTeX [${segmentId}] attempting to focus edit input...`);
+        
+        const focusType = lastFocusTypeRef.current;
+        const cursorPageX = lastCursorPageXRef.current;
+        
+        // Position cursor based on how we entered edit mode
+        if (focusType === 'fromUp' && cursorPageX !== undefined) {
+          // Coming from above - position cursor based on horizontal coordinate
+          console.log(`🎯 SegmentLaTeX [${segmentId}] positioning cursor from above at pageX=${cursorPageX}`);
+          const closestPos = getClosestCharIndex(editInputRef.current, cursorPageX, 'forward');
+          setCursorPos(editInputRef.current, closestPos);
+        } else if (focusType === 'fromDown' && cursorPageX !== undefined) {
+          // Coming from below - position cursor based on horizontal coordinate
+          console.log(`🎯 SegmentLaTeX [${segmentId}] positioning cursor from below at pageX=${cursorPageX}`);
+          const closestPos = getClosestCharIndex(editInputRef.current, cursorPageX, 'backward');
+          setCursorPos(editInputRef.current, closestPos);
+        } else {
+          // Default: select all text for other entry types (fromLeft, fromRight, mouseClick)
+          console.log(`🎯 SegmentLaTeX [${segmentId}] selecting all text (focus type: ${focusType})`);
+          const range = document.createRange();
+          range.selectNodeContents(editInputRef.current);
+          const selection = window.getSelection();
+          selection.removeAllRanges();
+          // important: this might make focus lost
+          selection.addRange(range);
+        }
+        
+        // Focus AFTER setting selection/cursor (selection might cause blur)
+        editInputRef.current.focus({ preventScroll: true });
+        
+        console.log(`🎯 SegmentLaTeX [${segmentId}] after focus(), activeElement:`, document.activeElement);
+        console.log(`🎯 SegmentLaTeX [${segmentId}] editInputRef.current:`, editInputRef.current);
+        console.log(`🎯 SegmentLaTeX [${segmentId}] are they same?`, document.activeElement === editInputRef.current);
       }
       
       // Position the editor and triangle
@@ -277,130 +370,234 @@ const SegmentLaTeX = ({ segment, segmentId: segmentIdProp, parentNodeId, globalI
           triangle.style.transform = 'translateX(-50%)';
         }
       }
-    }, 10);
-  }, [isEditing, textRaw]);
+    });
+  }, [isEditing, textRaw, segmentId]);
 
   // Handle blur (only save if still marked as focused)
   const handleBlur = (e) => {
     // Only call handleUnfocus if we're still marked as focused
-    if (isFocusedRef.current) {
-      console.log(`🔵 SegmentLaTeX [${effectiveSegmentId}] handleBlur: isFocused=true, calling handleUnfocus(true, false)`);
-      handleUnfocus(true, false);
+    if (isLogicallyFocused.current) {
+      console.log(`🔵 SegmentLaTeX [${segmentId}] handleBlur: isFocused=true, calling handleUnfocus(true)`);
+      handleUnfocus(true);
     } else {
-      console.log(`⚪ SegmentLaTeX [${effectiveSegmentId}] handleBlur: isFocused=false, skipping`);
+      console.log(`⚪ SegmentLaTeX [${segmentId}] handleBlur: isFocused=false, skipping`);
     }
   };
 
   // Handle keyboard navigation
-  const handleKeyDown = (e) => {
+  const handleKeyDown = (e, source = 'direct') => {
     if (!parentNodeId) return;
 
     if (e.key === 'Enter') {
       e.preventDefault();
-      handleUnfocus(true, true);
+      handleUnfocus(true);
     } else if (e.key === 'Escape') {
       e.preventDefault();
       cancelEdit();
     } else if (e.key === 'ArrowLeft') {
+      // Always prevent YamdDoc from seeing this event
+      e.stopPropagation();
+      
       const selection = window.getSelection();
       
-      // Only trigger unfocus if there's no selection (collapsed) and cursor is at the beginning
-      if (selection.isCollapsed && selection.anchorOffset === 0) {
+      // If text is selected: collapse selection and stay in edit mode
+      if (!selection.isCollapsed) {
         e.preventDefault();
-        handleUnfocus(true, true);
-        console.log(`⬅️ SegmentLaTeX [${effectiveSegmentId}] triggering unfocus: left`);
-        renderUtils.triggerUnfocus?.(parentNodeId, effectiveSegmentId, 'left');
+        selection.collapseToStart();
+        return;
       }
-      // Otherwise, let the browser handle it (collapse selection or move cursor)
+      
+      // If cursor at beginning: exit to previous segment
+      if (isCursorAtBeginning(editInputRef.current)) {
+        e.preventDefault();
+        
+        // Save content first
+        if (editInputRef.current) {
+          const savedContent = editInputRef.current.textContent || '';
+          renderUtils.updateNodeData?.(segmentId, (draft) => {
+            draft.textRaw = savedContent;
+            draft.textOriginal = savedContent;
+          });
+        }
+        
+        // Mark as not focused
+        isLogicallyFocused.current = false;
+        
+        console.log(`⬅️ SegmentLaTeX [${segmentId}] triggering unfocus: left`);
+        renderUtils.triggerUnfocus?.(parentNodeId, segmentId, 'left');
+        return;
+      }
+      
+      // Otherwise: let browser move cursor left naturally (no preventDefault)
     } else if (e.key === 'ArrowRight') {
-      const selection = window.getSelection();
-      const textLength = editInputRef.current?.textContent?.length || 0;
+      // Always prevent YamdDoc from seeing this event
+      e.stopPropagation();
       
-      // Only trigger unfocus if there's no selection (collapsed) and cursor is at the end
-      if (selection.isCollapsed && selection.anchorOffset === textLength) {
+      const selection = window.getSelection();
+      
+      // If text is selected: collapse selection and stay in edit mode
+      if (!selection.isCollapsed) {
         e.preventDefault();
-        handleUnfocus(true, true);
-        console.log(`➡️ SegmentLaTeX [${effectiveSegmentId}] triggering unfocus: right`);
-        renderUtils.triggerUnfocus?.(parentNodeId, effectiveSegmentId, 'right');
+        selection.collapseToEnd();
+        return;
       }
-      // Otherwise, let the browser handle it (collapse selection or move cursor)
+      
+      // If cursor at end: exit to next segment
+      if (isCursorAtEnd(editInputRef.current)) {
+        e.preventDefault();
+        
+        // Save content first
+        if (editInputRef.current) {
+          const savedContent = editInputRef.current.textContent || '';
+          renderUtils.updateNodeData?.(segmentId, (draft) => {
+            draft.textRaw = savedContent;
+            draft.textOriginal = savedContent;
+          });
+        }
+        
+        // Mark as not focused
+        isLogicallyFocused.current = false;
+        
+        console.log(`➡️ SegmentLaTeX [${segmentId}] triggering unfocus: right`);
+        renderUtils.triggerUnfocus?.(parentNodeId, segmentId, 'right');
+        return;
+      }
+      
+      // Otherwise: let browser move cursor right naturally (no preventDefault)
+
     } else if (e.key === 'ArrowUp') {
-      // Check if cursor is on the first visual line
+      // Always prevent YamdDoc from seeing this event
+      e.stopPropagation();
+      
       const selection = window.getSelection();
       if (!editInputRef.current || !selection.rangeCount) return;
       
-      const range = selection.getRangeAt(0);
-      const cursorRect = range.getBoundingClientRect();
-      const containerRect = editInputRef.current.getBoundingClientRect();
-      
-      // Get container padding
-      const computedStyle = window.getComputedStyle(editInputRef.current);
-      const paddingTop = parseFloat(computedStyle.paddingTop) || 0;
-      
-      // Check if cursor Y is close to container top + padding (first visual line)
-      const isOnFirstLine = (cursorRect.top - containerRect.top - paddingTop) < 5;
-      
-      if (isOnFirstLine) {
+      // If text is selected: collapse to start but stay in edit mode
+      if (!selection.isCollapsed) {
         e.preventDefault();
-        handleUnfocus(true, true);
+        selection.collapseToStart();
+        return;
+      }
+      
+      // If cursor on first line OR at beginning (for single-line inputs): exit to previous node
+      const isOnFirstLine = isCursorOnFirstLine(editInputRef.current);
+      const isAtBeginning = isCursorAtBeginning(editInputRef.current);
+      
+      console.log(`🔍 SegmentLaTeX [${segmentId}] ArrowUp check: isOnFirstLine=${isOnFirstLine}, isAtBeginning=${isAtBeginning}`);
+      
+      if (isOnFirstLine || isAtBeginning) {
+        e.preventDefault();
+        
+        console.log(`🔔 SegmentLaTeX [${segmentId}] ArrowUp at beginning/first line, triggering unfocus`);
+        
+        // Save content first
+        if (editInputRef.current) {
+          const savedContent = editInputRef.current.textContent || '';
+          renderUtils.updateNodeData?.(segmentId, (draft) => {
+            draft.textRaw = savedContent;
+            draft.textOriginal = savedContent;
+          });
+        }
+        
+        // Mark as not focused
+        isLogicallyFocused.current = false;
         
         // Get cursor X position for vertical navigation
-        const cursorPageX = cursorRect.left + (cursorRect.width / 2);
-        console.log(`⬆️ SegmentLaTeX [${effectiveSegmentId}] triggering unfocus: up, cursorPageX=${cursorPageX}`);
-        renderUtils.triggerUnfocus?.(parentNodeId, effectiveSegmentId, 'up', { cursorPageX });
+        const cursorPageX = getCursorPageX(editInputRef.current);
+        console.log(`⬆️ SegmentLaTeX [${segmentId}] triggering unfocus: up, cursorPageX=${cursorPageX}`);
+        renderUtils.triggerUnfocus?.(parentNodeId, segmentId, 'up', { cursorPageX });
+        return;
       }
-      // Otherwise, let browser handle moving cursor up within the text
+      
+      // Otherwise: let browser move cursor up naturally (no preventDefault)
     } else if (e.key === 'ArrowDown') {
-      // Check if cursor is on the last visual line
+      // Always prevent YamdDoc from seeing this event
+      e.stopPropagation();
+      
       const selection = window.getSelection();
       if (!editInputRef.current || !selection.rangeCount) return;
       
-      const range = selection.getRangeAt(0);
-      const cursorRect = range.getBoundingClientRect();
-      const containerRect = editInputRef.current.getBoundingClientRect();
-      
-      // Get container padding
-      const computedStyle = window.getComputedStyle(editInputRef.current);
-      const paddingBottom = parseFloat(computedStyle.paddingBottom) || 0;
-      
-      // Check if cursor Y is close to container bottom - padding (last visual line)
-      const isOnLastLine = (containerRect.bottom - paddingBottom - cursorRect.bottom) < 5;
-      
-      if (isOnLastLine) {
+      // If text is selected: collapse to end but stay in edit mode
+      if (!selection.isCollapsed) {
         e.preventDefault();
-        handleUnfocus(true, true);
+        selection.collapseToEnd();
+        return;
+      }
+      
+      // If cursor on last line OR at end (for single-line inputs): exit to next node
+      const isOnLastLine = isCursorOnLastLine(editInputRef.current);
+      const isAtEnd = isCursorAtEnd(editInputRef.current);
+      
+      console.log(`🔍 SegmentLaTeX [${segmentId}] ArrowDown check: isOnLastLine=${isOnLastLine}, isAtEnd=${isAtEnd}`);
+      
+      if (isOnLastLine || isAtEnd) {
+        e.preventDefault();
+        
+        console.log(`🔔 SegmentLaTeX [${segmentId}] ArrowDown at end/last line, triggering unfocus`);
+        
+        // Save content first
+        if (editInputRef.current) {
+          const savedContent = editInputRef.current.textContent || '';
+          renderUtils.updateNodeData?.(segmentId, (draft) => {
+            draft.textRaw = savedContent;
+            draft.textOriginal = savedContent;
+          });
+        }
+        
+        // Mark as not focused
+        isLogicallyFocused.current = false;
         
         // Get cursor X position for vertical navigation
-        const cursorPageX = cursorRect.left + (cursorRect.width / 2);
-        console.log(`⬇️ SegmentLaTeX [${effectiveSegmentId}] triggering unfocus: down, cursorPageX=${cursorPageX}`);
-        renderUtils.triggerUnfocus?.(parentNodeId, effectiveSegmentId, 'down', { cursorPageX });
+        const cursorPageX = getCursorPageX(editInputRef.current);
+        console.log(`⬇️ SegmentLaTeX [${segmentId}] triggering unfocus: down, cursorPageX=${cursorPageX}`);
+        renderUtils.triggerUnfocus?.(parentNodeId, segmentId, 'down', { cursorPageX });
+        return;
       }
-      // Otherwise, let browser handle moving cursor down within the text
+      
+      // Otherwise: let browser move cursor down naturally (no preventDefault)
     }
   };
 
   // Handle click to enter edit mode
   const handleClick = (e) => {
-    if (isEditing) return;
+    console.log(`🖱️ SegmentLaTeX [${segmentId}] handleClick: isLogicallyFocused.current=${isLogicallyFocused.current}, isEditing=${isEditing}`);
+    
+    // Don't trigger focus if already focused (check using ref, not state to avoid stale closure)
+    if (isLogicallyFocused.current) {
+      console.log(`⚠️ SegmentLaTeX [${segmentId}] already focused, ignoring click`);
+      return;
+    }
     
     e.preventDefault();
+    
+    // Report to parent that this segment is now focused
+    renderUtils.setCurrentSegmentId?.(segmentId);
+    
     const docId = globalInfo?.docId;
-    docsState.triggerFocus(docId, effectiveSegmentId, 'editing');
+    docsState.triggerFocus(docId, segmentId, 'mouseClick');
   };
+
+  // YamdDoc (contentEditable=true)
+  // └── Container span (contentEditable=false)  ← Isolated!
+  //       ├── SVG span (contentEditable=false)
+  //       └── Editor span
+  //             └── Edit input (contentEditable=true)  ← Only this is editable
 
   // Render edit mode
   if (isEditing) {
     return (
-      <span className="yamd-latex-segment-container">
+      <span className="yamd-latex-segment-container" contentEditable={false}>
         {/* Display the SVG in its original place */}
         {asset?.htmlContent ? (
           <span 
             ref={svgRef}
             className="yamd-latex-inline yamd-latex-converted"
             dangerouslySetInnerHTML={{ __html: asset.htmlContent }}
+            contentEditable={false}
+            style={{ userSelect: 'none' }}
           />
         ) : (
-          <span ref={svgRef} className="yamd-latex-inline yamd-latex-raw">
+          <span ref={svgRef} className="yamd-latex-inline yamd-latex-raw" contentEditable={false}>
             ${textRaw}$
           </span>
         )}
@@ -408,14 +605,24 @@ const SegmentLaTeX = ({ segment, segmentId: segmentIdProp, parentNodeId, globalI
         {/* Floating editor above */}
         <span ref={editorRef} className="yamd-latex-editor">
           <span className="yamd-latex-editor-triangle"></span>
-          <span
+          <div
             ref={editInputRef}
             className="yamd-latex-editor-input"
-            contentEditable
+            contentEditable={true}
             suppressContentEditableWarning
+            tabIndex={-1}
             onInput={handleInput}
-            onKeyDown={handleKeyDown}
-            onBlur={handleBlur}
+            onKeyDown={(e) => {
+              console.log(`🎯 SegmentLaTeX edit input onKeyDown fired:`, e.key, `activeElement:`, document.activeElement);
+              handleKeyDown(e, 'direct');
+            }}
+            onFocus={() => {
+              console.log(`✅ SegmentLaTeX edit input gained focus`);
+            }}
+            onBlur={() => {
+              const ae = document.activeElement;
+              console.log(`❌ SegmentLaTeX edit input lost focus, new activeElement:`, ae?.tagName, ae?.className);
+            }}
           />
         </span>
       </span>
@@ -423,8 +630,10 @@ const SegmentLaTeX = ({ segment, segmentId: segmentIdProp, parentNodeId, globalI
   }
 
   // Render display mode
+  // Wrap in contentEditable={false} to prevent parent's contentEditable from affecting this
   return (
     <span 
+      contentEditable={false}
       className="yamd-latex-segment-container"
       onClick={handleClick}
       style={{ cursor: 'pointer' }}

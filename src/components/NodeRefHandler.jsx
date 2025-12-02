@@ -88,7 +88,9 @@ const YamdRefHandler = React.memo(({
   }
 
   return (
-    <div style={{
+    <div 
+    contentEditable={false}
+    style={{
       position: 'absolute',
       right: '0px',
       top: `${refState.clickY}px`,

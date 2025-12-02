@@ -108,6 +108,20 @@ const NodeTextRich = forwardRef(({ nodeId, className, parentInfo, globalInfo = n
         console.log(`⬇️ No cursorPageX, focusing first segment: ${targetSegmentId}`);
       }
       
+    } else if (type === 'fromRight' || type === 'fromLeft') {
+      // Horizontal navigation from adjacent node
+      if (type === 'fromRight') {
+        // Coming from right → focus LAST segment
+        segmentFocusType = 'fromRight';
+        targetSegmentId = segments[segments.length - 1];
+        console.log(`⬅️ fromRight: focusing last segment: ${targetSegmentId}`);
+      } else {
+        // Coming from left → focus FIRST segment
+        segmentFocusType = 'fromLeft';
+        targetSegmentId = segments[0];
+        console.log(`➡️ fromLeft: focusing first segment: ${targetSegmentId}`);
+      }
+      
     } else {
       // Other focus types → default to first segment
       targetSegmentId = segments[0];
@@ -117,7 +131,7 @@ const NodeTextRich = forwardRef(({ nodeId, className, parentInfo, globalInfo = n
     console.log(`🎯 Triggering focus on segment ${targetSegmentId} with type=${segmentFocusType}, cursorPageX=${cursorPageX}`);
     renderUtils.triggerFocus(targetSegmentId, segmentFocusType, { cursorPageX });
     
-  }, [nodeState?.focus?.counter, nodeId, segments, renderUtils]);
+  }, [nodeState?.focus?.counter, nodeId, renderUtils]);
 
   // Handle unfocus requests from segments (via nodeState.unfocus)
   useEffect(() => {
@@ -144,11 +158,21 @@ const NodeTextRich = forwardRef(({ nodeId, className, parentInfo, globalInfo = n
           // Move to previous segment - trigger focus on it
           const prevSegmentId = segments[segmentIndex - 1];
           console.log(`⬅️ Moving focus to previous segment: ${prevSegmentId}`);
+          renderUtils.setCurrentSegmentId?.(prevSegmentId); // Update current segment in YamdDoc
           renderUtils.triggerFocus(prevSegmentId, 'fromRight');
         } else {
           // Leftmost segment - move to previous node
           console.log(`⬅️ Leftmost segment, moving to previous node`);
-          // TODO: Move to previous node
+          
+          // Clear current segment before moving to previous node
+          renderUtils.cancelCurrentSegmentId?.();
+          
+          // Move to previous node in tree order
+          const upTargetId = getMoveUpTargetId(nodeId, renderUtils.getNodeDataById);
+          if (upTargetId) {
+            console.log(`⬅️ Triggering focus on previous node: ${upTargetId}`);
+            renderUtils.triggerFocus(upTargetId, 'fromRight');
+          }
         }
         break;
         
@@ -157,11 +181,21 @@ const NodeTextRich = forwardRef(({ nodeId, className, parentInfo, globalInfo = n
           // Move to next segment - trigger focus on it
           const nextSegmentId = segments[segmentIndex + 1];
           console.log(`➡️ Moving focus to next segment: ${nextSegmentId}`);
+          renderUtils.setCurrentSegmentId?.(nextSegmentId); // Update current segment in YamdDoc
           renderUtils.triggerFocus(nextSegmentId, 'fromLeft');
         } else {
           // Rightmost segment - move to next node
           console.log(`➡️ Rightmost segment, moving to next node`);
-          // TODO: Move to next node
+          
+          // Clear current segment before moving to next node
+          renderUtils.cancelCurrentSegmentId?.();
+          
+          // Move to next node in tree order
+          const downTargetId = getMoveDownTargetId(nodeId, renderUtils.getNodeDataById);
+          if (downTargetId) {
+            console.log(`➡️ Triggering focus on next node: ${downTargetId}`);
+            renderUtils.triggerFocus(downTargetId, 'fromLeft');
+          }
         }
         break;
         
@@ -172,6 +206,9 @@ const NodeTextRich = forwardRef(({ nodeId, className, parentInfo, globalInfo = n
         // Otherwise, move to previous node in tree order
         
         console.log(`⬆️ Moving to previous node, cursorPageX=${cursorPageX}`);
+        
+        // Clear current segment before moving to previous node
+        renderUtils.cancelCurrentSegmentId?.();
         
         const upTargetId = getMoveUpTargetId(nodeId, renderUtils.getNodeDataById);
         if (upTargetId) {
@@ -190,6 +227,9 @@ const NodeTextRich = forwardRef(({ nodeId, className, parentInfo, globalInfo = n
         // TODO: Move to next node (same as plain text down arrow)
         console.log(`⬇️ Moving to next node, cursorPageX=${cursorPageX}`);
         
+        // Clear current segment before moving to next node
+        renderUtils.cancelCurrentSegmentId?.();
+        
         const downTargetId = getMoveDownTargetId(nodeId, renderUtils.getNodeDataById);
         if (downTargetId) {
           console.log(`⬇️ Triggering focus on ${downTargetId} with cursorPageX=${cursorPageX}`);
@@ -201,10 +241,40 @@ const NodeTextRich = forwardRef(({ nodeId, className, parentInfo, globalInfo = n
         console.warn(`⚠️ Unknown unfocus type: ${type}`);
     }
     
-  }, [nodeState?.unfocus?.counter, nodeId, segments, renderUtils]);
+  }, [nodeState?.unfocus?.counter, nodeId, renderUtils]);
 
   // Note: Bullet positioning is now handled entirely by Zustand store in YamdNodeText
   // All positioning logic moved to calcBulletYPos in NodeRichText.js
+  
+  // Check if editable mode is enabled
+  const isEditable = renderUtils.isEditable;
+  
+  // Track if user is currently dragging to select text
+  const isDraggingRef = React.useRef(false);
+  
+  // Handle mousedown - detect start of drag selection
+  const handleMouseDown = (e) => {
+    if (!isEditable) return;
+    isDraggingRef.current = false;
+    
+    // Track mousemove to detect dragging
+    const handleMouseMove = () => {
+      isDraggingRef.current = true;
+      document.removeEventListener('mousemove', handleMouseMove);
+    };
+    
+    const handleMouseUp = () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      // Reset drag flag after a short delay
+      setTimeout(() => {
+        isDraggingRef.current = false;
+      }, 10);
+    };
+    
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  };
   
   // If no segments, show error
   if (!segments || segments.length === 0) {
@@ -217,8 +287,20 @@ const NodeTextRich = forwardRef(({ nodeId, className, parentInfo, globalInfo = n
   }
   
   // Render segments using segment node IDs
+  // In editable mode, this inherits contentEditable from YamdDoc container
+  // Do NOT set contentEditable here - it would create a nested contentEditable boundary
   return (
-    <span ref={textRef} className={className}>
+    <span
+      ref={textRef} 
+      className={className}
+      style={isEditable ? {
+        outline: 'none',
+        userSelect: 'text',
+        WebkitUserSelect: 'text',
+        MozUserSelect: 'text',
+        msUserSelect: 'text',
+      } : undefined}
+    >
       {segments.map((segmentId) => {
         const segmentNode = renderUtils.getNodeDataById(segmentId);
         
@@ -239,7 +321,6 @@ const NodeTextRich = forwardRef(({ nodeId, className, parentInfo, globalInfo = n
           // Use dedicated LaTeX segment component with focus/unfocus support
           segmentComponent = (
             <SegmentLaTeX
-              segment={segmentNode}
               segmentId={segmentId}
               parentNodeId={nodeId}
               globalInfo={globalInfo}
@@ -249,7 +330,6 @@ const NodeTextRich = forwardRef(({ nodeId, className, parentInfo, globalInfo = n
           // Use dedicated reference component
           segmentComponent = (
             <SegmentRef
-              segment={segmentNode}
               segmentId={segmentId}
               parentNodeId={nodeId}
               globalInfo={globalInfo}

@@ -55,7 +55,7 @@ const YamdBibsList = ({ bibs, globalInfo }) => {
   };
 
   return (
-    <div className="yamd-bibs-list">
+    <div className="yamd-bibs-list" contentEditable={false}>
       <h3 className="yamd-bibs-title">References</h3>
       <div className="yamd-bibs-content">
         {sortedBibs.map((bib, index) => {

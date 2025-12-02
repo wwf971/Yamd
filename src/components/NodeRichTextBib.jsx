@@ -29,9 +29,10 @@ const NodeTextRichBib = ({ segment, globalInfo }) => {
   };
 
   // if multiple keys, render as separate clickable spans
+  // Wrap in contentEditable={false} to prevent parent's contentEditable from affecting this
   if (bibKeys.length > 1) {
     return (
-      <span className="yamd-bib-group">
+      <span contentEditable={false} className="yamd-bib-group">
         [
         {bibKeys.map((bibKey, index) => {
           const bibId = bibIds[index];
@@ -56,11 +57,13 @@ const NodeTextRichBib = ({ segment, globalInfo }) => {
   }
 
   // single key - use the same handler
+  // Wrap in contentEditable={false} to prevent parent's contentEditable from affecting this
   const singleBibKey = bibKeys[0];
   const singleBibId = bibIds[0];
 
   return (
     <span 
+      contentEditable={false}
       className="yamd-bib-link"
       onClick={handleBibClick(singleBibKey, singleBibId)}
       data-bib-key={singleBibKey}
