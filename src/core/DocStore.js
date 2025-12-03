@@ -269,6 +269,7 @@ class DocsState {
     this._unfocusCounterAtoms = {};
     this._keyboardCounterAtoms = {};
     this._childDeleteCounterAtoms = {};
+    this._childCreateCounterAtoms = {};
     // Use the same Jotai store as DocsData
     this._store = docsData.getStore();
   }
@@ -304,6 +305,12 @@ class DocsState {
           counter: 0,
           from: null, // segment/child ID that wants to delete itself
           reason: null  // 'backspaceOnEmpty', etc.
+        },
+        childCreate: {
+          counter: 0,
+          from: null, // segment ID requesting to create new segment
+          type: null, // 'toLeft', 'toRight'
+          isPseudo: false // whether new segment should be in pseudo mode
         }
       });
     }
@@ -385,6 +392,25 @@ class DocsState {
     }
     
     return this._childDeleteCounterAtoms[docId][nodeId];
+  }
+
+  /**
+   * Get derived atom for childCreate counter only (cached)
+   * @param {string} docId - Document ID
+   * @param {string} nodeId - Node ID
+   * @returns {object} Jotai derived atom for childCreate counter
+   */
+  getChildCreateCounterAtom(docId, nodeId) {
+    if (!this._childCreateCounterAtoms[docId]) {
+      this._childCreateCounterAtoms[docId] = {};
+    }
+    
+    if (!this._childCreateCounterAtoms[docId][nodeId]) {
+      const stateAtom = this.getNodeState(docId, nodeId);
+      this._childCreateCounterAtoms[docId][nodeId] = atom((get) => get(stateAtom).childCreate.counter);
+    }
+    
+    return this._childCreateCounterAtoms[docId][nodeId];
   }
 
   /**
@@ -471,6 +497,30 @@ class DocsState {
   }
 
   /**
+   * Trigger child create request (from child segment to parent)
+   * @param {string} docId - Document ID
+   * @param {string} parentNodeId - Parent node ID
+   * @param {string} fromId - Segment ID requesting to create new sibling
+   * @param {string} type - Where to create: 'toLeft', 'toRight'
+   * @param {boolean} isPseudo - Whether new segment should be pseudo
+   */
+  triggerChildCreate(docId, parentNodeId, fromId, type = 'toRight', isPseudo = false) {
+    const stateAtom = this.getNodeState(docId, parentNodeId);
+    const currentState = this._store.get(stateAtom);
+    
+    // Update childCreate state
+    currentState.childCreate = {
+      counter: (currentState.childCreate?.counter || 0) + 1,
+      from: fromId,
+      type: type,
+      isPseudo: isPseudo
+    };
+    
+    // Set with a new state reference so Jotai detects the change
+    this._store.set(stateAtom, {...currentState});
+  }
+
+  /**
    * Remove state for a node
    * @param {string} docId - Document ID
    * @param {string} nodeId - Node ID
@@ -501,6 +551,9 @@ class DocsState {
     }
     if (this._childDeleteCounterAtoms[docId]) {
       delete this._childDeleteCounterAtoms[docId];
+    }
+    if (this._childCreateCounterAtoms[docId]) {
+      delete this._childCreateCounterAtoms[docId];
     }
   }
 }

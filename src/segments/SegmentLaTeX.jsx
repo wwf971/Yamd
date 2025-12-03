@@ -390,7 +390,25 @@ const SegmentLaTeX = ({ segmentId, parentNodeId, globalInfo }) => {
 
     if (e.key === 'Enter') {
       e.preventDefault();
+      
+      // Save and exit edit mode
       handleUnfocus(true);
+      
+      // Check if this is the last segment
+      const parentNode = renderUtils.getNodeDataById?.(parentNodeId);
+      const segments = parentNode?.segments || [];
+      const segmentIndex = segments.indexOf(segmentId);
+      const isLastSegment = segmentIndex === segments.length - 1;
+      
+      if (isLastSegment) {
+        console.log(`↩️ SegmentLaTeX [${segmentId}] Enter pressed (last segment), creating new pseudo segment to right`);
+        // Request parent to create a new empty text segment to the right
+        renderUtils.triggerChildCreate?.(parentNodeId, segmentId, 'toRight', true); // isPseudo=true
+      } else {
+        console.log(`↩️ SegmentLaTeX [${segmentId}] Enter pressed (not last), focusing next segment`);
+        // Just focus on the next segment
+        renderUtils.triggerUnfocus?.(parentNodeId, segmentId, 'right');
+      }
     } else if (e.key === 'Escape') {
       e.preventDefault();
       cancelEdit();

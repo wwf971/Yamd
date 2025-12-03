@@ -38,6 +38,7 @@ export interface RenderUtilsContextValue {
   useNodeUnfocusCounter: (nodeId: string) => number;
   useNodeKeyboardCounter: (nodeId: string) => number;
   useNodeChildDeleteCounter: (nodeId: string) => number;
+  useNodeChildCreateCounter: (nodeId: string) => number;
   useAsset: (assetId: string) => any;
   
   // Non-reactive data access methods
@@ -58,6 +59,7 @@ export interface RenderUtilsContextValue {
   triggerFocus: (nodeId: string, type: string, extraData?: any) => void;
   triggerUnfocus: (nodeId: string, from: string, type: string, extraData?: any) => void;
   triggerChildDelete: (parentNodeId: string, fromId: string, reason?: string) => void;
+  triggerChildCreate: (parentNodeId: string, fromId: string, type: string, isPseudo?: boolean) => void;
   
   // Cursor/selection utilities
   getCurrentSegmentId: (containerRef: React.RefObject<HTMLElement>) => string | null;
@@ -76,6 +78,10 @@ export interface RenderUtilsContextValue {
   
   // Zustand store (for backward compatibility - bullet positioning)
   docStore?: any;
+  
+  // Callbacks
+  onCreate?: ((id: string, data: any) => void) | null;
+  onDelete?: ((id: string, data: any) => void) | null;
   
   // Helper methods (not critical for type hints, but included for completeness)
   getChildDisplay?: any;
@@ -263,6 +269,8 @@ export const createRenderUtilsContextValue = ({
   docStore = null, // Keep for backward compatibility (bullet positioning still uses Zustand)
   setCurrentSegmentId = () => {},
   cancelCurrentSegmentId = () => {},
+  onCreate = null,
+  onDelete = null,
 }: {
   registerNodeRef?: (nodeId: string, ref: any) => void;
   renderChildNodes?: (params: { childIds: string[]; parentInfo: any; globalInfo: any }) => React.ReactNode;
@@ -271,6 +279,8 @@ export const createRenderUtilsContextValue = ({
   docStore?: any;
   setCurrentSegmentId?: (segmentId: string | null) => void;
   cancelCurrentSegmentId?: () => void;
+  onCreate?: ((id: string, data: any) => void) | null;
+  onDelete?: ((id: string, data: any) => void) | null;
 } = {}): RenderUtilsContextValue => {
 
   return {
@@ -347,6 +357,13 @@ export const createRenderUtilsContextValue = ({
     useNodeChildDeleteCounter: (nodeId: string) => {
       if (!docId) return 0;
       const counterAtom = docsState.getChildDeleteCounterAtom(docId, nodeId) as any;
+      // eslint-disable-next-line react-hooks/rules-of-hooks
+      return useAtomValue(counterAtom) as number;
+    },
+
+    useNodeChildCreateCounter: (nodeId: string) => {
+      if (!docId) return 0;
+      const counterAtom = docsState.getChildCreateCounterAtom(docId, nodeId) as any;
       // eslint-disable-next-line react-hooks/rules-of-hooks
       return useAtomValue(counterAtom) as number;
     },
@@ -439,6 +456,11 @@ export const createRenderUtilsContextValue = ({
       
       // Trigger focus on new node
       docsState.triggerFocus(docId, newNodeId, 'selfCreated');
+      
+      // Call onCreate callback
+      if (onCreate) {
+        onCreate(newNodeId, newNode);
+      }
       
       return {
         code: 0,
@@ -649,6 +671,11 @@ export const createRenderUtilsContextValue = ({
       // Trigger focus on previous sibling if it exists
       if (previousSiblingId) {
         docsState.triggerFocus(docId, previousSiblingId, 'prevSiblingDeleted');
+      }
+      
+      // Call onDelete callback before actual deletion
+      if (onDelete) {
+        onDelete(nodeId, targetNode);
       }
       
       // Remove the node's data atom
@@ -916,6 +943,11 @@ export const createRenderUtilsContextValue = ({
       if (!docId) return;
       docsState.triggerChildDelete(docId, parentNodeId, fromId, reason);
     },
+
+    triggerChildCreate: (parentNodeId: string, fromId: string, type: string = 'toRight', isPseudo: boolean = false) => {
+      if (!docId) return;
+      docsState.triggerChildCreate(docId, parentNodeId, fromId, type, isPseudo);
+    },
     
     // Cursor/selection utilities
     getCurrentSegmentId: (containerRef: React.RefObject<HTMLElement>) => {
@@ -950,6 +982,10 @@ export const createRenderUtilsContextValue = ({
     
     // Edit mode
     isEditable,
+    
+    // Callbacks
+    onCreate,
+    onDelete,
   };
 };
 

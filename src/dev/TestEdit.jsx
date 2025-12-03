@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import YamdDoc from '@/core/YamdDoc.jsx';
 import { useDocStore, docsData } from '@/core/DocStore.js';
 import { loadMathJax } from '@/mathjax/MathJaxLoad.js';
@@ -30,6 +30,7 @@ const TestEdit = () => {
   const [nodeIds, setNodeIds] = useState([]);
   const [currentSegmentId, setCurrentSegmentId] = useState(null);
   const [activeElement, setActiveElement] = useState(null);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   // Initialize MathJax
   useEffect(() => {
@@ -130,6 +131,15 @@ const TestEdit = () => {
     setYamlInput(getSampleYaml(sampleName));
   };
 
+  // Stable callbacks for node/segment creation and deletion
+  const handleCreate = useCallback(() => {
+    setRefreshTrigger(prev => prev + 1);
+  }, []);
+
+  const handleDelete = useCallback(() => {
+    setRefreshTrigger(prev => prev + 1);
+  }, []);
+
   // Note: Real-time updates are now handled by Jotai subscriptions in NodeDataDisplay components
   // No need for manual Zustand subscription anymore
 
@@ -181,6 +191,8 @@ const TestEdit = () => {
                 disableRefJump={false} 
                 isEditable={true}
                 onCurrentSegmentChange={setCurrentSegmentId}
+                onCreate={handleCreate}
+                onDelete={handleDelete}
               />
             ) : (
               <div className="rendered-panel-placeholder">
@@ -220,7 +232,7 @@ const TestEdit = () => {
             </div>
           </div>
           <DocDataDisplay 
-            key={docId}
+            key={`${docId}-${refreshTrigger}`}
             docId={docId} 
             nodeIds={nodeIds} 
             isLoading={isLoading}

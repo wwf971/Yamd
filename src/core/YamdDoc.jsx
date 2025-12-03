@@ -23,6 +23,8 @@ const YamdDoc = ({
   customNodeRenderer = null,
   isEditable = false,
   onCurrentSegmentChange = null, // Callback for current segment ID changes
+  onCreate = null, // Callback when a node/segment is created: (id, data) => void
+  onDelete = null, // Callback when a node/segment is deleted: (id, data) => void
 }) => {
   if (!docId) {
     console.error('YamdDoc: docId is required');
@@ -224,9 +226,11 @@ const YamdDoc = ({
       docId: docId,
       docStore: useDocStore,
       setCurrentSegmentId,
-      cancelCurrentSegmentId
+      cancelCurrentSegmentId,
+      onCreate,
+      onDelete
     }), 
-    [registerNodeRef, renderChildNodes, isEditable, docId, setCurrentSegmentId, cancelCurrentSegmentId]
+    [registerNodeRef, renderChildNodes, isEditable, docId, setCurrentSegmentId, cancelCurrentSegmentId, onCreate, onDelete]
   );
 
   // Get document data from Jotai atoms

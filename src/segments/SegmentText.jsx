@@ -17,6 +17,8 @@ const SegmentText = forwardRef(({ segmentId, parentNodeId, className, globalInfo
   const renderUtils = useRenderUtilsContext();
   const hintText = 'empty_text_segment'
   const isEmpty = useRef(null);
+  const isPseudo = useRef(false);
+
   const contextIsEditable = renderUtils.isEditable;
   // If isEditable prop is not null, it overwrites the value from context
   const finalIsEditable = isEditable !== null ? isEditable : contextIsEditable;
@@ -78,13 +80,19 @@ const SegmentText = forwardRef(({ segmentId, parentNodeId, className, globalInfo
     const state = renderUtils.getNodeStateById?.(segmentId);
     if (!state?.focus) return;
     
-    const { type, cursorPageX } = state.focus;
+    const { type, cursorPageX, isPseudo: isPseudoFromFocus } = state.focus;
     
-    console.log(`🎯 SegmentText [${segmentId}] received FOCUS from ${type}`);
+    console.log(`🎯 SegmentText [${segmentId}] received FOCUS from ${type}, isPseudo=${isPseudoFromFocus}`);
     console.log(`🎯 Current DOM content before focus: "${textEl.current?.textContent}", isEmpty=${isEmpty.current}`);
     
     // Mark as logically focused
     isLogicallyFocused.current = true;
+    
+    // Store isPseudo state
+    if (isPseudoFromFocus === true) {
+      isPseudo.current = true;
+      console.log(`🎭 SegmentText [${segmentId}] entering pseudo mode`);
+    }
     
     // Apply focus styles
     textEl.current.style.backgroundColor = '#fff3cd';
@@ -140,6 +148,12 @@ const SegmentText = forwardRef(({ segmentId, parentNodeId, className, globalInfo
     // Mark as not focused
     isLogicallyFocused.current = false;
     
+    // Clear pseudo mode on unfocus
+    if (isPseudo.current) {
+      console.log(`🎭 SegmentText [${segmentId}] clearing pseudo mode on unfocus`);
+      isPseudo.current = false;
+    }
+    
     // Remove focus styles
     if (textEl.current) {
       textEl.current.style.backgroundColor = 'transparent';
@@ -183,6 +197,12 @@ const SegmentText = forwardRef(({ segmentId, parentNodeId, className, globalInfo
     // If it's a regular character key (not modifier combo, not arrow, not special)
     // Let browser insert it, then update the store
     if (!hasModifier && !isArrowKey && !isSpecialKey && e.key.length === 1) {
+      // If in pseudo mode, exit pseudo mode when user types
+      if (isPseudo.current) {
+        console.log(`🎭 SegmentText [${segmentId}] exiting pseudo mode (user typed)`);
+        isPseudo.current = false;
+      }
+      
       // If showing hint text, clear it first before letting browser insert the character
       if (isEmpty.current && textEl.current?.textContent === hintText) {
         e.preventDefault(); // Prevent default to manually handle the input
@@ -236,10 +256,13 @@ const SegmentText = forwardRef(({ segmentId, parentNodeId, className, globalInfo
       // If segment is already empty (showing hint), request deletion from parent
       if (isEmpty.current && currentText === '') {
         e.preventDefault();
-        console.log(`🗑️ SegmentText [${segmentId}] requesting deletion from parent`);
+        
+        // Use different reason for pseudo segments
+        const reason = isPseudo.current ? 'pseudoAbandoned' : 'backspaceOnEmpty';
+        console.log(`🗑️ SegmentText [${segmentId}] requesting deletion from parent (${reason})`);
         
         // Notify parent to delete this segment
-        renderUtils.triggerChildDelete?.(parentNodeId, segmentId, 'backspaceOnEmpty');
+        renderUtils.triggerChildDelete?.(parentNodeId, segmentId, reason);
         return;
       }
       
@@ -288,6 +311,14 @@ const SegmentText = forwardRef(({ segmentId, parentNodeId, className, globalInfo
     
     // Navigate left with Left arrow (at beginning or empty)
     if (e.key === 'ArrowLeft') {
+      // If in pseudo mode and empty, delete segment instead of unfocus
+      if (isPseudo.current && isEmpty.current) {
+        e.preventDefault();
+        console.log(`🎭 SegmentText [${segmentId}] deleting pseudo segment (ArrowLeft)`);
+        renderUtils.triggerChildDelete?.(parentNodeId, segmentId, 'pseudoAbandoned');
+        return;
+      }
+      
       // If segment is empty (showing hint text), prevent default and unfocus
       if (isEmpty.current) {
         e.preventDefault(); // Prevent cursor from moving in hint text
@@ -321,6 +352,14 @@ const SegmentText = forwardRef(({ segmentId, parentNodeId, className, globalInfo
     
     // Navigate right with Right arrow (at end or empty)
     if (e.key === 'ArrowRight') {
+      // If in pseudo mode and empty, delete segment instead of unfocus
+      if (isPseudo.current && isEmpty.current) {
+        e.preventDefault();
+        console.log(`🎭 SegmentText [${segmentId}] deleting pseudo segment (ArrowRight)`);
+        renderUtils.triggerChildDelete?.(parentNodeId, segmentId, 'pseudoAbandoned');
+        return;
+      }
+      
       // If segment is empty (showing hint text), prevent default and unfocus
       if (isEmpty.current) {
         e.preventDefault(); // Prevent cursor from moving in hint text
@@ -357,6 +396,14 @@ const SegmentText = forwardRef(({ segmentId, parentNodeId, className, globalInfo
     
     // Navigate up with Up arrow (always unfocus)
     if (e.key === 'ArrowUp') {
+      // If in pseudo mode and empty, delete segment
+      if (isPseudo.current && isEmpty.current) {
+        e.preventDefault();
+        console.log(`🎭 SegmentText [${segmentId}] deleting pseudo segment (ArrowUp)`);
+        renderUtils.triggerChildDelete?.(parentNodeId, segmentId, 'pseudoAbandoned');
+        return;
+      }
+      
       const cursorPageX = getCursorPageX(textEl.current);
       console.log(`🔔 SegmentText [${segmentId}] triggering unfocus UP`);
       renderUtils.triggerUnfocus(parentNodeId, segmentId, 'up', { cursorPageX });
@@ -365,10 +412,30 @@ const SegmentText = forwardRef(({ segmentId, parentNodeId, className, globalInfo
     
     // Navigate down with Down arrow (always unfocus)
     if (e.key === 'ArrowDown') {
+      // If in pseudo mode and empty, delete segment
+      if (isPseudo.current && isEmpty.current) {
+        e.preventDefault();
+        console.log(`🎭 SegmentText [${segmentId}] deleting pseudo segment (ArrowDown)`);
+        renderUtils.triggerChildDelete?.(parentNodeId, segmentId, 'pseudoAbandoned');
+        return;
+      }
+      
       const cursorPageX = getCursorPageX(textEl.current);
       console.log(`🔔 SegmentText [${segmentId}] triggering unfocus DOWN`);
       renderUtils.triggerUnfocus(parentNodeId, segmentId, 'down', { cursorPageX });
       return;
+    }
+    
+    // Handle Enter key
+    if (e.key === 'Enter') {
+      // If in pseudo mode and empty, delete segment
+      if (isPseudo.current && isEmpty.current) {
+        e.preventDefault();
+        console.log(`🎭 SegmentText [${segmentId}] deleting pseudo segment (Enter)`);
+        renderUtils.triggerChildDelete?.(parentNodeId, segmentId, 'pseudoAbandoned');
+        return;
+      }
+      // Otherwise, let default behavior happen (create new line/paragraph)
     }
     
     // Blur on Escape

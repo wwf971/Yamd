@@ -271,8 +271,12 @@ const NodeTextRich = forwardRef(({ nodeId, className, parentInfo, globalInfo = n
     
     console.log(`🗑️ NodeRichText [${nodeId}] received childDelete request from ${from}, reason: ${reason}`);
     
+    // Get fresh segments array from node data
+    const currentNodeData = renderUtils.getNodeDataById?.(nodeId);
+    const currentSegments = currentNodeData?.segments || [];
+    
     // Find the segment to delete
-    const segmentIndex = segments.indexOf(from);
+    const segmentIndex = currentSegments.indexOf(from);
     
     if (segmentIndex === -1) {
       console.warn(`⚠️ Segment ${from} not found in segments array`);
@@ -280,7 +284,7 @@ const NodeTextRich = forwardRef(({ nodeId, className, parentInfo, globalInfo = n
     }
     
     // If this is the only segment, delete the entire node instead
-    if (segments.length === 1) {
+    if (currentSegments.length === 1) {
       console.log(`🗑️ Only one segment, deleting entire node ${nodeId}`);
       
       // Use existing deleteNode logic from renderUtils
@@ -289,15 +293,35 @@ const NodeTextRich = forwardRef(({ nodeId, className, parentInfo, globalInfo = n
       return;
     }
     
-    // Multiple segments - delete this segment and focus previous one
-    console.log(`🗑️ Deleting segment ${from} (${segmentIndex + 1}/${segments.length})`);
+    // Multiple segments - delete this segment and focus appropriate one
+    console.log(`🗑️ Deleting segment ${from} (${segmentIndex + 1}/${currentSegments.length}), reason: ${reason}`);
     
     // Determine which segment to focus after deletion
-    const targetSegmentId = segmentIndex > 0 
-      ? segments[segmentIndex - 1]  // Focus previous segment
-      : segments[segmentIndex + 1];  // Or next if deleting first
+    let targetSegmentId;
+    let focusType;
     
-    console.log(`🗑️ Will focus segment: ${targetSegmentId}`);
+    if (reason === 'pseudoAbandoned') {
+      // Pseudo segment abandoned - focus the segment that created it (previous segment)
+      // The pseudo segment is always created to the right, so previous is the creator
+      targetSegmentId = segmentIndex > 0 ? currentSegments[segmentIndex - 1] : currentSegments[segmentIndex + 1];
+      focusType = 'fromRight'; // Position at end of creator segment
+      console.log(`🎭 Pseudo segment abandoned, returning to creator: ${targetSegmentId}`);
+    } else {
+      // Regular deletion - focus previous segment (or next if first)
+      targetSegmentId = segmentIndex > 0 
+        ? currentSegments[segmentIndex - 1]  // Focus previous segment
+        : currentSegments[segmentIndex + 1];  // Or next if deleting first
+      focusType = 'fromRight'; // Position at end
+      console.log(`🗑️ Regular deletion, will focus: ${targetSegmentId}`);
+    }
+    
+    // Get segment data before deletion for callback
+    const segmentData = renderUtils.getNodeDataById?.(from);
+    
+    // Call onDelete callback before actual deletion
+    if (renderUtils.onDelete) {
+      renderUtils.onDelete(from, segmentData);
+    }
     
     // Delete the segment from the segments array
     renderUtils.updateNodeData(nodeId, (draft) => {
@@ -307,9 +331,69 @@ const NodeTextRich = forwardRef(({ nodeId, className, parentInfo, globalInfo = n
     });
     
     // Focus the target segment
-    renderUtils.triggerFocus?.(targetSegmentId, 'fromRight'); // Position at end
+    renderUtils.triggerFocus?.(targetSegmentId, focusType);
     
-  }, [nodeState?.childDelete?.counter, nodeId, segments, renderUtils]);
+  }, [nodeState?.childDelete?.counter, nodeId, renderUtils]);
+
+  // Handle child create requests from segments (via nodeState.childCreate)
+  useEffect(() => {
+    if (!nodeState?.childCreate) return;
+    
+    const { counter, from, type, isPseudo } = nodeState.childCreate;
+    
+    // Skip if counter is 0 (initial state)
+    if (counter === 0) return;
+    
+    console.log(`➕ NodeRichText [${nodeId}] received childCreate request from ${from}, type: ${type}, isPseudo: ${isPseudo}`);
+    
+    // Get fresh segments array from node data
+    const currentNodeData = renderUtils.getNodeDataById?.(nodeId);
+    const currentSegments = currentNodeData?.segments || [];
+    
+    // Find the requesting segment
+    const segmentIndex = currentSegments.indexOf(from);
+    
+    if (segmentIndex === -1) {
+      console.warn(`⚠️ Segment ${from} not found in segments array`);
+      return;
+    }
+    
+    // Generate new segment ID
+    const newSegmentId = `seg_${Math.random().toString(36).substr(2, 9)}`;
+    console.log(`➕ Creating new segment: ${newSegmentId} ${type} of ${from}`);
+    
+    // Create the new empty text segment
+    const newSegment = {
+      type: 'segment',
+      textRaw: '',
+      id: newSegmentId,
+      selfDisplay: 'text',
+      parentId: nodeId
+    };
+    
+    // Add the new segment to docsData
+    renderUtils.updateNodeData(newSegmentId, () => newSegment);
+    
+    // Insert into segments array at the appropriate position
+    const insertIndex = type === 'toRight' ? segmentIndex + 1 : segmentIndex;
+    
+    renderUtils.updateNodeData(nodeId, (draft) => {
+      if (draft.segments) {
+        draft.segments.splice(insertIndex, 0, newSegmentId);
+      }
+    });
+    
+    console.log(`➕ Inserted ${newSegmentId} at index ${insertIndex}, total segments: ${currentSegments.length + 1}`);
+    
+    // Call onCreate callback
+    if (renderUtils.onCreate) {
+      renderUtils.onCreate(newSegmentId, newSegment);
+    }
+    
+    // Focus the new segment with isPseudo flag
+    renderUtils.triggerFocus?.(newSegmentId, 'fromLeft', { isPseudo });
+    
+  }, [nodeState?.childCreate?.counter, nodeId, renderUtils]);
 
   // Note: Bullet positioning is now handled entirely by Zustand store in YamdNodeText
   // All positioning logic moved to calcBulletYPos in NodeRichText.js
