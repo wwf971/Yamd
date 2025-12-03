@@ -108,7 +108,7 @@ export const setCursorToEnd = (element) => {
  * Set cursor to the beginning of a contentEditable element
  * @param {HTMLElement} element - The contentEditable element
  */
-export const setCursorToBeginning = (element) => {
+export const setCursorToBegin = (element) => {
   if (!element) return;
   
   const range = document.createRange();

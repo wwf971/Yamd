@@ -6,16 +6,22 @@ import { docsData } from '@/core/DocStore.js';
  * NodeDataDisplay - Component to display a single node's data with real-time Jotai updates
  * Used in test/dev components to show flattened node data with automatic reactivity
  */
-export const NodeDataDisplay = ({ docId, nodeId, onUpdate }) => {
-  // Check if doc exists BEFORE calling getNodeData to avoid warnings
-  const docExists = docId && docsData.getNodeIds(docId).length > 0;
-  
-  // Only get nodeData if doc exists
-  const nodeAtom = docExists ? docsData.getNodeData(docId, nodeId) : null;
-  const nodeData = useAtomValue(nodeAtom || atom(null)); // Use dummy atom if no doc
+export const NodeDataDisplay = ({ docId, nodeId, onUpdate, refreshTrigger }) => {
   const elementRef = useRef(null);
-  const prevDataRef = useRef(nodeData);
+  const prevDataRef = useRef(null);
   const [isHighlighted, setIsHighlighted] = useState(false);
+  
+  // Get node atom - returns null atom if doc/node doesn't exist
+  let nodeAtom;
+  try {
+    nodeAtom = docId && nodeId ? docsData.getNodeData(docId, nodeId) : null;
+  } catch (error) {
+    nodeAtom = null;
+  }
+  
+  // Always call useAtomValue (Rules of Hooks - must be unconditional)
+  // Use a fallback null atom if nodeAtom is invalid
+  const nodeData = useAtomValue(nodeAtom || atom(null));
   
   // Detect when nodeData changes and notify parent
   useEffect(() => {
@@ -33,9 +39,17 @@ export const NodeDataDisplay = ({ docId, nodeId, onUpdate }) => {
     }
   }, [nodeData, nodeId, onUpdate]);
   
-  // Skip rendering if doc or nodeData doesn't exist (cleaned up or not loaded yet)
+  // Handle manual refresh - always highlight when refresh is triggered
+  useEffect(() => {
+    if (refreshTrigger > 0) {
+      setIsHighlighted(true);
+      setTimeout(() => setIsHighlighted(false), 800);
+    }
+  }, [refreshTrigger]);
+  
+  // Skip rendering if nodeData doesn't exist (cleaned up or not loaded yet)
   // IMPORTANT: This check must come AFTER all hooks to avoid Rules of Hooks violation
-  if (!docExists || !nodeData) {
+  if (!nodeData || !docId || !nodeId) {
     return null;
   }
   
@@ -82,6 +96,7 @@ export const DocDataDisplay = ({ docId, nodeIds, isLoading }) => {
   const containerRef = useRef(null);
   const updateQueueRef = useRef([]);
   const scrollTimeoutRef = useRef(null);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
   
   // Check if doc exists by trying to get its atom (without creating warnings)
   // If nodeIds is empty or undefined, the doc probably doesn't exist yet
@@ -148,9 +163,29 @@ export const DocDataDisplay = ({ docId, nodeIds, isLoading }) => {
             borderBottom: '2px solid #ddd',
             zIndex: 10,
             fontSize: '12px',
-            color: '#666'
+            color: '#666',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center'
           }}>
-            {nodeIds.length} nodes • Real-time updates enabled
+            <span>{nodeIds.length} nodes • Real-time updates enabled</span>
+            <button
+              onClick={() => setRefreshTrigger(prev => prev + 1)}
+              style={{
+                padding: '4px 8px',
+                fontSize: '11px',
+                backgroundColor: '#4CAF50',
+                color: 'white',
+                border: 'none',
+                borderRadius: '3px',
+                cursor: 'pointer',
+                fontWeight: '500'
+              }}
+              onMouseEnter={(e) => e.target.style.backgroundColor = '#45a049'}
+              onMouseLeave={(e) => e.target.style.backgroundColor = '#4CAF50'}
+            >
+              🔄 Refresh
+            </button>
           </div>
           {nodeIds.map(nodeId => (
             <NodeDataDisplay 
@@ -158,6 +193,7 @@ export const DocDataDisplay = ({ docId, nodeIds, isLoading }) => {
               docId={docId} 
               nodeId={nodeId}
               onUpdate={handleNodeUpdate}
+              refreshTrigger={refreshTrigger}
             />
           ))}
         </>

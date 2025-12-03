@@ -306,23 +306,23 @@ const handleRootKeyDown = (e, isEditable, currentSegmentId, docId) => {
   const isArrowKey = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key);
   const isEnterOrEscape = ['Enter', 'Escape'].includes(e.key);
   
-  if (!hasModifier && !isArrowKey && !isEnterOrEscape) {
-    // Let browser handle regular character input naturally
-    return;
-  }
+  // if (!hasModifier && !isArrowKey && !isEnterOrEscape) {
+  //   // Let browser handle regular character input naturally
+  //   return;
+  // }
   
   // Note: We don't call preventDefault() here for arrow keys
   // Browser moves cursor in contentEditable before this handler runs
   // Segments will preventDefault only when triggering unfocus
   
-  // Extract important event attributes and add no-op methods
+  // Extract important event attributes and pass real preventDefault
   const eventData = {
     key: e.key,
     ctrlKey: e.ctrlKey,
     shiftKey: e.shiftKey,
     metaKey: e.metaKey,
     altKey: e.altKey,
-    preventDefault: () => {}, // No-op (segments handle this)
+    preventDefault: () => e.preventDefault(), // Allow segments to prevent default
     stopPropagation: () => {} // No-op (event already at root)
   };
   

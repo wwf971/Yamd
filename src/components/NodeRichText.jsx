@@ -161,17 +161,21 @@ const NodeTextRich = forwardRef(({ nodeId, className, parentInfo, globalInfo = n
           renderUtils.setCurrentSegmentId?.(prevSegmentId); // Update current segment in YamdDoc
           renderUtils.triggerFocus(prevSegmentId, 'fromRight');
         } else {
-          // Leftmost segment - move to previous node
-          console.log(`⬅️ Leftmost segment, moving to previous node`);
-          
-          // Clear current segment before moving to previous node
-          renderUtils.cancelCurrentSegmentId?.();
+          // Leftmost segment - try to move to previous node
+          console.log(`⬅️ Leftmost segment, checking for previous node`);
           
           // Move to previous node in tree order
           const upTargetId = getMoveUpTargetId(nodeId, renderUtils.getNodeDataById);
           if (upTargetId) {
+            // Clear current segment before moving to previous node
+            renderUtils.cancelCurrentSegmentId?.();
             console.log(`⬅️ Triggering focus on previous node: ${upTargetId}`);
             renderUtils.triggerFocus(upTargetId, 'fromRight');
+          } else {
+            // No previous node - stay on current segment (don't cancel current segment)
+            console.log(`⬅️ No previous node, staying on segment: ${from}`);
+            // Trigger focus with fromLeft to position cursor at beginning
+            renderUtils.triggerFocus(from, 'fromLeft');
           }
         }
         break;
@@ -184,17 +188,21 @@ const NodeTextRich = forwardRef(({ nodeId, className, parentInfo, globalInfo = n
           renderUtils.setCurrentSegmentId?.(nextSegmentId); // Update current segment in YamdDoc
           renderUtils.triggerFocus(nextSegmentId, 'fromLeft');
         } else {
-          // Rightmost segment - move to next node
-          console.log(`➡️ Rightmost segment, moving to next node`);
-          
-          // Clear current segment before moving to next node
-          renderUtils.cancelCurrentSegmentId?.();
+          // Rightmost segment - try to move to next node
+          console.log(`➡️ Rightmost segment, checking for next node`);
           
           // Move to next node in tree order
           const downTargetId = getMoveDownTargetId(nodeId, renderUtils.getNodeDataById);
           if (downTargetId) {
+            // Clear current segment before moving to next node
+            renderUtils.cancelCurrentSegmentId?.();
             console.log(`➡️ Triggering focus on next node: ${downTargetId}`);
             renderUtils.triggerFocus(downTargetId, 'fromLeft');
+          } else {
+            // No next node - stay on current segment (don't cancel current segment)
+            console.log(`➡️ No next node, staying on segment: ${from}`);
+            // Trigger focus with fromRight to position cursor at end
+            renderUtils.triggerFocus(from, 'fromRight');
           }
         }
         break;
@@ -205,13 +213,13 @@ const NodeTextRich = forwardRef(({ nodeId, className, parentInfo, globalInfo = n
         // If so, focus on that segment
         // Otherwise, move to previous node in tree order
         
-        console.log(`⬆️ Moving to previous node, cursorPageX=${cursorPageX}`);
-        
-        // Clear current segment before moving to previous node
-        renderUtils.cancelCurrentSegmentId?.();
+        console.log(`⬆️ Checking for previous node, cursorPageX=${cursorPageX}`);
         
         const upTargetId = getMoveUpTargetId(nodeId, renderUtils.getNodeDataById);
         if (upTargetId) {
+          // Clear current segment before moving to previous node
+          renderUtils.cancelCurrentSegmentId?.();
+          
           // Determine focus type based on whether target is parent
           const currentNode = renderUtils.getNodeDataById(nodeId);
           const isMovingToParent = upTargetId === currentNode?.parentId;
@@ -219,21 +227,30 @@ const NodeTextRich = forwardRef(({ nodeId, className, parentInfo, globalInfo = n
           
           console.log(`⬆️ Triggering focus on ${upTargetId} with cursorPageX=${cursorPageX}`);
           renderUtils.triggerFocus(upTargetId, focusType, { cursorPageX });
+        } else {
+          // No previous node - stay on current segment (don't cancel current segment)
+          console.log(`⬆️ No previous node, staying on segment: ${from}`);
+          // Just trigger focus again to ensure cursor is positioned correctly
+          renderUtils.triggerFocus(from, 'fromUp', { cursorPageX });
         }
         
         break;
         
       case 'down':
         // TODO: Move to next node (same as plain text down arrow)
-        console.log(`⬇️ Moving to next node, cursorPageX=${cursorPageX}`);
-        
-        // Clear current segment before moving to next node
-        renderUtils.cancelCurrentSegmentId?.();
+        console.log(`⬇️ Checking for next node, cursorPageX=${cursorPageX}`);
         
         const downTargetId = getMoveDownTargetId(nodeId, renderUtils.getNodeDataById);
         if (downTargetId) {
+          // Clear current segment before moving to next node
+          renderUtils.cancelCurrentSegmentId?.();
           console.log(`⬇️ Triggering focus on ${downTargetId} with cursorPageX=${cursorPageX}`);
           renderUtils.triggerFocus(downTargetId, 'arrowDown', { cursorPageX });
+        } else {
+          // No next node - stay on current segment (don't cancel current segment)
+          console.log(`⬇️ No next node, staying on segment: ${from}`);
+          // Just trigger focus again to ensure cursor is positioned correctly
+          renderUtils.triggerFocus(from, 'fromDown', { cursorPageX });
         }
         break;
         

@@ -3,7 +3,7 @@ import { useRenderUtilsContext } from '@/core/RenderUtils.ts';
 import {
   isCursorAtEnd, isCursorAtBeginning,
   getCursorPageX, getClosestCharIndex,
-  setCursorPos, setCursorToEnd, setCursorToBeginning
+  setCursorPos, setCursorToEnd, setCursorToBegin
 } from '@/components/TextUtils.js';
 
 /**
@@ -14,7 +14,8 @@ import {
 const SegmentText = forwardRef(({ segmentId, parentNodeId, className, globalInfo, isEditable = null}, ref) => {
   // Get render utils from context
   const renderUtils = useRenderUtilsContext();
-
+  const hintText = 'empty_text_segment'
+  const isEmpty = useRef(null);
   const contextIsEditable = renderUtils.isEditable;
   // If isEditable prop is not null, it overwrites the value from context
   const finalIsEditable = isEditable !== null ? isEditable : contextIsEditable;
@@ -31,21 +32,43 @@ const SegmentText = forwardRef(({ segmentId, parentNodeId, className, globalInfo
   const text = segmentData?.textRaw ?? '';
   
   // Ref for the contentEditable span
-  const textElRef = useRef(null);
+  const textEl = useRef(null);
   
   // Track if this segment is theoretically focused (for styling)
   const isLogicallyFocused = useRef(false);
   
+  // Debug: log every render
+  console.log(`🔄 SegmentText [${segmentId}] render: text="${text}", isEmpty=${isEmpty.current}, isLogicallyFocused=${isLogicallyFocused.current}`);
+  
+  // Update isEmpty when text changes
+  useEffect(() => {
+    isEmpty.current = text === '';
+  }, [text]);
+  
   // Update DOM content when text prop changes externally (but not while user is focused)
   useEffect(() => {
-    if (textElRef.current && !isLogicallyFocused.current) {
-      textElRef.current.textContent = text;
+    if (textEl.current && !isLogicallyFocused.current) {
+      if (text === '') {
+        // Show hint text
+        console.log(`💭 SegmentText [${segmentId}] updating DOM with hint text (text is empty, not focused)`);
+        textEl.current.textContent = hintText;
+        textEl.current.style.color = '#ccc';
+        textEl.current.style.fontStyle = 'italic';
+        isEmpty.current = true;
+      } else {
+        // Show actual text
+        console.log(`💭 SegmentText [${segmentId}] updating DOM with actual text: "${text}"`);
+        textEl.current.textContent = text;
+        textEl.current.style.color = '';
+        textEl.current.style.fontStyle = '';
+        isEmpty.current = false;
+      }
     }
-  }, [text]);
+  }, [text, hintText, segmentId]);
 
   // Handle focus requests from parent NodeRichText
   useEffect(() => {
-    if (!textElRef.current) return;
+    if (!textEl.current) return;
     
     // Skip if counter is 0 (initial state)
     if (focusCounter === 0) return;
@@ -57,35 +80,45 @@ const SegmentText = forwardRef(({ segmentId, parentNodeId, className, globalInfo
     const { type, cursorPageX } = state.focus;
     
     console.log(`🎯 SegmentText [${segmentId}] received FOCUS from ${type}`);
+    console.log(`🎯 Current DOM content before focus: "${textEl.current?.textContent}", isEmpty=${isEmpty.current}`);
     
     // Mark as logically focused
     isLogicallyFocused.current = true;
     
     // Apply focus styles
-    textElRef.current.style.backgroundColor = '#fff3cd';
-    textElRef.current.style.border = '1px solid #ffc107';
+    textEl.current.style.backgroundColor = '#fff3cd';
+    textEl.current.style.border = '1px solid #ffc107';
     
     // Report to parent that this segment is now focused
     renderUtils.setCurrentSegmentId?.(segmentId);
     
+    // Keep hint text visible when focused on empty segment (acts as placeholder)
+    // It will be cleared when user starts typing
+    
+    if(isEmpty.current) {
+      setCursorToBegin(textEl.current);
+      return;
+    }
+
     // Set cursor position based on focus type (theoretical focus - no .focus() call)
+    // For empty segments, position based on focus type (beginning or end of hint text)
     if (type === 'fromLeft') {
       // Coming from left segment - position at beginning
-      setCursorToBeginning(textElRef.current);
+      setCursorToBegin(textEl.current);
     } else if (type === 'fromRight') {
       // Coming from right segment - position at end
-      setCursorToEnd(textElRef.current);
+      setCursorToEnd(textEl.current)
     } else if (type === 'fromUp' && cursorPageX !== undefined) {
       // Coming from above - find closest horizontal position
-      const closestPos = getClosestCharIndex(textElRef.current, cursorPageX, 'backward');
-      setCursorPos(textElRef.current, closestPos);
+      const closestPos = getClosestCharIndex(textEl.current, cursorPageX, 'backward');
+      setCursorPos(textEl.current, closestPos);
     } else if (type === 'fromDown' && cursorPageX !== undefined) {
       // Coming from below - find closest horizontal position
-      const closestPos = getClosestCharIndex(textElRef.current, cursorPageX, 'forward');
-      setCursorPos(textElRef.current, closestPos);
+      const closestPos = getClosestCharIndex(textEl.current, cursorPageX, 'forward');
+      setCursorPos(textEl.current, closestPos);
     } else {
       // Default - position at beginning
-      setCursorToBeginning(textElRef.current);
+      setCursorToBegin(textEl.current);
     }
     
   }, [focusCounter, segmentId, renderUtils]);
@@ -107,12 +140,21 @@ const SegmentText = forwardRef(({ segmentId, parentNodeId, className, globalInfo
     isLogicallyFocused.current = false;
     
     // Remove focus styles
-    if (textElRef.current) {
-      textElRef.current.style.backgroundColor = 'transparent';
-      textElRef.current.style.border = '1px solid transparent';
+    if (textEl.current) {
+      textEl.current.style.backgroundColor = 'transparent';
+      textEl.current.style.border = '1px solid transparent';
+      
+      // Restore hint text if segment is empty
+      const currentText = textEl.current.textContent || '';
+      if (currentText === '' || currentText === ' ') {
+        textEl.current.textContent = hintText;
+        textEl.current.style.color = '#ccc';
+        textEl.current.style.fontStyle = 'italic';
+        isEmpty.current = true;
+      }
     }
     
-  }, [unfocusCounter, segmentId, renderUtils]);
+  }, [unfocusCounter, segmentId, renderUtils, hintText]);
   
   // Handle keyboard events forwarded from YamdDoc (for backward compatibility)
   useEffect(() => {
@@ -123,6 +165,8 @@ const SegmentText = forwardRef(({ segmentId, parentNodeId, className, globalInfo
     
     const { event } = state.keyboard;
     
+    console.log(`⌨️ SegmentText [${segmentId}] received keyboard event: ${event.key}, counter: ${keyboardCounter}`);
+    
     // Call handleKeyDown with synthetic event
     handleKeyDown(event);
     
@@ -130,9 +174,118 @@ const SegmentText = forwardRef(({ segmentId, parentNodeId, className, globalInfo
 
   // Handle key events forwarded from YamdDoc (theoretical focus model)
   const handleKeyDown = useCallback((e) => {
-    // Navigate left with Left arrow (at beginning)
+    // Check if this is a modifier key combination or special key
+    const hasModifier = e.ctrlKey || e.altKey || e.metaKey;
+    const isArrowKey = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key);
+    const isSpecialKey = ['Enter', 'Escape', 'Tab', 'Backspace', 'Delete'].includes(e.key);
+    
+    // If it's a regular character key (not modifier combo, not arrow, not special)
+    // Let browser insert it, then update the store
+    if (!hasModifier && !isArrowKey && !isSpecialKey && e.key.length === 1) {
+      // If showing hint text, clear it first before letting browser insert the character
+      if (isEmpty.current && textEl.current?.textContent === hintText) {
+        e.preventDefault(); // Prevent default to manually handle the input
+        textEl.current.textContent = e.key; // Insert the typed character
+        textEl.current.style.color = '';
+        textEl.current.style.fontStyle = '';
+        
+        // Move cursor to end
+        const range = document.createRange();
+        const sel = window.getSelection();
+        range.selectNodeContents(textEl.current);
+        range.collapse(false);
+        sel.removeAllRanges();
+        sel.addRange(range);
+        
+        isEmpty.current = false;
+        console.log(`📝 SegmentText [${segmentId}] first character typed: "${e.key}"`);
+        renderUtils.updateNodeData(segmentId, (draft) => {
+          draft.textRaw = e.key;
+        });
+        return;
+      }
+      
+      // Normal case: let browser insert character, then update store
+      requestAnimationFrame(() => {
+        if (textEl.current) {
+          let newText = textEl.current.textContent || '';
+          // Don't save hint text
+          if (newText === hintText) {
+            newText = '';
+          }
+          console.log(`📝 SegmentText [${segmentId}] updating text: "${newText}"`);
+          isEmpty.current = newText === '';
+          renderUtils.updateNodeData(segmentId, (draft) => {
+            draft.textRaw = newText;
+          });
+        }
+      });
+      return;
+    }
+    
+    // Handle Backspace/Delete - also need to update after character is removed
+    if (e.key === 'Backspace' || e.key === 'Delete') {
+      let currentText = textEl.current?.textContent || '';
+      
+      // Don't count hint text as real content
+      if (currentText === hintText) {
+        currentText = '';
+      }
+      
+      // If deleting the last character, manually clear and show hint
+      // Prevent default to stop browser from deleting the entire span
+      if (currentText.length === 1) {
+        e.preventDefault(); // Prevent browser from deleting the empty span
+        console.log(`📝 SegmentText [${segmentId}] deleting last character, showing hint`);
+        textEl.current.textContent = hintText;
+        textEl.current.style.color = '#ccc';
+        textEl.current.style.fontStyle = 'italic';
+        isEmpty.current = true;
+        renderUtils.updateNodeData(segmentId, (draft) => {
+          draft.textRaw = '';
+        });
+        return;
+      }
+      
+      // Otherwise, let browser handle deletion and read result
+      requestAnimationFrame(() => {
+        if (textEl.current) {
+          let newText = textEl.current.textContent || '';
+          // Don't save hint text
+          if (newText === hintText) {
+            newText = '';
+          }
+          console.log(`📝 SegmentText [${segmentId}] updating text after delete: "${newText}"`);
+          
+          // If text becomes empty, show hint
+          if (newText === '') {
+            textEl.current.textContent = hintText;
+            textEl.current.style.color = '#ccc';
+            textEl.current.style.fontStyle = 'italic';
+            isEmpty.current = true;
+          } else {
+            isEmpty.current = false;
+          }
+          
+          renderUtils.updateNodeData(segmentId, (draft) => {
+            draft.textRaw = newText;
+          });
+        }
+      });
+      return;
+    }
+    
+    // Navigate left with Left arrow (at beginning or empty)
     if (e.key === 'ArrowLeft') {
-      const isAtBeginning = isCursorAtBeginning(textElRef.current);
+      // If segment is empty (showing hint text), prevent default and unfocus
+      if (isEmpty.current) {
+        e.preventDefault(); // Prevent cursor from moving in hint text
+        console.log(`🔔 SegmentText [${segmentId}] triggering unfocus LEFT (empty)`);
+        renderUtils.triggerUnfocus(parentNodeId, segmentId, 'left');
+        return;
+      }
+      
+      const isAtBeginning = isCursorAtBeginning(textEl.current);
       if (isAtBeginning) {
         console.log(`🔔 SegmentText [${segmentId}] triggering unfocus LEFT`);
         renderUtils.triggerUnfocus(parentNodeId, segmentId, 'left');
@@ -140,9 +293,17 @@ const SegmentText = forwardRef(({ segmentId, parentNodeId, className, globalInfo
       return;
     }
     
-    // Navigate right with Right arrow (at end)
+    // Navigate right with Right arrow (at end or empty)
     if (e.key === 'ArrowRight') {
-      const isAtEnd = isCursorAtEnd(textElRef.current);
+      // If segment is empty (showing hint text), prevent default and unfocus
+      if (isEmpty.current) {
+        e.preventDefault(); // Prevent cursor from moving in hint text
+        console.log(`🔔 SegmentText [${segmentId}] triggering unfocus RIGHT (empty)`);
+        renderUtils.triggerUnfocus(parentNodeId, segmentId, 'right');
+        return;
+      }
+      
+      const isAtEnd = isCursorAtEnd(textEl.current);
       if (isAtEnd) {
         console.log(`🔔 SegmentText [${segmentId}] triggering unfocus RIGHT`);
         renderUtils.triggerUnfocus(parentNodeId, segmentId, 'right');
@@ -150,17 +311,17 @@ const SegmentText = forwardRef(({ segmentId, parentNodeId, className, globalInfo
       return;
     }
     
-    // Navigate up with Up arrow
+    // Navigate up with Up arrow (always unfocus)
     if (e.key === 'ArrowUp') {
-      const cursorPageX = getCursorPageX(textElRef.current);
+      const cursorPageX = getCursorPageX(textEl.current);
       console.log(`🔔 SegmentText [${segmentId}] triggering unfocus UP`);
       renderUtils.triggerUnfocus(parentNodeId, segmentId, 'up', { cursorPageX });
       return;
     }
     
-    // Navigate down with Down arrow
+    // Navigate down with Down arrow (always unfocus)
     if (e.key === 'ArrowDown') {
-      const cursorPageX = getCursorPageX(textElRef.current);
+      const cursorPageX = getCursorPageX(textEl.current);
       console.log(`🔔 SegmentText [${segmentId}] triggering unfocus DOWN`);
       renderUtils.triggerUnfocus(parentNodeId, segmentId, 'down', { cursorPageX });
       return;
@@ -168,26 +329,11 @@ const SegmentText = forwardRef(({ segmentId, parentNodeId, className, globalInfo
     
     // Blur on Escape
     if (e.key === 'Escape') {
-      textElRef.current?.blur();
+      textEl.current?.blur();
     }
   }, [segmentId, parentNodeId, renderUtils]);
 
-  // Handle input changes in contentEditable span
-  const handleInput = (e) => {
-    const newText = e.target.textContent || '';
-    
-    // Update segment data in Jotai store
-    if (segmentId) {
-      renderUtils.updateNodeData(segmentId, (segment) => {
-        segment.textRaw = newText;
-      });
-      
-      // TODO: Also need to regenerate parent node's textRaw from all segments
-      // This will be handled by the parent NodeRichText component
-    }
-  };
-   
-   // Handle mouse down/click to report theoretical focus
+  // Handle mouse down/click to report theoretical focus
   const handleMouseDown = (e) => {
     if (!finalIsEditable) return;
     
@@ -196,13 +342,16 @@ const SegmentText = forwardRef(({ segmentId, parentNodeId, className, globalInfo
     // Mark as theoretically focused
     isLogicallyFocused.current = true;
     
+    // Keep hint text visible when focused (acts as placeholder)
+    // It will be cleared when user starts typing
+    
     // Report to parent
     renderUtils.setCurrentSegmentId(segmentId);
     
     // Apply focus styles immediately
-    if (textElRef.current) {
-      textElRef.current.style.backgroundColor = '#f0f8ff';
-      textElRef.current.style.border = '1px solid #4CAF50';
+    if (textEl.current) {
+      textEl.current.style.backgroundColor = '#f0f8ff';
+      textEl.current.style.border = '1px solid #4CAF50';
     }
   };
 
@@ -210,7 +359,11 @@ const SegmentText = forwardRef(({ segmentId, parentNodeId, className, globalInfo
   if (!finalIsEditable) {
     // Non-editable mode: just render as span
     return (
-      <span ref={textElRef} className={`${className} yamd-text-segment`}>
+      <span 
+        ref={textEl} 
+        className={`${className} yamd-text-segment`}
+        data-segment-id={segmentId}
+      >
         {text}
       </span>
     );
@@ -218,8 +371,19 @@ const SegmentText = forwardRef(({ segmentId, parentNodeId, className, globalInfo
   
   // Set initial content on mount only
   useEffect(() => {
-    if (textElRef.current && textElRef.current.textContent !== text) {
-      textElRef.current.textContent = text;
+    if (textEl.current) {
+      if (text === '') {
+        // Show hint text for empty segments
+        console.log(`🔧 SegmentText [${segmentId}] mounting with empty text, showing hint`);
+        textEl.current.textContent = hintText;
+        textEl.current.style.color = '#ccc';
+        textEl.current.style.fontStyle = 'italic';
+        isEmpty.current = true;
+      } else {
+        console.log(`🔧 SegmentText [${segmentId}] mounting with text: "${text}"`);
+        textEl.current.textContent = text;
+        isEmpty.current = false;
+      }
     }
   }, []);
   
@@ -227,13 +391,15 @@ const SegmentText = forwardRef(({ segmentId, parentNodeId, className, globalInfo
   // No nested contentEditable - part of parent YamdDoc's contentEditable context
   return (
     <span
-      ref={textElRef}
-      onInput={handleInput}
+      ref={textEl}
+      data-segment-id={segmentId}
       onMouseDown={handleMouseDown}
       suppressContentEditableWarning={true}
       className={`${className} yamd-text-segment`}
       style={{
-        display: 'inline',
+        display: 'inline-block',
+        minWidth: '2ch',
+        minHeight: '1em',
         outline: 'none',
         cursor: 'text',
         padding: '0px 0px',
