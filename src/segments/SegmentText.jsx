@@ -3,7 +3,8 @@ import { useRenderUtilsContext } from '@/core/RenderUtils.ts';
 import {
   isCursorAtEnd, isCursorAtBeginning,
   getCursorPageX, getClosestCharIndex,
-  setCursorPos, setCursorToEnd, setCursorToBegin
+  setCursorPos, setCursorToEnd, setCursorToBegin,
+  getCursorPosition
 } from '@/components/TextUtils.js';
 
 /**
@@ -232,6 +233,16 @@ const SegmentText = forwardRef(({ segmentId, parentNodeId, className, globalInfo
         currentText = '';
       }
       
+      // If segment is already empty (showing hint), request deletion from parent
+      if (isEmpty.current && currentText === '') {
+        e.preventDefault();
+        console.log(`🗑️ SegmentText [${segmentId}] requesting deletion from parent`);
+        
+        // Notify parent to delete this segment
+        renderUtils.triggerChildDelete?.(parentNodeId, segmentId, 'backspaceOnEmpty');
+        return;
+      }
+      
       // If deleting the last character, manually clear and show hint
       // Prevent default to stop browser from deleting the entire span
       if (currentText.length === 1) {
@@ -285,11 +296,26 @@ const SegmentText = forwardRef(({ segmentId, parentNodeId, className, globalInfo
         return;
       }
       
-      const isAtBeginning = isCursorAtBeginning(textEl.current);
-      if (isAtBeginning) {
+      // Check cursor position before browser moves it
+      const currentPos = getCursorPosition(textEl.current);
+      const sel = window.getSelection();
+      const isOutside = !textEl.current?.contains(sel.anchorNode);
+      
+      // Trigger unfocus if:
+      // 1. Cursor is at position 0 (at beginning)
+      // 2. Cursor is outside our element (already jumped out)
+      const shouldUnfocus = currentPos === 0 || isOutside;
+      
+      console.log(`⬅️ SegmentText [${segmentId}] ArrowLeft: pos=${currentPos}, shouldUnfocus=${shouldUnfocus}`);
+      
+      if (shouldUnfocus) {
+        e.preventDefault(); // Prevent cursor from moving outside
         console.log(`🔔 SegmentText [${segmentId}] triggering unfocus LEFT`);
         renderUtils.triggerUnfocus(parentNodeId, segmentId, 'left');
+        return;
       }
+      
+      // Not at beginning - let browser move cursor naturally
       return;
     }
     
@@ -303,11 +329,29 @@ const SegmentText = forwardRef(({ segmentId, parentNodeId, className, globalInfo
         return;
       }
       
-      const isAtEnd = isCursorAtEnd(textEl.current);
-      if (isAtEnd) {
+      // Check cursor position before browser moves it
+      const currentPos = getCursorPosition(textEl.current);
+      const text = textEl.current?.textContent || '';
+      const textLength = text.length;
+      const sel = window.getSelection();
+      const isOutside = !textEl.current?.contains(sel.anchorNode);
+      const textToRight = currentPos < textLength ? text.substring(currentPos) : '(end)';
+      
+      // Trigger unfocus if:
+      // 1. Cursor is at the last position (at end)
+      // 2. Cursor is outside our element (already jumped out)
+      const shouldUnfocus = currentPos >= textLength || isOutside;
+      
+      console.log(`➡️ SegmentText [${segmentId}] ArrowRight: pos=${currentPos}/${textLength}, text to right: "${textToRight}", shouldUnfocus=${shouldUnfocus}`);
+      
+      if (shouldUnfocus) {
+        e.preventDefault(); // Prevent cursor from moving outside
         console.log(`🔔 SegmentText [${segmentId}] triggering unfocus RIGHT`);
         renderUtils.triggerUnfocus(parentNodeId, segmentId, 'right');
+        return;
       }
+      
+      // Not at end - let browser move cursor naturally
       return;
     }
     
@@ -337,7 +381,14 @@ const SegmentText = forwardRef(({ segmentId, parentNodeId, className, globalInfo
   const handleMouseDown = (e) => {
     if (!finalIsEditable) return;
     
-    console.log(`🖱️ SegmentText [${segmentId}] mouseDown`);
+    // Log cursor position after click
+    requestAnimationFrame(() => {
+      const pos = getCursorPosition(textEl.current);
+      const text = textEl.current?.textContent || '';
+      const len = text.length;
+      const textToRight = pos < len ? text.substring(pos) : '(end)';
+      console.log(`🖱️ SegmentText [${segmentId}] mouseDown, cursor at ${pos}/${len}, text to right: "${textToRight}"`);
+    });
     
     // Mark as theoretically focused
     isLogicallyFocused.current = true;
@@ -363,6 +414,9 @@ const SegmentText = forwardRef(({ segmentId, parentNodeId, className, globalInfo
         ref={textEl} 
         className={`${className} yamd-text-segment`}
         data-segment-id={segmentId}
+        style={{
+          whiteSpace: 'pre-wrap' /* make the space displayed as a space */
+        }}
       >
         {text}
       </span>
@@ -400,6 +454,7 @@ const SegmentText = forwardRef(({ segmentId, parentNodeId, className, globalInfo
         display: 'inline-block',
         minWidth: '2ch',
         minHeight: '1em',
+        whiteSpace: 'pre-wrap',
         outline: 'none',
         cursor: 'text',
         padding: '0px 0px',

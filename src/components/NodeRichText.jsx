@@ -108,13 +108,13 @@ const NodeTextRich = forwardRef(({ nodeId, className, parentInfo, globalInfo = n
         console.log(`⬇️ No cursorPageX, focusing first segment: ${targetSegmentId}`);
       }
       
-    } else if (type === 'fromRight' || type === 'fromLeft') {
-      // Horizontal navigation from adjacent node
-      if (type === 'fromRight') {
-        // Coming from right → focus LAST segment
+    } else if (type === 'fromRight' || type === 'fromLeft' || type === 'prevSiblingDeleted') {
+      // Horizontal navigation from adjacent node or after deletion
+      if (type === 'fromRight' || type === 'prevSiblingDeleted') {
+        // Coming from right OR previous sibling was deleted → focus LAST segment
         segmentFocusType = 'fromRight';
         targetSegmentId = segments[segments.length - 1];
-        console.log(`⬅️ fromRight: focusing last segment: ${targetSegmentId}`);
+        console.log(`⬅️ ${type}: focusing last segment: ${targetSegmentId}`);
       } else {
         // Coming from left → focus FIRST segment
         segmentFocusType = 'fromLeft';
@@ -259,6 +259,57 @@ const NodeTextRich = forwardRef(({ nodeId, className, parentInfo, globalInfo = n
     }
     
   }, [nodeState?.unfocus?.counter, nodeId, renderUtils]);
+
+  // Handle child delete requests from segments (via nodeState.childDelete)
+  useEffect(() => {
+    if (!nodeState?.childDelete) return;
+    
+    const { counter, from, reason } = nodeState.childDelete;
+    
+    // Skip if counter is 0 (initial state)
+    if (counter === 0) return;
+    
+    console.log(`🗑️ NodeRichText [${nodeId}] received childDelete request from ${from}, reason: ${reason}`);
+    
+    // Find the segment to delete
+    const segmentIndex = segments.indexOf(from);
+    
+    if (segmentIndex === -1) {
+      console.warn(`⚠️ Segment ${from} not found in segments array`);
+      return;
+    }
+    
+    // If this is the only segment, delete the entire node instead
+    if (segments.length === 1) {
+      console.log(`🗑️ Only one segment, deleting entire node ${nodeId}`);
+      
+      // Use existing deleteNode logic from renderUtils
+      const result = renderUtils.deleteNode?.(nodeId);
+      console.log(`🗑️ Delete node result:`, result);
+      return;
+    }
+    
+    // Multiple segments - delete this segment and focus previous one
+    console.log(`🗑️ Deleting segment ${from} (${segmentIndex + 1}/${segments.length})`);
+    
+    // Determine which segment to focus after deletion
+    const targetSegmentId = segmentIndex > 0 
+      ? segments[segmentIndex - 1]  // Focus previous segment
+      : segments[segmentIndex + 1];  // Or next if deleting first
+    
+    console.log(`🗑️ Will focus segment: ${targetSegmentId}`);
+    
+    // Delete the segment from the segments array
+    renderUtils.updateNodeData(nodeId, (draft) => {
+      if (draft.segments) {
+        draft.segments = draft.segments.filter(id => id !== from);
+      }
+    });
+    
+    // Focus the target segment
+    renderUtils.triggerFocus?.(targetSegmentId, 'fromRight'); // Position at end
+    
+  }, [nodeState?.childDelete?.counter, nodeId, segments, renderUtils]);
 
   // Note: Bullet positioning is now handled entirely by Zustand store in YamdNodeText
   // All positioning logic moved to calcBulletYPos in NodeRichText.js

@@ -37,6 +37,7 @@ export interface RenderUtilsContextValue {
   useNodeFocusCounter: (nodeId: string) => number;
   useNodeUnfocusCounter: (nodeId: string) => number;
   useNodeKeyboardCounter: (nodeId: string) => number;
+  useNodeChildDeleteCounter: (nodeId: string) => number;
   useAsset: (assetId: string) => any;
   
   // Non-reactive data access methods
@@ -56,6 +57,7 @@ export interface RenderUtilsContextValue {
   // Focus management
   triggerFocus: (nodeId: string, type: string, extraData?: any) => void;
   triggerUnfocus: (nodeId: string, from: string, type: string, extraData?: any) => void;
+  triggerChildDelete: (parentNodeId: string, fromId: string, reason?: string) => void;
   
   // Cursor/selection utilities
   getCurrentSegmentId: (containerRef: React.RefObject<HTMLElement>) => string | null;
@@ -338,6 +340,13 @@ export const createRenderUtilsContextValue = ({
     useNodeKeyboardCounter: (nodeId: string) => {
       if (!docId) return 0;
       const counterAtom = docsState.getKeyboardCounterAtom(docId, nodeId) as any;
+      // eslint-disable-next-line react-hooks/rules-of-hooks
+      return useAtomValue(counterAtom) as number;
+    },
+
+    useNodeChildDeleteCounter: (nodeId: string) => {
+      if (!docId) return 0;
+      const counterAtom = docsState.getChildDeleteCounterAtom(docId, nodeId) as any;
       // eslint-disable-next-line react-hooks/rules-of-hooks
       return useAtomValue(counterAtom) as number;
     },
@@ -901,6 +910,11 @@ export const createRenderUtilsContextValue = ({
     triggerUnfocus: (nodeId: string, from: string, type: string, extraData: any = {}) => {
       if (!docId) return;
       docsState.triggerUnfocus(docId, nodeId, from, type, extraData);
+    },
+
+    triggerChildDelete: (parentNodeId: string, fromId: string, reason: string = 'backspaceOnEmpty') => {
+      if (!docId) return;
+      docsState.triggerChildDelete(docId, parentNodeId, fromId, reason);
     },
     
     // Cursor/selection utilities

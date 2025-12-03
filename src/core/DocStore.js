@@ -268,6 +268,7 @@ class DocsState {
     this._focusCounterAtoms = {};
     this._unfocusCounterAtoms = {};
     this._keyboardCounterAtoms = {};
+    this._childDeleteCounterAtoms = {};
     // Use the same Jotai store as DocsData
     this._store = docsData.getStore();
   }
@@ -298,6 +299,11 @@ class DocsState {
         keyboard: {
           counter: 0,
           event: null // { key, ctrlKey, shiftKey, metaKey, altKey }
+        },
+        childDelete: {
+          counter: 0,
+          from: null, // segment/child ID that wants to delete itself
+          reason: null  // 'backspaceOnEmpty', etc.
         }
       });
     }
@@ -363,6 +369,25 @@ class DocsState {
   }
 
   /**
+   * Get derived atom for childDelete counter only (cached)
+   * @param {string} docId - Document ID
+   * @param {string} nodeId - Node ID
+   * @returns {object} Jotai derived atom for childDelete counter
+   */
+  getChildDeleteCounterAtom(docId, nodeId) {
+    if (!this._childDeleteCounterAtoms[docId]) {
+      this._childDeleteCounterAtoms[docId] = {};
+    }
+    
+    if (!this._childDeleteCounterAtoms[docId][nodeId]) {
+      const stateAtom = this.getNodeState(docId, nodeId);
+      this._childDeleteCounterAtoms[docId][nodeId] = atom((get) => get(stateAtom).childDelete.counter);
+    }
+    
+    return this._childDeleteCounterAtoms[docId][nodeId];
+  }
+
+  /**
    * Trigger focus on a node
    * @param {string} docId - Document ID
    * @param {string} nodeId - Node ID
@@ -424,6 +449,28 @@ class DocsState {
   }
 
   /**
+   * Trigger child delete request (from child segment/node to parent)
+   * @param {string} docId - Document ID
+   * @param {string} parentNodeId - Parent node ID
+   * @param {string} fromId - Child ID requesting deletion
+   * @param {string} reason - Reason for deletion
+   */
+  triggerChildDelete(docId, parentNodeId, fromId, reason = 'backspaceOnEmpty') {
+    const stateAtom = this.getNodeState(docId, parentNodeId);
+    const currentState = this._store.get(stateAtom);
+    
+    // Update childDelete state
+    currentState.childDelete = {
+      counter: (currentState.childDelete?.counter || 0) + 1,
+      from: fromId,
+      reason: reason
+    };
+    
+    // Set with a new state reference so Jotai detects the change
+    this._store.set(stateAtom, {...currentState});
+  }
+
+  /**
    * Remove state for a node
    * @param {string} docId - Document ID
    * @param {string} nodeId - Node ID
@@ -451,6 +498,9 @@ class DocsState {
     }
     if (this._keyboardCounterAtoms[docId]) {
       delete this._keyboardCounterAtoms[docId];
+    }
+    if (this._childDeleteCounterAtoms[docId]) {
+      delete this._childDeleteCounterAtoms[docId];
     }
   }
 }
