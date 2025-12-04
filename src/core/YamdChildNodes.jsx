@@ -2,6 +2,7 @@ import React from 'react';
 import YamdTimeline from '@/components/NodeTimeline.jsx';
 import { LIST_SETTINGS } from '@/config/RenderConfig.js';
 import YamdNode from '@/core/YamdNode.jsx';
+import { useRenderUtilsContext } from '@/core/RenderUtils.ts';
 
 /**
  * Component for rendering children nodes based on childDisplay style from parentInfo
@@ -16,6 +17,10 @@ const YamdChildNodes = ({
   shouldAddIndent = false,
   globalInfo = null
 }) => {
+  // Get render utils from context
+  const renderUtils = useRenderUtilsContext();
+  const isEditable = renderUtils.isEditable;
+
   // render children based on parentInfo.childDisplay
   if (!childIds || childIds.length === 0) return null;
   // console.log('🔍 YamdChildNodes rendering childIds:', childIds);
@@ -29,6 +34,28 @@ const YamdChildNodes = ({
     }
     return classNames || '';
   };
+
+  // Handle click on child container - focus the child node's rich text
+  const handleChildContainerClick = (e, childId) => {
+    if (!isEditable) return;
+    
+    // Check if click landed directly on the container (not on child elements inside it)
+    // e.currentTarget is the element the handler is attached to
+    // e.target is the actual element that was clicked
+    if (e.target !== e.currentTarget) {
+      console.log(`🖱️ YamdChildNodes: click on child element of ${childId}, ignoring`);
+      return;
+    }
+    
+    console.log(`🖱️ YamdChildNodes: click on container for child ${childId}, focusing with cursor coords`);
+    
+    // Convert clientX/Y to pageX/Y
+    const cursorPageX = e.clientX + window.scrollX;
+    const cursorPageY = e.clientY + window.scrollY;
+    
+    // Trigger focus on the child node with cursor coordinates
+    renderUtils.triggerFocus?.(childId, 'parentClick', { cursorPageX, cursorPageY });
+  };
   
 
   // ordered/unordered list renderer. using divs instead of ul/ol/li
@@ -36,7 +63,11 @@ const YamdChildNodes = ({
   const renderChildNodes = (containerClassName, itemClassName, defaultChildClass = 'yamd-list-content') => (
     <div className={joinClassNames(containerClassName)}>
       {childIds.map((childId, index) => (
-        <div key={childId} className={joinClassNames(itemClassName)}>
+        <div 
+          key={childId} 
+          className={joinClassNames(itemClassName)}
+          onClick={isEditable ? (e) => handleChildContainerClick(e, childId) : undefined}
+        >
           <YamdNode
             key={childId}
             nodeId={childId}
@@ -106,7 +137,11 @@ const YamdChildNodes = ({
           <div style={{ width: shouldAddIndent ? LIST_SETTINGS.child_indent_x : '0px', height: '0px' }} />
           <div className="yamd-paragraphs">
             {childIds.map(childId => (
-              <div key={childId} className="yamd-paragraph">
+              <div 
+                key={childId} 
+                className="yamd-paragraph"
+                onClick={isEditable ? (e) => handleChildContainerClick(e, childId) : undefined}
+              >
                 <YamdNode
                   key={childId}
                   nodeId={childId} 

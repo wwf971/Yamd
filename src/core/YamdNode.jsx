@@ -5,7 +5,7 @@ import NodeDivider from '@/components/NodeDivider.jsx';
 import YamdNodeKey from '@/components/NodeKey.jsx';
 import YamdNodeTopRight from '@/components/NodeTopRight.jsx';
 import YamdNodeAnonym from '@/components/NodeAnonym.jsx';
-import YamdNodeText from '@/components/NodeText.jsx';
+import ListItem from '@/components/ListItem.jsx';
 import SegmentLaTeX from '@/segments/SegmentLaTeX.jsx';
 import NodeImage from '@/components/NodeImage.jsx';
 import NodeVideo from '@/components/NodeVideo.jsx';
@@ -192,7 +192,7 @@ const YamdNode = React.memo(({ nodeId, parentInfo = null, globalInfo = null }) =
         */
         <AddListBulletBeforeNode
           childNode={
-            <YamdNodeText 
+            <ListItem 
               nodeId={nodeId} 
               parentInfo={parentInfo}
               globalInfo={globalInfo} 

@@ -6,7 +6,7 @@ import NodeTextRichBib from './NodeRichTextBib.jsx';
 import { calcBulletYPos as _calcBulletYPos} from './NodeRichText.js';
 import { useRenderUtilsContext } from '@/core/RenderUtils.ts';
 import { getMoveUpTargetId, getMoveDownTargetId } from '@/core/EditUtils.js';
-import { getClosestSegmentIndex } from './TextUtils.js';
+import { getClosestSegmentIndex, getClosestSegmentForClick } from './TextUtils.js';
 
 /**
  * Rich text renderer with inline LaTeX math support
@@ -35,16 +35,16 @@ const NodeTextRich = forwardRef(({ nodeId, className, parentInfo, globalInfo = n
   }), [segments]);
 
   // Handle focus requests on the rich text node itself
-  // Delegate to appropriate segment based on focus type and cursorPageX
+  // Delegate to appropriate segment based on focus type and cursorPageX/cursorPageY
   useEffect(() => {
     if (!nodeState?.focus) return;
     
-    const { counter, type, cursorPageX } = nodeState.focus;
+    const { counter, type, cursorPageX, cursorPageY } = nodeState.focus;
     
     // Skip if counter is 0 (initial state)
     if (counter === 0) return;
     
-    console.log(`🎯 NodeRichText [${nodeId}] received focus request:`, { counter, type, cursorPageX });
+    console.log(`🎯 NodeRichText [${nodeId}] received focus request:`, { counter, type, cursorPageX, cursorPageY });
     
     if (segments.length === 0) return;
     
@@ -59,14 +59,14 @@ const NodeTextRich = forwardRef(({ nodeId, className, parentInfo, globalInfo = n
       if (cursorPageX !== undefined) {
         console.log(`⬆️ cursorPageX=${cursorPageX}, searching for closest segment...`);
         // Use cursorPageX to find closest segment
-        const segmentElements = segments.map(segId => 
+        const segElements = segments.map(segId => 
           document.querySelector(`[data-segment-id="${segId}"]`)
         ).filter(el => el !== null);
         
-        console.log(`⬆️ Found ${segmentElements.length} segment elements`);
+        console.log(`⬆️ Found ${segElements.length} segment elements`);
         
-        if (segmentElements.length > 0) {
-          const segmentIndex = getClosestSegmentIndex(segmentElements, cursorPageX, null, 'backward');
+        if (segElements.length > 0) {
+          const segmentIndex = getClosestSegmentIndex(segElements, cursorPageX, null, 'backward');
           targetSegmentId = segments[segmentIndex];
           console.log(`⬆️ Using cursorPageX to focus segment at index ${segmentIndex}: ${targetSegmentId}`);
         } else {
@@ -87,14 +87,14 @@ const NodeTextRich = forwardRef(({ nodeId, className, parentInfo, globalInfo = n
       if (cursorPageX !== undefined) {
         console.log(`⬇️ cursorPageX=${cursorPageX}, searching for closest segment...`);
         // Use cursorPageX to find closest segment
-        const segmentElements = segments.map(segId => 
+        const segElements = segments.map(segId => 
           document.querySelector(`[data-segment-id="${segId}"]`)
         ).filter(el => el !== null);
         
-        console.log(`⬇️ Found ${segmentElements.length} segment elements`);
+        console.log(`⬇️ Found ${segElements.length} segment elements`);
         
-        if (segmentElements.length > 0) {
-          const segmentIndex = getClosestSegmentIndex(segmentElements, cursorPageX, null, 'forward');
+        if (segElements.length > 0) {
+          const segmentIndex = getClosestSegmentIndex(segElements, cursorPageX, null, 'forward');
           targetSegmentId = segments[segmentIndex];
           console.log(`⬇️ Using cursorPageX to focus segment at index ${segmentIndex}: ${targetSegmentId}`);
         } else {
@@ -120,6 +120,31 @@ const NodeTextRich = forwardRef(({ nodeId, className, parentInfo, globalInfo = n
         segmentFocusType = 'fromLeft';
         targetSegmentId = segments[0];
         console.log(`➡️ fromLeft: focusing first segment: ${targetSegmentId}`);
+      }
+      
+    } else if (type === 'parentClick') {
+      // Click on parent list item wrapper - find nearest segment using both X and Y coordinates
+      console.log(`🖱️ parentClick: cursorPageX=${cursorPageX}, cursorPageY=${cursorPageY}`);
+      
+      // Convert pageX/Y back to clientX/Y for getClosestSegmentForClick
+      const clientX = cursorPageX - window.scrollX;
+      const clientY = cursorPageY !== undefined ? (cursorPageY - window.scrollY) : null;
+      
+      // Get all segment elements
+      const segElements = segments.map(segId => 
+        textRef.current?.querySelector(`[data-segment-id="${segId}"]`)
+      ).filter(el => el !== null);
+      
+      if (segElements.length > 0) {
+        const { index, focusType } = getClosestSegmentForClick(segElements, clientX, clientY);
+        targetSegmentId = segments[index];
+        segmentFocusType = focusType;
+        console.log(`🖱️ parentClick: focusing segment at index ${index}: ${targetSegmentId} with type=${focusType}`);
+      } else {
+        // Fallback to first segment
+        targetSegmentId = segments[0];
+        segmentFocusType = 'fromLeft';
+        console.log(`🖱️ parentClick: no segment elements found, focusing first segment: ${targetSegmentId}`);
       }
       
     } else {
@@ -158,7 +183,7 @@ const NodeTextRich = forwardRef(({ nodeId, className, parentInfo, globalInfo = n
           // Move to previous segment - trigger focus on it
           const prevSegmentId = segments[segmentIndex - 1];
           console.log(`⬅️ Moving focus to previous segment: ${prevSegmentId}`);
-          renderUtils.setCurrentSegmentId?.(prevSegmentId); // Update current segment in YamdDoc
+          renderUtils.setCurrentSegId?.(prevSegmentId); // Update current segment in YamdDoc
           renderUtils.triggerFocus(prevSegmentId, 'fromRight');
         } else {
           // Leftmost segment - try to move to previous node
@@ -168,7 +193,7 @@ const NodeTextRich = forwardRef(({ nodeId, className, parentInfo, globalInfo = n
           const upTargetId = getMoveUpTargetId(nodeId, renderUtils.getNodeDataById);
           if (upTargetId) {
             // Clear current segment before moving to previous node
-            renderUtils.cancelCurrentSegmentId?.();
+            renderUtils.cancelCurrentSegId?.();
             console.log(`⬅️ Triggering focus on previous node: ${upTargetId}`);
             renderUtils.triggerFocus(upTargetId, 'fromRight');
           } else {
@@ -185,7 +210,7 @@ const NodeTextRich = forwardRef(({ nodeId, className, parentInfo, globalInfo = n
           // Move to next segment - trigger focus on it
           const nextSegmentId = segments[segmentIndex + 1];
           console.log(`➡️ Moving focus to next segment: ${nextSegmentId}`);
-          renderUtils.setCurrentSegmentId?.(nextSegmentId); // Update current segment in YamdDoc
+          renderUtils.setCurrentSegId?.(nextSegmentId); // Update current segment in YamdDoc
           renderUtils.triggerFocus(nextSegmentId, 'fromLeft');
         } else {
           // Rightmost segment - try to move to next node
@@ -195,7 +220,7 @@ const NodeTextRich = forwardRef(({ nodeId, className, parentInfo, globalInfo = n
           const downTargetId = getMoveDownTargetId(nodeId, renderUtils.getNodeDataById);
           if (downTargetId) {
             // Clear current segment before moving to next node
-            renderUtils.cancelCurrentSegmentId?.();
+            renderUtils.cancelCurrentSegId?.();
             console.log(`➡️ Triggering focus on next node: ${downTargetId}`);
             renderUtils.triggerFocus(downTargetId, 'fromLeft');
           } else {
@@ -208,49 +233,67 @@ const NodeTextRich = forwardRef(({ nodeId, className, parentInfo, globalInfo = n
         break;
         
       case 'up':
-        // TODO: Move to previous node (same as plain text up arrow)
-        // Check if there is segment of same node above current sgement
-        // If so, focus on that segment
-        // Otherwise, move to previous node in tree order
-        
+        // Move to previous node (same as plain text up arrow)
         console.log(`⬆️ Checking for previous node, cursorPageX=${cursorPageX}`);
         
         const upTargetId = getMoveUpTargetId(nodeId, renderUtils.getNodeDataById);
         if (upTargetId) {
-          // Clear current segment before moving to previous node
-          renderUtils.cancelCurrentSegmentId?.();
+          // Check if target node has segments (is a focusable rich text node)
+          const upTargetNode = renderUtils.getNodeDataById(upTargetId);
+          const hasSegments = upTargetNode?.segments && upTargetNode.segments.length > 0;
           
-          // Determine focus type based on whether target is parent
-          const currentNode = renderUtils.getNodeDataById(nodeId);
-          const isMovingToParent = upTargetId === currentNode?.parentId;
-          const focusType = isMovingToParent ? 'arrowUpFromFirstChild' : 'arrowUp';
-          
-          console.log(`⬆️ Triggering focus on ${upTargetId} with cursorPageX=${cursorPageX}`);
-          renderUtils.triggerFocus(upTargetId, focusType, { cursorPageX });
+          if (hasSegments) {
+            // Target node has segments, move to it
+            // Clear current segment before moving to previous node
+            renderUtils.cancelCurrentSegId?.();
+            
+            // Determine focus type based on whether target is parent
+            const currentNode = renderUtils.getNodeDataById(nodeId);
+            const isMovingToParent = upTargetId === currentNode?.parentId;
+            const focusType = isMovingToParent ? 'arrowUpFromFirstChild' : 'arrowUp';
+            
+            console.log(`⬆️ Triggering focus on ${upTargetId} with cursorPageX=${cursorPageX}`);
+            renderUtils.triggerFocus(upTargetId, focusType, { cursorPageX });
+          } else {
+            // Target node has no segments - stay on current segment and move cursor to beginning
+            console.log(`⬆️ Previous node ${upTargetId} has no segments, staying on segment: ${from}, moving cursor to beginning`);
+            renderUtils.triggerFocus(from, 'fromLeft');
+          }
         } else {
-          // No previous node - stay on current segment (don't cancel current segment)
-          console.log(`⬆️ No previous node, staying on segment: ${from}`);
-          // Just trigger focus again to ensure cursor is positioned correctly
-          renderUtils.triggerFocus(from, 'fromUp', { cursorPageX });
+          // No previous node - stay on current segment and move cursor to beginning
+          console.log(`⬆️ No previous node, staying on segment: ${from}, moving cursor to beginning`);
+          // Trigger focus with fromLeft to position cursor at beginning
+          renderUtils.triggerFocus(from, 'fromLeft');
         }
         
         break;
         
       case 'down':
-        // TODO: Move to next node (same as plain text down arrow)
+        // Move to next node (same as plain text down arrow)
         console.log(`⬇️ Checking for next node, cursorPageX=${cursorPageX}`);
         
         const downTargetId = getMoveDownTargetId(nodeId, renderUtils.getNodeDataById);
         if (downTargetId) {
-          // Clear current segment before moving to next node
-          renderUtils.cancelCurrentSegmentId?.();
-          console.log(`⬇️ Triggering focus on ${downTargetId} with cursorPageX=${cursorPageX}`);
-          renderUtils.triggerFocus(downTargetId, 'arrowDown', { cursorPageX });
+          // Check if target node has segments (is a focusable rich text node)
+          const downTargetNode = renderUtils.getNodeDataById(downTargetId);
+          const hasSegments = downTargetNode?.segments && downTargetNode.segments.length > 0;
+          
+          if (hasSegments) {
+            // Target node has segments, move to it
+            // Clear current segment before moving to next node
+            renderUtils.cancelCurrentSegId?.();
+            console.log(`⬇️ Triggering focus on ${downTargetId} with cursorPageX=${cursorPageX}`);
+            renderUtils.triggerFocus(downTargetId, 'arrowDown', { cursorPageX });
+          } else {
+            // Target node has no segments - stay on current segment and move cursor to end
+            console.log(`⬇️ Next node ${downTargetId} has no segments, staying on segment: ${from}, moving cursor to end`);
+            renderUtils.triggerFocus(from, 'fromRight');
+          }
         } else {
-          // No next node - stay on current segment (don't cancel current segment)
-          console.log(`⬇️ No next node, staying on segment: ${from}`);
-          // Just trigger focus again to ensure cursor is positioned correctly
-          renderUtils.triggerFocus(from, 'fromDown', { cursorPageX });
+          // No next node - stay on current segment and move cursor to end
+          console.log(`⬇️ No next node, staying on segment: ${from}, moving cursor to end`);
+          // Trigger focus with fromRight to position cursor at end
+          renderUtils.triggerFocus(from, 'fromRight');
         }
         break;
         
@@ -395,7 +438,7 @@ const NodeTextRich = forwardRef(({ nodeId, className, parentInfo, globalInfo = n
     
   }, [nodeState?.childCreate?.counter, nodeId, renderUtils]);
 
-  // Note: Bullet positioning is now handled entirely by Zustand store in YamdNodeText
+  // Note: Bullet positioning is now handled entirely by Zustand store in NodeText
   // All positioning logic moved to calcBulletYPos in NodeRichText.js
   
   // Check if editable mode is enabled
@@ -427,6 +470,49 @@ const NodeTextRich = forwardRef(({ nodeId, className, parentInfo, globalInfo = n
     document.addEventListener('mousemove', handleMouseMove);
     document.addEventListener('mouseup', handleMouseUp);
   };
+
+  // Handle click - focus nearest segment if click lands between segments
+  const handleClick = (e) => {
+    console.log(`🖱️ NodeRichText [${nodeId}] click, target:`, e.target, 'textRef:', textRef.current);
+    if (!isEditable) return;
+    
+    // If user was dragging to select text, don't interfere
+    if (isDraggingRef.current) {
+      console.log(`🖱️ NodeRichText [${nodeId}] click: user was dragging, ignoring`);
+      return;
+    }
+    
+    // Check if click landed directly on the rich text wrapper (between segments)
+    // e.currentTarget is the element the handler is attached to
+    // e.target is the actual element that was clicked
+    if (e.target !== e.currentTarget) {
+      console.log(`🖱️ NodeRichText [${nodeId}] click inside segment (target is child element)`);
+      // Click is inside a segment, let the segment handle it
+      return;
+    }
+    
+    // Click landed on the wrapper between segments, find nearest one
+    console.log(`🖱️ NodeRichText [${nodeId}] click between segments, finding nearest`);
+    
+    // Use requestAnimationFrame to ensure we can work with the selection after browser updates
+    requestAnimationFrame(() => {
+      // Get all segment elements
+      const segElements = segments.map(segId => 
+        textRef.current?.querySelector(`[data-segment-id="${segId}"]`)
+      ).filter(el => el !== null);
+      
+      if (segElements.length === 0) return;
+      
+      // Use utility function to find nearest segment and determine focus direction
+      const { index, focusType } = getClosestSegmentForClick(segElements, e.clientX, e.clientY);
+      const nearestSegment = segments[index];
+      
+      if (nearestSegment) {
+        console.log(`🎯 NodeRichText [${nodeId}] focusing nearest segment: ${nearestSegment} (index ${index}) with type=${focusType}`);
+        renderUtils.triggerFocus(nearestSegment, focusType);
+      }
+    });
+  };
   
   // If no segments, show error
   if (!segments || segments.length === 0) {
@@ -452,6 +538,8 @@ const NodeTextRich = forwardRef(({ nodeId, className, parentInfo, globalInfo = n
         MozUserSelect: 'text',
         msUserSelect: 'text',
       } : undefined}
+      onMouseDown={isEditable ? handleMouseDown : undefined}
+      onClick={isEditable ? handleClick : undefined}
     >
       {segments.map((segmentId) => {
         const segmentNode = renderUtils.getNodeDataById(segmentId);

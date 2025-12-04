@@ -65,8 +65,8 @@ export interface RenderUtilsContextValue {
   getCurrentSegmentId: (containerRef: React.RefObject<HTMLElement>) => string | null;
   
   // Focused segment tracking
-  setCurrentSegmentId: (segmentId: string | null) => void;
-  cancelCurrentSegmentId: () => void;
+  setCurrentSegId: (segmentId: string | null) => void;
+  cancelCurrentSegId: () => void;
   
   // Configuration
   BULLET_DIMENSIONS: typeof BULLET_DIMENSIONS;
@@ -267,8 +267,8 @@ export const createRenderUtilsContextValue = ({
   isEditable = false,
   docId = null,
   docStore = null, // Keep for backward compatibility (bullet positioning still uses Zustand)
-  setCurrentSegmentId = () => {},
-  cancelCurrentSegmentId = () => {},
+  setCurrentSegId = () => {},
+  cancelCurrentSegId = () => {},
   onCreate = null,
   onDelete = null,
 }: {
@@ -277,8 +277,8 @@ export const createRenderUtilsContextValue = ({
   isEditable?: boolean;
   docId?: string | null;
   docStore?: any;
-  setCurrentSegmentId?: (segmentId: string | null) => void;
-  cancelCurrentSegmentId?: () => void;
+  setCurrentSegId?: (segmentId: string | null) => void;
+  cancelCurrentSegId?: () => void;
   onCreate?: ((id: string, data: any) => void) | null;
   onDelete?: ((id: string, data: any) => void) | null;
 } = {}): RenderUtilsContextValue => {
@@ -972,8 +972,8 @@ export const createRenderUtilsContextValue = ({
     },
     
     // Focused segment tracking
-    setCurrentSegmentId,
-    cancelCurrentSegmentId,
+    setCurrentSegId,
+    cancelCurrentSegId,
     
     // Settings/Configuration
     BULLET_DIMENSIONS,

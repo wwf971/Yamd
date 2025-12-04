@@ -28,7 +28,7 @@ const TestEdit = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [docId, setDocId] = useState(null);
   const [nodeIds, setNodeIds] = useState([]);
-  const [currentSegmentId, setCurrentSegmentId] = useState(null);
+  const [currentSegmentId, setCurrentSegId] = useState(null);
   const [activeElement, setActiveElement] = useState(null);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
@@ -190,7 +190,7 @@ const TestEdit = () => {
                 docId={docId}
                 disableRefJump={false} 
                 isEditable={true}
-                onCurrentSegmentChange={setCurrentSegmentId}
+                onCurrentSegmentChange={setCurrentSegId}
                 onCreate={handleCreate}
                 onDelete={handleDelete}
               />

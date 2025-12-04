@@ -6,9 +6,9 @@ import { createBulletEqualityFn } from '@/core/RenderUtils.ts';
 import { docsBulletState, nodeBulletState } from '@/core/DocStore.js';
 
 /**
- * render a text node, and then render its children nodes.
+ * render a list item (text node), and then render its children nodes.
  */
-const YamdNodeText = React.memo(({ nodeId, parentInfo, globalInfo }) => {
+const ListItem = React.memo(({ nodeId, parentInfo, globalInfo }) => {
   const nodeRef = useRef(null);
 
   // Get render utils from context
@@ -84,8 +84,37 @@ const YamdNodeText = React.memo(({ nodeId, parentInfo, globalInfo }) => {
   // Check if text node has content (including empty string for editable mode)
   const hasTextContent = nodeData.textRaw !== undefined || nodeData.textOriginal !== undefined;
 
+  // Check if editable mode is enabled
+  const isEditable = renderUtils.isEditable;
+
+  // Handle click on list item - focus the rich text node inside
+  const handleClick = (e) => {
+    if (!isEditable) return;
+    
+    // Check if click landed directly on this list item wrapper (not on rich text or children)
+    // e.currentTarget is the element the handler is attached to
+    // e.target is the actual element that was clicked
+    if (e.target !== e.currentTarget) {
+      console.log(`🖱️ ListItem [${nodeId}] click on child element, ignoring`);
+      return;
+    }
+    
+    console.log(`🖱️ ListItem [${nodeId}] click on wrapper, focusing rich text node with cursor coords`);
+    
+    // Convert clientX/Y to pageX/Y
+    const cursorPageX = e.clientX + window.scrollX;
+    const cursorPageY = e.clientY + window.scrollY;
+    
+    // Trigger focus on the rich text node with cursor coordinates
+    renderUtils.triggerFocus?.(nodeId, 'parentClick', { cursorPageX, cursorPageY });
+  };
+
   return (
-    <div ref={nodeRef} className="yamd-node-text">
+    <div 
+      ref={nodeRef} 
+      className="yamd-node-text"
+      onClick={isEditable ? handleClick : undefined}
+    >
       {/* self content - always use NodeTextRich */}
       {hasTextContent && (
         <NodeTextRich 
@@ -133,4 +162,5 @@ const calcBulletYPos = (nodeId, docId, nodeRef, textContentRef, globalInfo) => {
 };
 
 
-export default YamdNodeText;
+export default ListItem;
+

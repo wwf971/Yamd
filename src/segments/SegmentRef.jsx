@@ -126,7 +126,7 @@ const SegmentRef = ({ segmentId, parentNodeId, globalInfo }) => {
       console.log(`✏️ SegmentRef [${segmentId}] entering edit mode from ${type}`);
       
       // Report to YamdDoc that this segment is now focused
-      renderUtils.setCurrentSegmentId?.(segmentId);
+      renderUtils.setCurrentSegId?.(segmentId);
       
       // Store the focus type for the layout effect to handle
       pendingFocusTypeRef.current = type;
@@ -376,7 +376,7 @@ const SegmentRef = ({ segmentId, parentNodeId, globalInfo }) => {
     e.stopPropagation();
     
     // Report to parent that this segment is now focused
-    renderUtils.setCurrentSegmentId?.(segmentId);
+    renderUtils.setCurrentSegId?.(segmentId);
     
     // Enter edit mode on click
     const docId = globalInfo?.docId;

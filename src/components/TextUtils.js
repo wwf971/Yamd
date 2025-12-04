@@ -263,26 +263,26 @@ export const getClosestCharIndex = (element, targetPageX, direction = 'forward')
 /**
  * Find the segment index closest to a target page coordinate (for rich text nodes with multiple segments)
  * Handles multi-row layouts by considering both vertical (Y) and horizontal (X) distances
- * @param {Array<HTMLElement>} segmentElements - Array of segment DOM elements (in order)
+ * @param {Array<HTMLElement>} segElements - Array of segment DOM elements (in order)
  * @param {number} targetPageX - The target horizontal page coordinate
  * @param {number} targetPageY - The target vertical page coordinate (optional, for multi-row)
  * @param {string} direction - Search direction: 'forward' (start to end) or 'backward' (end to start)
  * @returns {number} - The segment index (0-based) closest to the target coordinates
  */
-export const getClosestSegmentIndex = (segmentElements, targetPageX, targetPageY = null, direction = 'forward') => {
-  if (!segmentElements || segmentElements.length === 0) return 0;
+export const getClosestSegmentIndex = (segElements, targetPageX, targetPageY = null, direction = 'forward') => {
+  if (!segElements || segElements.length === 0) return 0;
   
-  let closestIndex = direction === 'forward' ? 0 : segmentElements.length - 1;
+  let closestIndex = direction === 'forward' ? 0 : segElements.length - 1;
   let minDistance = Infinity;
   
   // Determine iteration order based on direction
-  const start = direction === 'forward' ? 0 : segmentElements.length - 1;
-  const end = direction === 'forward' ? segmentElements.length - 1 : 0;
+  const start = direction === 'forward' ? 0 : segElements.length - 1;
+  const end = direction === 'forward' ? segElements.length - 1 : 0;
   const step = direction === 'forward' ? 1 : -1;
   
   // Iterate through segments to find the closest one
   for (let i = start; direction === 'forward' ? i <= end : i >= end; i += step) {
-    const element = segmentElements[i];
+    const element = segElements[i];
     if (!element) continue;
     
     try {
@@ -358,5 +358,170 @@ export const getClosestSegmentIndex = (segmentElements, targetPageX, targetPageY
   }
   
   return closestIndex;
+};
+
+/**
+ * Find the segment closest to a click position and determine focus direction
+ * Wraps getClosestSegmentIndex and adds focus direction logic
+ * @param {Array<HTMLElement>} segElements - Array of segment DOM elements (in order)
+ * @param {number} clickX - The click X coordinate (clientX from click event)
+ * @param {number} clickY - The click Y coordinate (clientY from click event, optional for single-row)
+ * @returns {{ index: number, focusType: string }} - Object with segment index and focus type ('fromLeft' or 'fromRight')
+ */
+export const getClosestSegmentForClick = (segElements, clickX, clickY = null) => {
+  if (!segElements || segElements.length === 0) {
+    return { index: 0, focusType: 'fromLeft' };
+  }
+  
+  // Convert clientX/Y to pageX/Y for getClosestSegmentIndex
+  const targetPageX = clickX + window.scrollX;
+  const targetPageY = clickY !== null ? (clickY + window.scrollY) : null;
+  
+  // Use existing getClosestSegmentIndex to find the nearest segment
+  const closestIndex = getClosestSegmentIndex(segElements, targetPageX, targetPageY, 'forward');
+  
+  // Now determine focus direction based on where click landed relative to the segment
+  const element = segElements[closestIndex];
+  let focusType = 'fromLeft'; // Default
+  
+  if (element) {
+    try {
+      const rect = element.getBoundingClientRect();
+      const centerX = rect.left + rect.width / 2;
+      
+      // If click is to the left of segment center, focus from left; otherwise from right
+      focusType = clickX < centerX ? 'fromLeft' : 'fromRight';
+    } catch (e) {
+      // If measurement fails, use default
+      focusType = 'fromLeft';
+    }
+  }
+  
+  return { index: closestIndex, focusType };
+};
+
+/**
+ * Find the nearest segment from the current selection anchor node by DOM traversal
+ * This is efficient for clicks as it uses the browser's natural cursor placement
+ * @param {HTMLElement} rootContainer - The root container to stop traversal at
+ * @returns {{ segId: string | null, focusType: string, isDocumentBoundary: boolean, boundaryPosition: 'start' | 'end' | null }} - Object with segment ID, focus type, and boundary info
+ */
+export const findSegFromSelection = (rootContainer) => {
+  if (!rootContainer) {
+    return { segId: null, focusType: 'fromLeft', isDocumentBoundary: false, boundaryPosition: null };
+  }
+  
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0) {
+    return { segId: null, focusType: 'fromLeft', isDocumentBoundary: false, boundaryPosition: null };
+  }
+  
+  const range = selection.getRangeAt(0);
+  const anchorNode = range.startContainer;
+  
+  // Traverse up from anchor node to find the nearest segment element with data-segment-id
+  let currentNode = anchorNode.nodeType === Node.TEXT_NODE ? anchorNode.parentElement : anchorNode;
+  let segmentElement = null;
+  
+  while (currentNode && currentNode !== rootContainer) {
+    if (currentNode.hasAttribute && currentNode.hasAttribute('data-segment-id')) {
+      segmentElement = currentNode;
+      break;
+    }
+    currentNode = currentNode.parentElement;
+  }
+  
+  // If no segment found, check if selection is at document boundary
+  if (!segmentElement) {
+    // Check if selection is collapsed and in the root container
+    if (selection.isCollapsed && anchorNode === rootContainer) {
+      const focusOffset = selection.focusOffset;
+      
+      if (focusOffset === 0) {
+        // Selection at start of document - should focus first segment of first rich text node
+        return { segId: null, focusType: 'fromLeft', isDocumentBoundary: true, boundaryPosition: 'start' };
+      } else {
+        // Selection at end of document - should focus last segment of last rich text node
+        return { segId: null, focusType: 'fromRight', isDocumentBoundary: true, boundaryPosition: 'end' };
+      }
+    }
+    
+    return { segId: null, focusType: 'fromLeft', isDocumentBoundary: false, boundaryPosition: null };
+  }
+  
+  const segId = segmentElement.getAttribute('data-segment-id');
+  
+  // Determine focus direction based on cursor position relative to segment center
+  let focusType = 'fromLeft';
+  
+  try {
+    const rect = segmentElement.getBoundingClientRect();
+    const rangeRect = range.getBoundingClientRect();
+    const centerX = rect.left + rect.width / 2;
+    const cursorX = rangeRect.left;
+    
+    focusType = cursorX < centerX ? 'fromLeft' : 'fromRight';
+  } catch (e) {
+    // If measurement fails, default to fromLeft
+    focusType = 'fromLeft';
+  }
+  
+  return { segId, focusType, isDocumentBoundary: false, boundaryPosition: null };
+};
+
+/**
+ * Find the first segment in a document tree (depth-first search)
+ * @param {string} nodeId - The root node ID to start searching from
+ * @param {Function} getNodeData - Function to get node data by ID: (nodeId) => nodeData
+ * @returns {string | null} - The first segment ID found, or null if none exists
+ */
+export const getFirstSegInTree = (nodeId, getNodeData) => {
+  if (!nodeId || !getNodeData) return null;
+  
+  const nodeData = getNodeData(nodeId);
+  if (!nodeData) return null;
+  
+  // If this node has segments, return the first one
+  if (nodeData.segments && nodeData.segments.length > 0) {
+    return nodeData.segments[0];
+  }
+  
+  // Otherwise, recursively search children (first to last)
+  if (nodeData.children && nodeData.children.length > 0) {
+    for (let i = 0; i < nodeData.children.length; i++) {
+      const result = getFirstSegInTree(nodeData.children[i], getNodeData);
+      if (result) return result;
+    }
+  }
+  
+  return null;
+};
+
+/**
+ * Find the last segment in a document tree (reverse depth-first search)
+ * @param {string} nodeId - The root node ID to start searching from
+ * @param {Function} getNodeData - Function to get node data by ID: (nodeId) => nodeData
+ * @returns {string | null} - The last segment ID found, or null if none exists
+ */
+export const getLastSegInTree = (nodeId, getNodeData) => {
+  if (!nodeId || !getNodeData) return null;
+  
+  const nodeData = getNodeData(nodeId);
+  if (!nodeData) return null;
+  
+  // First, recursively search children (last to first)
+  if (nodeData.children && nodeData.children.length > 0) {
+    for (let i = nodeData.children.length - 1; i >= 0; i--) {
+      const result = getLastSegInTree(nodeData.children[i], getNodeData);
+      if (result) return result;
+    }
+  }
+  
+  // If no result from children and this node has segments, return the last one
+  if (nodeData.segments && nodeData.segments.length > 0) {
+    return nodeData.segments[nodeData.segments.length - 1];
+  }
+  
+  return null;
 };
 

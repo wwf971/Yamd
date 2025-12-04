@@ -99,7 +99,7 @@ const SegmentText = forwardRef(({ segmentId, parentNodeId, className, globalInfo
     textEl.current.style.border = '1px solid #ffc107';
     
     // Report to parent that this segment is now focused
-    renderUtils.setCurrentSegmentId?.(segmentId);
+    renderUtils.setCurrentSegId?.(segmentId);
     
     // Keep hint text visible when focused on empty segment (acts as placeholder)
     // It will be cleared when user starts typing
@@ -464,7 +464,7 @@ const SegmentText = forwardRef(({ segmentId, parentNodeId, className, globalInfo
     // It will be cleared when user starts typing
     
     // Report to parent
-    renderUtils.setCurrentSegmentId(segmentId);
+    renderUtils.setCurrentSegId(segmentId);
     
     // Apply focus styles immediately
     if (textEl.current) {

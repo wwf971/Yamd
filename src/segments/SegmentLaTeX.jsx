@@ -272,7 +272,7 @@ const SegmentLaTeX = ({ segmentId, parentNodeId, globalInfo }) => {
         console.log(`✏️ SegmentLaTeX [${segmentId}] entering edit mode from ${type}`);
         
         // Report to YamdDoc that this segment is now focused
-        renderUtils.setCurrentSegmentId?.(segmentId);
+        renderUtils.setCurrentSegId?.(segmentId);
         
         // Store focus type and cursorPageX for cursor positioning
         lastFocusTypeRef.current = type;
@@ -589,7 +589,7 @@ const SegmentLaTeX = ({ segmentId, parentNodeId, globalInfo }) => {
     e.preventDefault();
     
     // Report to parent that this segment is now focused
-    renderUtils.setCurrentSegmentId?.(segmentId);
+    renderUtils.setCurrentSegId?.(segmentId);
     
     const docId = globalInfo?.docId;
     docsState.triggerFocus(docId, segmentId, 'mouseClick');

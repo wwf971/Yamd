@@ -9,6 +9,7 @@ import { handleRefClick, handleBibClick, handleBackToSource } from '@/core/YamdD
 import { useDocStore, generateDocId, docsData, docsState, nodeBulletState } from '@/core/DocStore.js';
 // Import RenderUtils context for direct usage
 import { RenderUtilsContext, createRenderUtilsContextValue } from '@/core/RenderUtils.ts';
+import { findSegFromSelection, getFirstSegInTree, getLastSegInTree } from '@/components/TextUtils.js';
 
 
 
@@ -43,50 +44,50 @@ const YamdDoc = ({
   });
   
   // Track currently focused segment (for editable mode)
-  const [currentSegmentId, setCurrentSegmentIdState] = useState(null);
-  const prevSegmentIdRef = useRef(null);
+  const [currentSegId, setCurrentSegIdState] = useState(null);
+  const prevSegIdRef = useRef(null);
   
   // Notify previous segment to unfocus
-  const notifySegmentToUnfocus = useCallback((prevSegmentId, newSegmentId) => {
-    if (!isEditable || !prevSegmentId || prevSegmentId === newSegmentId) return;
+  const notifySegmentToUnfocus = useCallback((prevSegId, newSegId) => {
+    if (!isEditable || !prevSegId || prevSegId === newSegId) return;
     
-    console.log(`🔔 Notifying segment ${prevSegmentId} to unfocus, new focus: ${newSegmentId}`);
-    docsState.triggerUnfocus(docId, prevSegmentId, prevSegmentId, 'clickAway');
+    console.log(`🔔 Notifying segment ${prevSegId} to unfocus, new focus: ${newSegId}`);
+    docsState.triggerUnfocus(docId, prevSegId, prevSegId, 'clickAway');
   }, [isEditable, docId]);
   
-  // Wrapper for setCurrentSegmentId that also notifies previous segment
-  const setCurrentSegmentId = useCallback((newSegmentId) => {
-    const prevSegmentId = prevSegmentIdRef.current;
+  // Wrapper for setCurrentSegId that also notifies previous segment
+  const setCurrentSegId = useCallback((newSegId) => {
+    const prevSegId = prevSegIdRef.current;
     
     // Skip if already the current segment (avoid double-notification from mousedown + focus)
-    if (prevSegmentId === newSegmentId) return;
+    if (prevSegId === newSegId) return;
     
     // Notify previous segment to unfocus
-    notifySegmentToUnfocus(prevSegmentId, newSegmentId);
+    notifySegmentToUnfocus(prevSegId, newSegId);
     
     // Update state and ref
-    setCurrentSegmentIdState(newSegmentId);
-    prevSegmentIdRef.current = newSegmentId;
+    setCurrentSegIdState(newSegId);
+    prevSegIdRef.current = newSegId;
     
     // Notify parent component
     if (onCurrentSegmentChange) {
-      onCurrentSegmentChange(newSegmentId);
+      onCurrentSegmentChange(newSegId);
     }
   }, [notifySegmentToUnfocus, onCurrentSegmentChange]);
   
   // Cancel current segment (set to null)
-  const cancelCurrentSegmentId = useCallback(() => {
-    const prevSegmentId = prevSegmentIdRef.current;
-    console.log(`🚫 YamdDoc canceling currentSegmentId (was: ${prevSegmentId})`);
+  const cancelCurrentSegId = useCallback(() => {
+    const prevSegId = prevSegIdRef.current;
+    console.log(`🚫 YamdDoc canceling currentSegId (was: ${prevSegId})`);
     
     // Notify previous segment to unfocus before clearing
-    if (isEditable && prevSegmentId) {
-      console.log(`🔔 Notifying segment ${prevSegmentId} to unfocus (cancel)`);
-      docsState.triggerUnfocus(docId, prevSegmentId, prevSegmentId, 'clickAway');
+    if (isEditable && prevSegId) {
+      console.log(`🔔 Notifying segment ${prevSegId} to unfocus (cancel)`);
+      docsState.triggerUnfocus(docId, prevSegId, prevSegId, 'clickAway');
     }
     
-    setCurrentSegmentIdState(null);
-    prevSegmentIdRef.current = null;
+    setCurrentSegIdState(null);
+    prevSegIdRef.current = null;
     
     // Notify parent component
     if (onCurrentSegmentChange) {
@@ -96,8 +97,63 @@ const YamdDoc = ({
   
   // Handle keyboard events at root level and forward to focused segment
   const handleKeyDown = useCallback((e) => {
-    handleRootKeyDown(e, isEditable, currentSegmentId, docId);
-  }, [isEditable, currentSegmentId, docId]);
+    handleRootKeyDown(e, isEditable, currentSegId, docId);
+  }, [isEditable, currentSegId, docId]);
+
+  // Handle blur events on root - unfocus current segment when clicking outside
+  const handleBlur = useCallback((e) => {
+    // Only handle if editable and there's a focused segment
+    if (!isEditable || !currentSegId) return;
+    
+    // Check if the blur is due to clicking outside the document
+    // relatedTarget is the element that received focus (null if clicking outside)
+    const clickedOutside = !e.relatedTarget || !e.currentTarget.contains(e.relatedTarget);
+    
+    if (clickedOutside) {
+      console.log(`🔵 YamdDoc blur: clicking outside, unfocusing segment ${currentSegId}`);
+      cancelCurrentSegId();
+    }
+  }, [isEditable, currentSegId, cancelCurrentSegId]);
+
+  // Handle click on root - check if click lands on root element itself
+  const handleClick = useCallback((e, currentRootNodeId) => {
+    if (!isEditable) return;
+    
+    // Check if click landed directly on the root wrapper (between nodes)
+    // e.currentTarget is the element the handler is attached to
+    // e.target is the actual element that was clicked
+    if (e.target === e.currentTarget) {
+      // Capture the element reference before requestAnimationFrame
+      // (React recycles synthetic events, so e.currentTarget becomes null)
+      const rootElement = e.currentTarget;
+      
+      // Use the browser's natural selection/cursor position to find the nearest segment
+      // This is much more efficient than calculating distances to all segments
+      requestAnimationFrame(() => {
+        const { segId, focusType, isDocumentBoundary, boundaryPosition } = findSegFromSelection(rootElement);
+        
+        if (segId) {
+          docsState.triggerFocus(docId, segId, focusType);
+        } else if (isDocumentBoundary && currentRootNodeId) {
+          // Click is at document boundary (before first or after last node)
+          // Helper to get node data from Zustand store
+          const getNodeData = (nodeId) => {
+            const store = useDocStore.getState();
+            return store.docNodes?.[docId]?.[nodeId];
+          };
+          
+          // Find first or last segment in the document tree
+          const boundarySegId = boundaryPosition === 'start'
+            ? getFirstSegInTree(currentRootNodeId, getNodeData)
+            : getLastSegInTree(currentRootNodeId, getNodeData);
+          
+          if (boundarySegId) {
+            docsState.triggerFocus(docId, boundarySegId, focusType);
+          }
+        }
+      });
+    }
+  }, [docId, isEditable]);
 
   // handle reference click from NodeTextRichRef components
   const handleRefClickCallback = useCallback((refData) => {
@@ -217,7 +273,7 @@ const YamdDoc = ({
   }, []);
 
   // Initialize render utils context value
-  // Note: currentSegmentId is intentionally NOT included - it would cause all segments to re-render on every click
+  // Note: currentSegId is intentionally NOT included - it would cause all segments to re-render on every click
   const renderUtilsContextValue = useMemo(() => 
     createRenderUtilsContextValue({ 
       registerNodeRef, 
@@ -225,12 +281,12 @@ const YamdDoc = ({
       isEditable,
       docId: docId,
       docStore: useDocStore,
-      setCurrentSegmentId,
-      cancelCurrentSegmentId,
+      setCurrentSegId,
+      cancelCurrentSegId,
       onCreate,
       onDelete
     }), 
-    [registerNodeRef, renderChildNodes, isEditable, docId, setCurrentSegmentId, cancelCurrentSegmentId, onCreate, onDelete]
+    [registerNodeRef, renderChildNodes, isEditable, docId, setCurrentSegId, cancelCurrentSegId, onCreate, onDelete]
   );
 
   // Get document data from Jotai atoms
@@ -254,6 +310,8 @@ const YamdDoc = ({
         contentEditable={isEditable ? true : undefined}
         suppressContentEditableWarning={isEditable ? true : undefined}
         onKeyDown={handleKeyDown}
+        onBlur={handleBlur}
+        onClick={(e) => handleClick(e, rootNodeId)}
       >
         
         {/* main document, rendering start from root node*/}
@@ -291,12 +349,12 @@ export default YamdDoc;
  * Handle keyboard events at root level and forward to focused segment
  * @param {KeyboardEvent} e - The keyboard event
  * @param {boolean} isEditable - Whether document is in editable mode
- * @param {string|null} currentSegmentId - Currently focused segment ID
+ * @param {string|null} currentSegId - Currently focused segment ID
  * @param {string} docId - Document ID
  * @returns {void}
  */
-const handleRootKeyDown = (e, isEditable, currentSegmentId, docId) => {
-  if (!isEditable || !currentSegmentId) return;
+const handleRootKeyDown = (e, isEditable, currentSegId, docId) => {
+  if (!isEditable || !currentSegId) return;
 
   // Ignore events from child elements (nested contentEditable, buttons, etc.)
   // Only handle events that originate from the root contentEditable itself
@@ -331,5 +389,5 @@ const handleRootKeyDown = (e, isEditable, currentSegmentId, docId) => {
   };
   
   // Forward to currently focused segment
-  docsState.triggerKeyboard(docId, currentSegmentId, eventData);
+  docsState.triggerKeyboard(docId, currentSegId, eventData);
 };
