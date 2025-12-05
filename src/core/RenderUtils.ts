@@ -39,17 +39,21 @@ export interface RenderUtilsContextValue {
   useNodeKeyboardCounter: (nodeId: string) => number;
   useNodeChildDeleteCounter: (nodeId: string) => number;
   useNodeChildCreateCounter: (nodeId: string) => number;
+  useNodeChildEventCounter: (nodeId: string) => number;
   useAsset: (assetId: string) => any;
   
   // Non-reactive data access methods
   getNodeDataById: (nodeId: string) => any;
   getNodeStateById: (nodeId: string) => any;
   updateNodeData: (nodeId: string, producer: (draft: any) => void) => void;
+  createNode: (nodeId: string, nodeData: any) => void;
   getAssetById: (assetId: string) => any;
   updateAsset: (assetId: string, producer: (draft: any) => void) => void;
   getRefById: (refId: string) => any;
-  createNodeAfter: (nodeId: string, newNodeData?: any) => {code: number; message: string; data: { newNodeId: string } | null };
+  createNodeAbove: (nodeId: string, newNodeData?: any) => {code: number; message: string; data: { newNodeId: string } | null };
+  createListItemBelow: (nodeId: string, newNodeData?: any) => {code: number; message: string; data: { newNodeId: string } | null };
   splitToNextSibling: (nodeId: string, splitPosition: number) => { code: number; message: string; data: { newNodeId: string; leftText: string; rightText: string } | null };
+  splitListItemToBelow: (segmentId: string, splitPosition: number) => { code: number; message: string; data: { newNodeId: string; leftText: string; rightText: string; newNodeSegments: string[] } | null };
   mergeWithPrevSibling: (nodeId: string) => { code: number; message: string; data: { prevSiblingId: string; cursorPos: number } | null };
   deleteNode: (nodeId: string) => { code: number; message: string; data: { previousSiblingId: string | null } | null };
   indentNode: (nodeId: string) => { code: number; message: string; data: { prevSiblingId: string } | null };
@@ -60,6 +64,8 @@ export interface RenderUtilsContextValue {
   triggerUnfocus: (nodeId: string, from: string, type: string, extraData?: any) => void;
   triggerChildDelete: (parentNodeId: string, fromId: string, reason?: string) => void;
   triggerChildCreate: (parentNodeId: string, fromId: string, type: string, isPseudo?: boolean) => void;
+  triggerChildEvent: (parentNodeId: string, fromId: string, type: string, cursorLoc: string, cursorPos?: {x: number, y: number} | null, additionalData?: any) => void;
+  triggerBulletYPosCalc: (nodeId: string) => void;
   
   // Cursor/selection utilities
   getCurrentSegmentId: (containerRef: React.RefObject<HTMLElement>) => string | null;
@@ -368,11 +374,30 @@ export const createRenderUtilsContextValue = ({
       return useAtomValue(counterAtom) as number;
     },
 
+    useNodeChildEventCounter: (nodeId: string) => {
+      if (!docId) return 0;
+      const counterAtom = docsState.getChildEventCounterAtom(docId, nodeId) as any;
+      // eslint-disable-next-line react-hooks/rules-of-hooks
+      return useAtomValue(counterAtom) as number;
+    },
+
     updateNodeData: (nodeId: string, producer: (draft: any) => void) => {
       if (!docId) return;
       const nodeAtom = docsData.getNodeData(docId, nodeId);
       docsData.setAtom(nodeAtom, (prev: any) => immer(prev, producer));
     },
+
+    /**
+     * Create a new node/segment in docsData with proper atom initialization
+     * Use this instead of updateNodeData when creating new entities
+     */
+    createNode: (nodeId: string, nodeData: any) => {
+      if (!docId) return;
+      docsData.ensureNode(docId, nodeId);
+      const nodeAtom = docsData.getNodeData(docId, nodeId);
+      docsData.setAtom(nodeAtom, nodeData);
+    },
+
     
     getAssetById: (assetId: string) => {
       if (!docId) return null;
@@ -404,7 +429,91 @@ export const createRenderUtilsContextValue = ({
       return docsData.getAtomValue(refsAtom)?.[refId];
     },
     
-    createNodeAfter: (nodeId: string, newNodeData: any) => {
+    createNodeAbove: (nodeId: string, newNodeData: any) => {
+      if (!docId) return { code: -1, message: 'No docId available', data: null };
+      
+      const nodeAtom = docsData.getNodeData(docId, nodeId);
+      const currentNode = docsData.getAtomValue(nodeAtom) as any;
+      
+      if (!currentNode) {
+        return { code: -1, message: `Node ${nodeId} not found`, data: null };
+      }
+      
+      const parentId = currentNode.parentId;
+      if (!parentId) {
+        return { code: -1, message: 'Cannot add node before root', data: null };
+      }
+      
+      // Use provided node data or generate new node ID
+      const newNodeId = newNodeData.id || `yamd_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      
+      // Create new node with default structure
+      const newNode = {
+        id: newNodeId,
+        type: 'text',
+        parentId: parentId,
+        textRaw: '',
+        textOriginal: '',
+        children: [],
+        ...newNodeData,
+      };
+      
+      console.log(`➕ Creating new node ${newNodeId} before ${nodeId}`);
+      
+      // If newNode has segments, add them to docsData first
+      if (newNode.segments) {
+        newNode.segments.forEach((segId: string) => {
+          const segData = newNodeData.segmentsData?.[segId];
+          if (segData) {
+            docsData.ensureNode(docId, segId);
+            const segAtom = docsData.getNodeData(docId, segId);
+            docsData.setAtom(segAtom, segData);
+          }
+        });
+      }
+      
+      // Add new node to docsData
+      docsData.ensureNode(docId, newNodeId);
+      const newNodeAtom = docsData.getNodeData(docId, newNodeId);
+      docsData.setAtom(newNodeAtom, newNode);
+      
+      // Insert new node into parent's children array before current node
+      const parentNodeAtom = docsData.getNodeData(docId, parentId);
+      docsData.setAtom(parentNodeAtom, (prev: any) =>
+        immer(prev, (draft: any) => {
+          if (draft && draft.children) {
+            const currentIndex = draft.children.indexOf(nodeId);
+            if (currentIndex !== -1) {
+              draft.children.splice(currentIndex, 0, newNodeId);
+              console.log(`➕ Inserted ${newNodeId} at index ${currentIndex} (before ${nodeId})`);
+            }
+          }
+        })
+      );
+      
+      // Call onCreate callback
+      if (onCreate) {
+        onCreate(newNodeId, newNode);
+      }
+      
+      // Trigger bullet recalculation for the new node
+      setTimeout(() => {
+        if (nodeBulletState.hasAnyBulletReqs(docId, newNodeId)) {
+          const requests = nodeBulletState.getAllBulletYPosReqs(docId, newNodeId);
+          Object.keys(requests).forEach(containerClassName => {
+            nodeBulletState.reqCalcBulletYPos(docId, newNodeId, containerClassName);
+          });
+        }
+      }, 0);
+      
+      return {
+        code: 0,
+        message: `Node ${newNodeId} created successfully`,
+        data: { newNodeId }
+      };
+    },
+    
+    createListItemBelow: (nodeId: string, newNodeData: any = {}) => {
       if (!docId) return { code: -1, message: 'No docId available', data: null };
       
       const nodeAtom = docsData.getNodeData(docId, nodeId);
@@ -419,21 +528,35 @@ export const createRenderUtilsContextValue = ({
         return { code: -1, message: 'Cannot add node after root', data: null };
       }
       
-      // Generate new node ID
+      // Generate new node ID and segment ID
       const newNodeId = `yamd_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      const newSegmentId = `seg_${Math.random().toString(36).substr(2, 9)}`;
       
-      // Create new node with default structure
+      // Create empty segment
+      const newSegment = {
+        type: 'segment',
+        textRaw: '',
+        id: newSegmentId,
+        selfDisplay: 'text',
+        parentId: newNodeId,
+      };
+      
+      // Add segment to docsData
+      docsData.ensureNode(docId, newSegmentId);
+      const segmentAtom = docsData.getNodeData(docId, newSegmentId);
+      docsData.setAtom(segmentAtom, newSegment);
+      
+      // Create new rich text node with default structure
       const newNode = {
         id: newNodeId,
-        type: 'text',
+        type: 'richtext',
         parentId: parentId,
-        textRaw: '',
-        textOriginal: '',
+        segments: [newSegmentId],
         children: [],
         ...newNodeData,
       };
       
-      console.log(`➕ Creating new node ${newNodeId} after ${nodeId}`);
+      console.log(`➕ Creating new rich text node ${newNodeId} below ${nodeId} with empty segment ${newSegmentId}`);
       
       // Add new node to docsData
       docsData.ensureNode(docId, newNodeId);
@@ -454,18 +577,28 @@ export const createRenderUtilsContextValue = ({
         })
       );
       
-      // Trigger focus on new node
-      docsState.triggerFocus(docId, newNodeId, 'selfCreated');
+      // Focus the empty segment (not the node itself)
+      docsState.triggerFocus(docId, newSegmentId, 'fromLeft');
       
       // Call onCreate callback
       if (onCreate) {
         onCreate(newNodeId, newNode);
       }
       
+      // Trigger bullet recalculation for the new node
+      setTimeout(() => {
+        if (nodeBulletState.hasAnyBulletReqs(docId, newNodeId)) {
+          const requests = nodeBulletState.getAllBulletYPosReqs(docId, newNodeId);
+          Object.keys(requests).forEach(containerClassName => {
+            nodeBulletState.reqCalcBulletYPos(docId, newNodeId, containerClassName);
+          });
+        }
+      }, 0);
+      
       return {
         code: 0,
-        message: `Node ${newNodeId} created successfully`,
-        data: { newNodeId }
+        message: `Node ${newNodeId} created successfully with segment ${newSegmentId}`,
+        data: { newNodeId, newSegmentId }
       };
     },
     
@@ -544,6 +677,174 @@ export const createRenderUtilsContextValue = ({
         code: 0,
         message: `Node ${nodeId} split into ${newNodeId}`,
         data: { newNodeId, leftText, rightText }
+      };
+    },
+    
+    /**
+     * Split a rich text segment and create a new rich text node below with the right part and remaining segments
+     * Used when Enter is pressed in the middle of a text segment
+     * @param segmentId - The segment being split
+     * @param splitPosition - Character position in the segment's text where to split
+     * @returns Result object with code, message, and new node ID
+     */
+    splitListItemToBelow: (segmentId: string, splitPosition: number) => {
+      if (!docId) return { code: -1, message: 'No docId available', data: null };
+      
+      // Get the segment data
+      const segmentAtom = docsData.getNodeData(docId, segmentId);
+      const segmentData = docsData.getAtomValue(segmentAtom) as any;
+      
+      if (!segmentData) {
+        return { code: -1, message: `Segment ${segmentId} not found`, data: null };
+      }
+      
+      const parentRichTextNodeId = segmentData.parentId;
+      if (!parentRichTextNodeId) {
+        return { code: -1, message: 'Segment has no parent rich text node', data: null };
+      }
+      
+      // Get the parent rich text node
+      const parentAtom = docsData.getNodeData(docId, parentRichTextNodeId);
+      const parentNode = docsData.getAtomValue(parentAtom) as any;
+      
+      if (!parentNode) {
+        return { code: -1, message: `Parent node ${parentRichTextNodeId} not found`, data: null };
+      }
+      
+      const grandparentId = parentNode.parentId;
+      if (!grandparentId) {
+        return { code: -1, message: 'Cannot split - parent node is root', data: null };
+      }
+      
+      const segments = parentNode.segments || [];
+      const segmentIndex = segments.indexOf(segmentId);
+      
+      if (segmentIndex === -1) {
+        return { code: -1, message: `Segment ${segmentId} not found in parent's segments array`, data: null };
+      }
+      
+      // Split the current segment's text
+      const currentText = segmentData.textRaw || '';
+      const leftText = currentText.substring(0, splitPosition);
+      const rightText = currentText.substring(splitPosition);
+      
+      console.log(`✂️ Splitting segment ${segmentId} at position ${splitPosition}: "${leftText}" | "${rightText}"`);
+      
+      // Update current segment with left part
+      docsData.setAtom(segmentAtom, (prev: any) =>
+        immer(prev, (draft: any) => {
+          draft.textRaw = leftText;
+        })
+      );
+      
+      // Segments after the split segment (these will all move to new node)
+      const segmentsToMove = segments.slice(segmentIndex + 1);
+      
+      // Create new segment for the right text (if not empty)
+      const newNodeSegments: string[] = [];
+      
+      if (rightText !== '') {
+        // Create a new segment with the right text
+        const rightSegmentId = `seg_${Math.random().toString(36).substr(2, 9)}`;
+        const rightSegment = {
+          type: 'segment',
+          textRaw: rightText,
+          id: rightSegmentId,
+          selfDisplay: 'text',
+          parentId: null, // Will be set when added to new node
+        };
+        
+        // Add to docsData
+        docsData.ensureNode(docId, rightSegmentId);
+        const rightSegmentAtom = docsData.getNodeData(docId, rightSegmentId);
+        docsData.setAtom(rightSegmentAtom, rightSegment);
+        
+        newNodeSegments.push(rightSegmentId);
+      }
+      
+      // Add all segments that were to the right of the split segment
+      newNodeSegments.push(...segmentsToMove);
+      
+      // If no segments to move to new node, create an empty text segment
+      if (newNodeSegments.length === 0) {
+        const emptySegmentId = `seg_${Math.random().toString(36).substr(2, 9)}`;
+        const emptySegment = {
+          type: 'segment',
+          textRaw: '',
+          id: emptySegmentId,
+          selfDisplay: 'text',
+          parentId: null, // Will be set below
+        };
+        
+        docsData.ensureNode(docId, emptySegmentId);
+        const emptySegmentAtom = docsData.getNodeData(docId, emptySegmentId);
+        docsData.setAtom(emptySegmentAtom, emptySegment);
+        newNodeSegments.push(emptySegmentId);
+      }
+      
+      // Create new rich text node
+      const newNodeId = `yamd_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      const newNode = {
+        id: newNodeId,
+        type: 'richtext',
+        parentId: grandparentId,
+        segments: newNodeSegments,
+        children: [],
+      };
+      
+      console.log(`➕ Creating new rich text node ${newNodeId} with segments:`, newNodeSegments);
+      
+      // Add new node to docsData
+      docsData.ensureNode(docId, newNodeId);
+      const newNodeAtom = docsData.getNodeData(docId, newNodeId);
+      docsData.setAtom(newNodeAtom, newNode);
+      
+      // Update parentId for all segments in the new node
+      newNodeSegments.forEach(segId => {
+        const segAtom = docsData.getNodeData(docId, segId);
+        docsData.setAtom(segAtom, (prev: any) =>
+          immer(prev, (draft: any) => {
+            draft.parentId = newNodeId;
+          })
+        );
+      });
+      
+      // Remove moved segments from the current rich text node
+      docsData.setAtom(parentAtom, (prev: any) =>
+        immer(prev, (draft: any) => {
+          if (draft.segments) {
+            // Keep only segments up to and including the split segment
+            draft.segments = draft.segments.slice(0, segmentIndex + 1);
+          }
+        })
+      );
+      
+      // Insert new node into grandparent's children array after current parent
+      const grandparentAtom = docsData.getNodeData(docId, grandparentId);
+      docsData.setAtom(grandparentAtom, (prev: any) =>
+        immer(prev, (draft: any) => {
+          if (draft && draft.children) {
+            const parentIndex = draft.children.indexOf(parentRichTextNodeId);
+            if (parentIndex !== -1) {
+              draft.children.splice(parentIndex + 1, 0, newNodeId);
+            }
+          }
+        })
+      );
+      
+      // Call onCreate callback
+      if (onCreate) {
+        onCreate(newNodeId, newNode);
+      }
+      
+      // Focus the first segment of the new node
+      const firstSegmentId = newNodeSegments[0];
+      docsState.triggerFocus(docId, firstSegmentId, 'fromLeft');
+      
+      return {
+        code: 0,
+        message: `Segment ${segmentId} split, created new node ${newNodeId}`,
+        data: { newNodeId, leftText, rightText, newNodeSegments }
       };
     },
     
@@ -947,6 +1248,29 @@ export const createRenderUtilsContextValue = ({
     triggerChildCreate: (parentNodeId: string, fromId: string, type: string = 'toRight', isPseudo: boolean = false) => {
       if (!docId) return;
       docsState.triggerChildCreate(docId, parentNodeId, fromId, type, isPseudo);
+    },
+
+    triggerChildEvent: (parentNodeId: string, fromId: string, type: string, cursorLoc: string, cursorPos: {x: number, y: number} | null = null, additionalData: any = null) => {
+      if (!docId) return;
+      docsState.triggerChildEvent(docId, parentNodeId, fromId, type, cursorLoc, cursorPos || undefined, additionalData || undefined);
+    },
+
+    /**
+     * Trigger bullet position recalculation for a node
+     * Use after operations that change node structure (split, merge, etc.)
+     */
+    triggerBulletYPosCalc: (nodeId: string) => {
+      if (!docId) return;
+      setTimeout(() => {
+        // Check if there are any bullet positioning requests for this node
+        if (nodeBulletState.hasAnyBulletReqs(docId, nodeId)) {
+          const requests = nodeBulletState.getAllBulletYPosReqs(docId, nodeId);
+          // Increment request counter for each container to trigger recalculation
+          Object.keys(requests).forEach(containerClassName => {
+            nodeBulletState.reqCalcBulletYPos(docId, nodeId, containerClassName);
+          });
+        }
+      }, 0);
     },
     
     // Cursor/selection utilities

@@ -21,8 +21,8 @@ export const isCursorAtEnd = (element) => {
   
   const textLength = element.textContent?.length || 0;
   
-  // Use getCursorPosition which handles all DOM structures correctly
-  const position = getCursorPosition(element);
+  // Use getCursorPos which handles all DOM structures correctly
+  const position = getCursorPos(element);
   return position >= textLength;
 };
 
@@ -43,8 +43,8 @@ export const isCursorAtBeginning = (element) => {
     return false; // Cursor is not inside this element
   }
   
-  // Use getCursorPosition which handles all DOM structures correctly
-  const position = getCursorPosition(element);
+  // Use getCursorPos which handles all DOM structures correctly
+  const position = getCursorPos(element);
   return position === 0;
 };
 
@@ -53,7 +53,7 @@ export const isCursorAtBeginning = (element) => {
  * @param {HTMLElement} element - The contentEditable element
  * @returns {number} - The cursor position (0-based index)
  */
-export const getCursorPosition = (element) => {
+export const getCursorPos = (element) => {
   if (!element) return 0;
   
   const selection = window.getSelection();

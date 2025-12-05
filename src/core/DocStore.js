@@ -178,12 +178,12 @@ class DocsData {
    */
   getNodeData(docId, nodeId) {
     if (!this._data[docId]) {
-      console.warn(`⚠️ getNodeData: docId "${docId}" not found in store`);
+      console.log(`⚠️ getNodeData: docId "${docId}" not found in store`);
       this._data[docId] = {};
     }
     
     if (!this._data[docId][nodeId]) {
-      console.warn(`⚠️ getNodeData: nodeId "${nodeId}" not found in docId "${docId}", creating null atom`);
+      console.log(`⚠️ getNodeData: nodeId "${nodeId}" not found in docId "${docId}", creating null atom`);
       // Create new reactive container with null initial value
       this._data[docId][nodeId] = atom(null);
     }
@@ -270,6 +270,7 @@ class DocsState {
     this._keyboardCounterAtoms = {};
     this._childDeleteCounterAtoms = {};
     this._childCreateCounterAtoms = {};
+    this._childEventCounterAtoms = {};
     // Use the same Jotai store as DocsData
     this._store = docsData.getStore();
   }
@@ -311,6 +312,14 @@ class DocsState {
           from: null, // segment ID requesting to create new segment
           type: null, // 'toLeft', 'toRight'
           isPseudo: false // whether new segment should be in pseudo mode
+        },
+        childEvent: {
+          counter: 0,
+          from: null, // segment/child ID triggering the event
+          type: null, // 'split', 'indent', 'outdent', etc.
+          cursorLoc: null, // 'begin', 'middle', 'end'
+          cursorPos: null, // { x, y } cursor page coordinates
+          additionalData: null // any additional data for the event
         }
       });
     }
@@ -411,6 +420,25 @@ class DocsState {
     }
     
     return this._childCreateCounterAtoms[docId][nodeId];
+  }
+
+  /**
+   * Get derived atom for childEvent counter only (cached)
+   * @param {string} docId - Document ID
+   * @param {string} nodeId - Node ID
+   * @returns {object} Jotai derived atom for childEvent counter
+   */
+  getChildEventCounterAtom(docId, nodeId) {
+    if (!this._childEventCounterAtoms[docId]) {
+      this._childEventCounterAtoms[docId] = {};
+    }
+    
+    if (!this._childEventCounterAtoms[docId][nodeId]) {
+      const stateAtom = this.getNodeState(docId, nodeId);
+      this._childEventCounterAtoms[docId][nodeId] = atom((get) => get(stateAtom).childEvent.counter);
+    }
+    
+    return this._childEventCounterAtoms[docId][nodeId];
   }
 
   /**
@@ -521,6 +549,34 @@ class DocsState {
   }
 
   /**
+   * Trigger child event (from child segment to parent rich text node)
+   * @param {string} docId - Document ID
+   * @param {string} parentNodeId - Parent node ID
+   * @param {string} fromId - Segment ID triggering the event
+   * @param {string} type - Event type: 'split', 'indent', 'outdent', etc.
+   * @param {string} cursorLoc - Cursor location: 'begin', 'middle', 'end'
+   * @param {object} cursorPos - Cursor page coordinates: { x, y }
+   * @param {object} additionalData - Optional additional data
+   */
+  triggerChildEvent(docId, parentNodeId, fromId, type, cursorLoc, cursorPos = null, additionalData = null) {
+    const stateAtom = this.getNodeState(docId, parentNodeId);
+    const currentState = this._store.get(stateAtom);
+    
+    // Update childEvent state
+    currentState.childEvent = {
+      counter: (currentState.childEvent?.counter || 0) + 1,
+      from: fromId,
+      type: type,
+      cursorLoc: cursorLoc,
+      cursorPos: cursorPos,
+      additionalData: additionalData
+    };
+    
+    // Set with a new state reference so Jotai detects the change
+    this._store.set(stateAtom, {...currentState});
+  }
+
+  /**
    * Remove state for a node
    * @param {string} docId - Document ID
    * @param {string} nodeId - Node ID
@@ -554,6 +610,9 @@ class DocsState {
     }
     if (this._childCreateCounterAtoms[docId]) {
       delete this._childCreateCounterAtoms[docId];
+    }
+    if (this._childEventCounterAtoms[docId]) {
+      delete this._childEventCounterAtoms[docId];
     }
   }
 }

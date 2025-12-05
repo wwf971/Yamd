@@ -438,6 +438,182 @@ const NodeTextRich = forwardRef(({ nodeId, className, parentInfo, globalInfo = n
     
   }, [nodeState?.childCreate?.counter, nodeId, renderUtils]);
 
+  // Handle child events from segments (via nodeState.childEvent)
+  useEffect(() => {
+    if (!nodeState?.childEvent) return;
+    
+    const { counter, from, type, cursorLoc, cursorPos, additionalData } = nodeState.childEvent;
+    
+    // Skip if counter is 0 (initial state)
+    if (counter === 0) return;
+    
+    console.log(`📨 NodeRichText [${nodeId}] received childEvent from ${from}: type=${type}, cursorLoc=${cursorLoc}`, additionalData);
+    
+    // Get fresh segments array and node data
+    const currentNodeData = renderUtils.getNodeDataById?.(nodeId);
+    const currentSegments = currentNodeData?.segments || [];
+    const segmentIndex = currentSegments.indexOf(from);
+    
+    if (segmentIndex === -1) {
+      console.warn(`⚠️ Segment ${from} not found in segments array`);
+      return;
+    }
+    
+    // Handle split event
+    if (type === 'split') {
+      const isLastSegment = segmentIndex === currentSegments.length - 1;
+      
+      // Case 1: Cursor at end
+      if (cursorLoc === 'end') {
+        if (isLastSegment) {
+          // At end of last segment - create new pseudo segment to right
+          console.log(`↩️ Creating new pseudo segment to right`);
+          renderUtils.triggerChildCreate?.(nodeId, from, 'toRight', true);
+        } else {
+          // At end but not last segment - focus next segment
+          console.log(`↩️ Focusing next segment`);
+          renderUtils.triggerUnfocus?.(nodeId, from, 'right');
+        }
+        return;
+      }
+      
+      // Case 2: Cursor at beginning
+      if (cursorLoc === 'begin') {
+        // Create new empty rich text node above and focus it
+        console.log(`↩️ Creating new rich text node above (cursor at beginning)`);
+        const grandparentId = currentNodeData?.parentId;
+        if (grandparentId) {
+          // Create empty segment for new node
+          const newSegmentId = `seg_${Math.random().toString(36).substr(2, 9)}`;
+          
+          // Create new rich text node data
+          const newNodeId = `yamd_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+          const newNodeData = {
+            id: newNodeId,
+            type: 'richtext',
+            parentId: grandparentId,
+            segments: [newSegmentId],
+            children: [],
+            // Include segment data for createNodeAbove to process
+            segmentsData: {
+              [newSegmentId]: {
+                type: 'segment',
+                textRaw: '',
+                id: newSegmentId,
+                selfDisplay: 'text',
+                parentId: newNodeId,
+              }
+            }
+          };
+          
+          // Use createNodeAbove to insert the node
+          renderUtils.createNodeAbove?.(nodeId, newNodeData);
+        }
+        return;
+      }
+      
+      // Case 3: Cursor in middle
+      if (cursorLoc === 'middle') {
+        const rightSegId = additionalData?.rightSegId;
+        
+        if (!rightSegId) {
+          console.error(`⚠️ No rightSegId provided for middle split from ${from}`);
+          return;
+        }
+        
+        // Get all segments after the current segment
+        const segmentsAfter = currentSegments.slice(segmentIndex + 1);
+        
+        // Create new node segments: [rightSegId, ...segmentsAfter]
+        const newNodeSegments = [rightSegId, ...segmentsAfter];
+        
+        // If no segments, create empty segment
+        if (newNodeSegments.length === 0) {
+          const emptySegId = `seg_${Math.random().toString(36).substr(2, 9)}`;
+          renderUtils.createNode(emptySegId, {
+            type: 'segment',
+            textRaw: '',
+            id: emptySegId,
+            selfDisplay: 'text',
+            parentId: null,
+          });
+          newNodeSegments.push(emptySegId);
+        }
+        
+        // Create new rich text node
+        const newNodeId = `yamd_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        const grandparentId = currentNodeData?.parentId;
+        
+        if (!grandparentId) {
+          console.error(`⚠️ Cannot split - parent node has no grandparent`);
+          return;
+        }
+        
+        // Create new node with all fields from current node as template
+        const currentNodeFull = renderUtils.getNodeDataById(nodeId);
+        const newNodeData = {
+          ...currentNodeFull,
+          id: newNodeId,
+          parentId: grandparentId,
+          segments: newNodeSegments,
+          children: [],
+        };
+        
+        renderUtils.createNode(newNodeId, newNodeData);
+        
+        // Update parent for all moved segments
+        newNodeSegments.forEach(segId => {
+          renderUtils.updateNodeData(segId, (draft) => {
+            draft.parentId = newNodeId;
+          });
+        });
+        
+        // Remove moved segments from current node
+        renderUtils.updateNodeData(nodeId, (draft) => {
+          if (draft.segments) {
+            draft.segments = draft.segments.slice(0, segmentIndex + 1);
+          }
+        });
+        
+        // Insert new node into grandparent's children
+        renderUtils.updateNodeData(grandparentId, (draft) => {
+          if (draft.children) {
+            const currentNodeIndex = draft.children.indexOf(nodeId);
+            if (currentNodeIndex !== -1) {
+              draft.children.splice(currentNodeIndex + 1, 0, newNodeId);
+            }
+          }
+        });
+        
+        // Call onCreate callbacks
+        if (renderUtils.onCreate) {
+          const completeNewNodeData = renderUtils.getNodeDataById(newNodeId);
+          renderUtils.onCreate(newNodeId, completeNewNodeData);
+          
+          // Also notify for new segments
+          newNodeSegments.forEach(segId => {
+            const segData = renderUtils.getNodeDataById(segId);
+            renderUtils.onCreate(segId, segData);
+          });
+        }
+        
+        // Focus first segment of new node (the right segment)
+        renderUtils.triggerFocus?.(newNodeSegments[0], 'fromLeft');
+        
+        // Trigger bullet position recalculation for both nodes
+        renderUtils.triggerBulletYPosCalc?.(nodeId); // Current node (segments changed)
+        renderUtils.triggerBulletYPosCalc?.(newNodeId); // New node (just created)
+        
+        console.log(`✂️ Split complete: created node ${newNodeId} with ${newNodeSegments.length} segments`);
+        
+        return;
+      }
+    }
+    
+    // TODO: Handle indent/outdent events in the future
+    
+  }, [nodeState?.childEvent?.counter, nodeId, renderUtils]);
+
   // Note: Bullet positioning is now handled entirely by Zustand store in NodeText
   // All positioning logic moved to calcBulletYPos in NodeRichText.js
   

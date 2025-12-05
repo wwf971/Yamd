@@ -4,7 +4,7 @@ import {
   isCursorAtEnd, isCursorAtBeginning,
   getCursorPageX, getClosestCharIndex,
   setCursorPos, setCursorToEnd, setCursorToBegin,
-  getCursorPosition
+  getCursorPos
 } from '@/components/TextUtils.js';
 
 /**
@@ -18,6 +18,7 @@ const SegmentText = forwardRef(({ segmentId, parentNodeId, className, globalInfo
   const hintText = 'empty_text_segment'
   const isEmpty = useRef(null);
   const isPseudo = useRef(false);
+  const isShowingHintText = useRef(false); // Track if currently displaying hint text (avoids false positive if user types the hint text)
 
   const contextIsEditable = renderUtils.isEditable;
   // If isEditable prop is not null, it overwrites the value from context
@@ -58,6 +59,7 @@ const SegmentText = forwardRef(({ segmentId, parentNodeId, className, globalInfo
         textEl.current.style.color = '#ccc';
         textEl.current.style.fontStyle = 'italic';
         isEmpty.current = true;
+        isShowingHintText.current = true;
       } else {
         // Show actual text
         console.log(`💭 SegmentText [${segmentId}] updating DOM with actual text: "${text}"`);
@@ -65,6 +67,7 @@ const SegmentText = forwardRef(({ segmentId, parentNodeId, className, globalInfo
         textEl.current.style.color = '';
         textEl.current.style.fontStyle = '';
         isEmpty.current = false;
+        isShowingHintText.current = false;
       }
     }
   }, [text, hintText, segmentId]);
@@ -159,13 +162,17 @@ const SegmentText = forwardRef(({ segmentId, parentNodeId, className, globalInfo
       textEl.current.style.backgroundColor = 'transparent';
       textEl.current.style.border = '1px solid transparent';
       
-      // Restore hint text if segment is empty
-      const currentText = textEl.current.textContent || '';
-      if (currentText === '' || currentText === ' ') {
+      // Restore hint text if segment is actually empty (check data, not DOM)
+      // Only show hint if the actual text data is empty
+      if (text === '') {
         textEl.current.textContent = hintText;
         textEl.current.style.color = '#ccc';
         textEl.current.style.fontStyle = 'italic';
         isEmpty.current = true;
+        isShowingHintText.current = true;
+      } else {
+        // Not empty - ensure hint text flag is cleared
+        isShowingHintText.current = false;
       }
     }
     
@@ -204,7 +211,7 @@ const SegmentText = forwardRef(({ segmentId, parentNodeId, className, globalInfo
       }
       
       // If showing hint text, clear it first before letting browser insert the character
-      if (isEmpty.current && textEl.current?.textContent === hintText) {
+      if (isShowingHintText.current) {
         e.preventDefault(); // Prevent default to manually handle the input
         textEl.current.textContent = e.key; // Insert the typed character
         textEl.current.style.color = '';
@@ -219,6 +226,7 @@ const SegmentText = forwardRef(({ segmentId, parentNodeId, className, globalInfo
         sel.addRange(range);
         
         isEmpty.current = false;
+        isShowingHintText.current = false;
         console.log(`📝 SegmentText [${segmentId}] first character typed: "${e.key}"`);
         renderUtils.updateNodeData(segmentId, (draft) => {
           draft.textRaw = e.key;
@@ -275,6 +283,7 @@ const SegmentText = forwardRef(({ segmentId, parentNodeId, className, globalInfo
         textEl.current.style.color = '#ccc';
         textEl.current.style.fontStyle = 'italic';
         isEmpty.current = true;
+        isShowingHintText.current = true;
         renderUtils.updateNodeData(segmentId, (draft) => {
           draft.textRaw = '';
         });
@@ -297,8 +306,10 @@ const SegmentText = forwardRef(({ segmentId, parentNodeId, className, globalInfo
             textEl.current.style.color = '#ccc';
             textEl.current.style.fontStyle = 'italic';
             isEmpty.current = true;
+            isShowingHintText.current = true;
           } else {
             isEmpty.current = false;
+            isShowingHintText.current = false;
           }
           
           renderUtils.updateNodeData(segmentId, (draft) => {
@@ -328,7 +339,7 @@ const SegmentText = forwardRef(({ segmentId, parentNodeId, className, globalInfo
       }
       
       // Check cursor position before browser moves it
-      const currentPos = getCursorPosition(textEl.current);
+      const currentPos = getCursorPos(textEl.current);
       const sel = window.getSelection();
       const isOutside = !textEl.current?.contains(sel.anchorNode);
       
@@ -341,7 +352,6 @@ const SegmentText = forwardRef(({ segmentId, parentNodeId, className, globalInfo
       
       if (shouldUnfocus) {
         e.preventDefault(); // Prevent cursor from moving outside
-        console.log(`🔔 SegmentText [${segmentId}] triggering unfocus LEFT`);
         renderUtils.triggerUnfocus(parentNodeId, segmentId, 'left');
         return;
       }
@@ -352,6 +362,10 @@ const SegmentText = forwardRef(({ segmentId, parentNodeId, className, globalInfo
     
     // Navigate right with Right arrow (at end or empty)
     if (e.key === 'ArrowRight') {
+      // Update isEmpty based on current DOM state (checking hint text flag)
+      const domText = textEl.current?.textContent || '';
+      isEmpty.current = (domText === '' || isShowingHintText.current);
+      
       // If in pseudo mode and empty, delete segment instead of unfocus
       if (isPseudo.current && isEmpty.current) {
         e.preventDefault();
@@ -369,19 +383,15 @@ const SegmentText = forwardRef(({ segmentId, parentNodeId, className, globalInfo
       }
       
       // Check cursor position before browser moves it
-      const currentPos = getCursorPosition(textEl.current);
-      const text = textEl.current?.textContent || '';
+      const currentPos = getCursorPos(textEl.current);
+      const text = domText;
       const textLength = text.length;
       const sel = window.getSelection();
       const isOutside = !textEl.current?.contains(sel.anchorNode);
-      const textToRight = currentPos < textLength ? text.substring(currentPos) : '(end)';
-      
       // Trigger unfocus if:
       // 1. Cursor is at the last position (at end)
       // 2. Cursor is outside our element (already jumped out)
       const shouldUnfocus = currentPos >= textLength || isOutside;
-      
-      console.log(`➡️ SegmentText [${segmentId}] ArrowRight: pos=${currentPos}/${textLength}, text to right: "${textToRight}", shouldUnfocus=${shouldUnfocus}`);
       
       if (shouldUnfocus) {
         e.preventDefault(); // Prevent cursor from moving outside
@@ -428,14 +438,78 @@ const SegmentText = forwardRef(({ segmentId, parentNodeId, className, globalInfo
     
     // Handle Enter key
     if (e.key === 'Enter') {
+      e.preventDefault();
+      
       // If in pseudo mode and empty, delete segment
       if (isPseudo.current && isEmpty.current) {
-        e.preventDefault();
         console.log(`🎭 SegmentText [${segmentId}] deleting pseudo segment (Enter)`);
         renderUtils.triggerChildDelete?.(parentNodeId, segmentId, 'pseudoAbandoned');
         return;
       }
-      // Otherwise, let default behavior happen (create new line/paragraph)
+      
+      // Check cursor position
+      const cursorPos = getCursorPos(textEl.current);
+      const text = textEl.current?.textContent || '';
+      const textLength = text.length;
+      
+      // Determine cursor location
+      let cursorLoc;
+      let rightSegId = null;
+      
+      if (cursorPos === 0) {
+        cursorLoc = 'begin';
+      } else if (cursorPos === textLength) {
+        cursorLoc = 'end';
+      } else {
+        cursorLoc = 'middle';
+        
+        // For middle split, create right segment data (no parent yet)
+        const leftText = text.substring(0, cursorPos);
+        const rightText = text.substring(cursorPos);
+        
+        // Update DOM immediately (contentEditable won't update from data while focused)
+        if (textEl.current) {
+          textEl.current.textContent = leftText;
+          
+          // Set cursor to end of the left text
+          setCursorToEnd(textEl.current);
+        }
+        
+        // Create new segment for right text
+        rightSegId = `seg_${Math.random().toString(36).substr(2, 9)}`;
+        const rightSegment = {
+          type: 'segment',
+          textRaw: rightText,
+          id: rightSegId,
+          selfDisplay: 'text',
+          parentId: null, // No parent yet, will be set by parent rich text node
+        };
+        
+        // Add to docsData but don't set parent yet
+        renderUtils.createNode(rightSegId, rightSegment);
+        
+        // Update current segment with left text in data
+        renderUtils.updateNodeData(segmentId, (draft) => {
+          draft.textRaw = leftText;
+        });
+        
+        console.log(`✂️ SegmentText [${segmentId}] split: "${leftText}" | "${rightText}"`);
+      }
+      
+      // Get cursor page coordinates
+      const cursorPagePos = getCursorPageX(textEl.current);
+      
+      console.log(`↩️ SegmentText [${segmentId}] Enter pressed: cursorLoc=${cursorLoc}, cursorPos=${cursorPos}/${textLength}`);
+      
+      // Trigger childEvent to let parent rich text node handle it
+      renderUtils.triggerChildEvent?.(
+        parentNodeId,
+        segmentId,
+        'split',
+        cursorLoc,
+        { x: cursorPagePos, y: 0 }, // y coordinate not needed for now
+        { cursorPos, rightSegId } // include cursor position and right segment ID
+      );
     }
     
     // Blur on Escape
@@ -450,7 +524,7 @@ const SegmentText = forwardRef(({ segmentId, parentNodeId, className, globalInfo
     
     // Log cursor position after click
     requestAnimationFrame(() => {
-      const pos = getCursorPosition(textEl.current);
+      const pos = getCursorPos(textEl.current);
       const text = textEl.current?.textContent || '';
       const len = text.length;
       const textToRight = pos < len ? text.substring(pos) : '(end)';
@@ -500,10 +574,12 @@ const SegmentText = forwardRef(({ segmentId, parentNodeId, className, globalInfo
         textEl.current.style.color = '#ccc';
         textEl.current.style.fontStyle = 'italic';
         isEmpty.current = true;
+        isShowingHintText.current = true;
       } else {
         console.log(`🔧 SegmentText [${segmentId}] mounting with text: "${text}"`);
         textEl.current.textContent = text;
         isEmpty.current = false;
+        isShowingHintText.current = false;
       }
     }
   }, []);
@@ -519,7 +595,7 @@ const SegmentText = forwardRef(({ segmentId, parentNodeId, className, globalInfo
       className={`${className} yamd-text-segment`}
       style={{
         display: 'inline-block',
-        minWidth: '2ch',
+        minWidth: text === '' ? '2ch' : undefined, // Only set minimum width when truly empty
         minHeight: '1em',
         whiteSpace: 'pre-wrap',
         outline: 'none',
