@@ -210,12 +210,12 @@ const SegmentLaTeX = ({ segmentId, parentNodeId, globalInfo }) => {
 
   // Handle unfocus requests (from clicking other segments)
   useEffect(() => {
-    // Skip if counter is 0 (initial state)
-    if (unfocusCounter === 0) return;
-    
     // Fetch the full state non-reactively to get the type
     const state = renderUtils.getNodeStateById?.(segmentId);
     if (!state?.unfocus) return;
+    
+    // Skip if already processed this event
+    if (unfocusCounter <= state.unfocus.counterProcessed) return;
     
     const { type } = state.unfocus;
     
@@ -223,6 +223,9 @@ const SegmentLaTeX = ({ segmentId, parentNodeId, globalInfo }) => {
     
     // Exit edit mode and mark as not focused (always call handleUnfocus, let it handle the state)
     handleUnfocus(true); // Save changes
+    
+    // Mark this unfocus event as processed
+    renderUtils.markUnfocusProcessed?.(segmentId);
     
   }, [unfocusCounter, segmentId, handleUnfocus, renderUtils]);
   // Note: isEditing removed from deps to avoid re-processing when exiting edit mode
@@ -252,12 +255,12 @@ const SegmentLaTeX = ({ segmentId, parentNodeId, globalInfo }) => {
   
   // Handle focus requests
   useEffect(() => {
-    // Skip if counter is 0 (initial state)
-    if (focusCounter === 0) return;
-    
     // Fetch the full state non-reactively to get the type
     const state = renderUtils.getNodeStateById?.(segmentId);
     if (!state?.focus) return;
+    
+    // Skip if already processed this event
+    if (focusCounter <= state.focus.counterProcessed) return;
     
     const { type, cursorPageX } = state.focus;
     
@@ -289,6 +292,9 @@ const SegmentLaTeX = ({ segmentId, parentNodeId, globalInfo }) => {
         });
       }
     }
+    
+    // Mark this focus event as processed
+    renderUtils.markFocusProcessed?.(segmentId);
     
   }, [focusCounter, segmentId, renderUtils]);
 
@@ -403,7 +409,7 @@ const SegmentLaTeX = ({ segmentId, parentNodeId, globalInfo }) => {
       if (isLastSegment) {
         console.log(`↩️ SegmentLaTeX [${segmentId}] Enter pressed (last segment), creating new pseudo segment to right`);
         // Request parent to create a new empty text segment to the right
-        renderUtils.triggerChildCreate?.(parentNodeId, segmentId, 'toRight', true); // isPseudo=true
+        renderUtils.triggerChildEvent?.(parentNodeId, segmentId, 'create', null, null, { createType: 'toRight', isChildPseudo: true });
       } else {
         console.log(`↩️ SegmentLaTeX [${segmentId}] Enter pressed (not last), focusing next segment`);
         // Just focus on the next segment

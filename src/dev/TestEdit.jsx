@@ -132,11 +132,18 @@ const TestEdit = () => {
   };
 
   // Stable callbacks for node/segment creation and deletion
-  const handleCreate = useCallback(() => {
+  const handleCreate = useCallback((nodeId, nodeData) => {
+    // Add new node/segment to nodeIds array so it shows in DocDataDisplay
+    setNodeIds(prev => {
+      if (prev.includes(nodeId)) return prev;
+      return [...prev, nodeId];
+    });
     setRefreshTrigger(prev => prev + 1);
   }, []);
 
-  const handleDelete = useCallback(() => {
+  const handleDelete = useCallback((nodeId, nodeData) => {
+    // Remove deleted node/segment from nodeIds array
+    setNodeIds(prev => prev.filter(id => id !== nodeId));
     setRefreshTrigger(prev => prev + 1);
   }, []);
 

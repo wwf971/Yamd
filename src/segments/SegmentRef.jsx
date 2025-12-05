@@ -53,12 +53,12 @@ const SegmentRef = ({ segmentId, parentNodeId, globalInfo }) => {
   
   // Handle unfocus requests (from clicking other segments)
   useEffect(() => {
-    // Skip if counter is 0 (initial state)
-    if (unfocusCounter === 0) return;
-    
     // Fetch the full state non-reactively to get the type
     const state = renderUtils.getNodeStateById?.(segmentId);
     if (!state?.unfocus) return;
+    
+    // Skip if already processed this event
+    if (unfocusCounter <= state.unfocus.counterProcessed) return;
     
     const { type } = state.unfocus;
     
@@ -66,6 +66,9 @@ const SegmentRef = ({ segmentId, parentNodeId, globalInfo }) => {
     
     // Exit edit mode and mark as not focused (always call handleUnfocus, let it handle the state)
     handleUnfocus(true, false); // Save changes but don't blur (might not be in DOM)
+    
+    // Mark this unfocus event as processed
+    renderUtils.markUnfocusProcessed?.(segmentId);
     
   }, [unfocusCounter, segmentId, handleUnfocus, renderUtils]);
   // Note: isEditing removed from deps to avoid re-processing when exiting edit mode
@@ -107,12 +110,12 @@ const SegmentRef = ({ segmentId, parentNodeId, globalInfo }) => {
   
   // Handle focus requests
   useEffect(() => {
-    // Skip if counter is 0 (initial state)
-    if (focusCounter === 0) return;
-    
     // Fetch the full state non-reactively to get the type
     const state = renderUtils.getNodeStateById?.(segmentId);
     if (!state?.focus) return;
+    
+    // Skip if already processed this event
+    if (focusCounter <= state.focus.counterProcessed) return;
     
     const { type } = state.focus;
     
@@ -148,15 +151,17 @@ const SegmentRef = ({ segmentId, parentNodeId, globalInfo }) => {
       }
       
       // Field focusing is handled by useLayoutEffect that runs after DOM updates
-      return;
-    }
-    
-    // Other focus types - just focus the link element (non-editing)
-    if (!isEditing) {
-      if (linkRef.current) {
-        linkRef.current.focus();
+    } else {
+      // Other focus types - just focus the link element (non-editing)
+      if (!isEditing) {
+        if (linkRef.current) {
+          linkRef.current.focus();
+        }
       }
     }
+    
+    // Mark this focus event as processed
+    renderUtils.markFocusProcessed?.(segmentId);
     
   }, [focusCounter, segmentId, renderUtils]);
   

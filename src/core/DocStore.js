@@ -268,8 +268,6 @@ class DocsState {
     this._focusCounterAtoms = {};
     this._unfocusCounterAtoms = {};
     this._keyboardCounterAtoms = {};
-    this._childDeleteCounterAtoms = {};
-    this._childCreateCounterAtoms = {};
     this._childEventCounterAtoms = {};
     // Use the same Jotai store as DocsData
     this._store = docsData.getStore();
@@ -291,10 +289,12 @@ class DocsState {
       this._states[docId][nodeId] = atom({
         focus: {
           counter: 0,
+          counterProcessed: 0, // Track last processed counter to avoid re-processing
           type: null // 'prevSiblingDeleted', 'nextSiblingDeleted', 'parentCommand', etc.
         },
         unfocus: {
           counter: 0,
+          counterProcessed: 0, // Track last processed counter to avoid re-processing
           from: null, // segment ID that wants to unfocus
           type: null  // 'left', 'right', 'up', 'down'
         },
@@ -302,24 +302,13 @@ class DocsState {
           counter: 0,
           event: null // { key, ctrlKey, shiftKey, metaKey, altKey }
         },
-        childDelete: {
-          counter: 0,
-          from: null, // segment/child ID that wants to delete itself
-          reason: null  // 'backspaceOnEmpty', etc.
-        },
-        childCreate: {
-          counter: 0,
-          from: null, // segment ID requesting to create new segment
-          type: null, // 'toLeft', 'toRight'
-          isPseudo: false // whether new segment should be in pseudo mode
-        },
         childEvent: {
           counter: 0,
           from: null, // segment/child ID triggering the event
-          type: null, // 'split', 'indent', 'outdent', etc.
-          cursorLoc: null, // 'begin', 'middle', 'end'
+          type: null, // 'split', 'delete', 'create', 'indent', 'outdent', etc.
+          cursorLoc: null, // 'begin', 'middle', 'end' (for split/delete)
           cursorPos: null, // { x, y } cursor page coordinates
-          additionalData: null // any additional data for the event
+          additionalData: null // any additional data: { reason, rightSegId, createType, isChildPseudo, etc. }
         }
       });
     }
@@ -385,44 +374,6 @@ class DocsState {
   }
 
   /**
-   * Get derived atom for childDelete counter only (cached)
-   * @param {string} docId - Document ID
-   * @param {string} nodeId - Node ID
-   * @returns {object} Jotai derived atom for childDelete counter
-   */
-  getChildDeleteCounterAtom(docId, nodeId) {
-    if (!this._childDeleteCounterAtoms[docId]) {
-      this._childDeleteCounterAtoms[docId] = {};
-    }
-    
-    if (!this._childDeleteCounterAtoms[docId][nodeId]) {
-      const stateAtom = this.getNodeState(docId, nodeId);
-      this._childDeleteCounterAtoms[docId][nodeId] = atom((get) => get(stateAtom).childDelete.counter);
-    }
-    
-    return this._childDeleteCounterAtoms[docId][nodeId];
-  }
-
-  /**
-   * Get derived atom for childCreate counter only (cached)
-   * @param {string} docId - Document ID
-   * @param {string} nodeId - Node ID
-   * @returns {object} Jotai derived atom for childCreate counter
-   */
-  getChildCreateCounterAtom(docId, nodeId) {
-    if (!this._childCreateCounterAtoms[docId]) {
-      this._childCreateCounterAtoms[docId] = {};
-    }
-    
-    if (!this._childCreateCounterAtoms[docId][nodeId]) {
-      const stateAtom = this.getNodeState(docId, nodeId);
-      this._childCreateCounterAtoms[docId][nodeId] = atom((get) => get(stateAtom).childCreate.counter);
-    }
-    
-    return this._childCreateCounterAtoms[docId][nodeId];
-  }
-
-  /**
    * Get derived atom for childEvent counter only (cached)
    * @param {string} docId - Document ID
    * @param {string} nodeId - Node ID
@@ -483,6 +434,47 @@ class DocsState {
   }
 
   /**
+   * Mark all pending focus/unfocus events as processed (used when moving segments to new parent)
+   * @param {string} docId - Document ID
+   * @param {string} nodeId - Node ID
+   */
+  resetFocusState(docId, nodeId) {
+    const stateAtom = this.getNodeState(docId, nodeId);
+    const currentState = this._store.get(stateAtom);
+    
+    // Mark current counters as already processed to prevent re-processing old events
+    currentState.focus.counterProcessed = currentState.focus.counter;
+    currentState.unfocus.counterProcessed = currentState.unfocus.counter;
+    
+    // Set with a new state reference so Jotai detects the change
+    this._store.set(stateAtom, {...currentState});
+  }
+
+  /**
+   * Mark focus event as processed (called by segments after handling focus)
+   * @param {string} docId - Document ID
+   * @param {string} nodeId - Node ID
+   */
+  markFocusProcessed(docId, nodeId) {
+    const stateAtom = this.getNodeState(docId, nodeId);
+    const currentState = this._store.get(stateAtom);
+    currentState.focus.counterProcessed = currentState.focus.counter;
+    // No need to trigger re-render, just update the value
+  }
+
+  /**
+   * Mark unfocus event as processed (called by segments after handling unfocus)
+   * @param {string} docId - Document ID
+   * @param {string} nodeId - Node ID
+   */
+  markUnfocusProcessed(docId, nodeId) {
+    const stateAtom = this.getNodeState(docId, nodeId);
+    const currentState = this._store.get(stateAtom);
+    currentState.unfocus.counterProcessed = currentState.unfocus.counter;
+    // No need to trigger re-render, just update the value
+  }
+
+  /**
    * Trigger keyboard event on a node/segment
    * @param {string} docId - Document ID
    * @param {string} nodeId - Node/Segment ID
@@ -503,62 +495,16 @@ class DocsState {
   }
 
   /**
-   * Trigger child delete request (from child segment/node to parent)
-   * @param {string} docId - Document ID
-   * @param {string} parentNodeId - Parent node ID
-   * @param {string} fromId - Child ID requesting deletion
-   * @param {string} reason - Reason for deletion
-   */
-  triggerChildDelete(docId, parentNodeId, fromId, reason = 'backspaceOnEmpty') {
-    const stateAtom = this.getNodeState(docId, parentNodeId);
-    const currentState = this._store.get(stateAtom);
-    
-    // Update childDelete state
-    currentState.childDelete = {
-      counter: (currentState.childDelete?.counter || 0) + 1,
-      from: fromId,
-      reason: reason
-    };
-    
-    // Set with a new state reference so Jotai detects the change
-    this._store.set(stateAtom, {...currentState});
-  }
-
-  /**
-   * Trigger child create request (from child segment to parent)
-   * @param {string} docId - Document ID
-   * @param {string} parentNodeId - Parent node ID
-   * @param {string} fromId - Segment ID requesting to create new sibling
-   * @param {string} type - Where to create: 'toLeft', 'toRight'
-   * @param {boolean} isPseudo - Whether new segment should be pseudo
-   */
-  triggerChildCreate(docId, parentNodeId, fromId, type = 'toRight', isPseudo = false) {
-    const stateAtom = this.getNodeState(docId, parentNodeId);
-    const currentState = this._store.get(stateAtom);
-    
-    // Update childCreate state
-    currentState.childCreate = {
-      counter: (currentState.childCreate?.counter || 0) + 1,
-      from: fromId,
-      type: type,
-      isPseudo: isPseudo
-    };
-    
-    // Set with a new state reference so Jotai detects the change
-    this._store.set(stateAtom, {...currentState});
-  }
-
-  /**
    * Trigger child event (from child segment to parent rich text node)
    * @param {string} docId - Document ID
    * @param {string} parentNodeId - Parent node ID
    * @param {string} fromId - Segment ID triggering the event
-   * @param {string} type - Event type: 'split', 'indent', 'outdent', etc.
-   * @param {string} cursorLoc - Cursor location: 'begin', 'middle', 'end'
-   * @param {object} cursorPos - Cursor page coordinates: { x, y }
-   * @param {object} additionalData - Optional additional data
+   * @param {string} type - Event type: 'split', 'delete', 'create', 'indent', 'outdent', etc.
+   * @param {string|null} cursorLoc - Optional cursor location: 'begin', 'middle', 'end', or null
+   * @param {object|null} cursorPos - Optional cursor page coordinates: { x, y }, or null
+   * @param {object|null} additionalData - Optional additional data
    */
-  triggerChildEvent(docId, parentNodeId, fromId, type, cursorLoc, cursorPos = null, additionalData = null) {
+  triggerChildEvent(docId, parentNodeId, fromId, type, cursorLoc = null, cursorPos = null, additionalData = null) {
     const stateAtom = this.getNodeState(docId, parentNodeId);
     const currentState = this._store.get(stateAtom);
     
@@ -604,12 +550,6 @@ class DocsState {
     }
     if (this._keyboardCounterAtoms[docId]) {
       delete this._keyboardCounterAtoms[docId];
-    }
-    if (this._childDeleteCounterAtoms[docId]) {
-      delete this._childDeleteCounterAtoms[docId];
-    }
-    if (this._childCreateCounterAtoms[docId]) {
-      delete this._childCreateCounterAtoms[docId];
     }
     if (this._childEventCounterAtoms[docId]) {
       delete this._childEventCounterAtoms[docId];

@@ -303,141 +303,6 @@ const NodeTextRich = forwardRef(({ nodeId, className, parentInfo, globalInfo = n
     
   }, [nodeState?.unfocus?.counter, nodeId, renderUtils]);
 
-  // Handle child delete requests from segments (via nodeState.childDelete)
-  useEffect(() => {
-    if (!nodeState?.childDelete) return;
-    
-    const { counter, from, reason } = nodeState.childDelete;
-    
-    // Skip if counter is 0 (initial state)
-    if (counter === 0) return;
-    
-    console.log(`🗑️ NodeRichText [${nodeId}] received childDelete request from ${from}, reason: ${reason}`);
-    
-    // Get fresh segments array from node data
-    const currentNodeData = renderUtils.getNodeDataById?.(nodeId);
-    const currentSegments = currentNodeData?.segments || [];
-    
-    // Find the segment to delete
-    const segmentIndex = currentSegments.indexOf(from);
-    
-    if (segmentIndex === -1) {
-      console.warn(`⚠️ Segment ${from} not found in segments array`);
-      return;
-    }
-    
-    // If this is the only segment, delete the entire node instead
-    if (currentSegments.length === 1) {
-      console.log(`🗑️ Only one segment, deleting entire node ${nodeId}`);
-      
-      // Use existing deleteNode logic from renderUtils
-      const result = renderUtils.deleteNode?.(nodeId);
-      console.log(`🗑️ Delete node result:`, result);
-      return;
-    }
-    
-    // Multiple segments - delete this segment and focus appropriate one
-    console.log(`🗑️ Deleting segment ${from} (${segmentIndex + 1}/${currentSegments.length}), reason: ${reason}`);
-    
-    // Determine which segment to focus after deletion
-    let targetSegmentId;
-    let focusType;
-    
-    if (reason === 'pseudoAbandoned') {
-      // Pseudo segment abandoned - focus the segment that created it (previous segment)
-      // The pseudo segment is always created to the right, so previous is the creator
-      targetSegmentId = segmentIndex > 0 ? currentSegments[segmentIndex - 1] : currentSegments[segmentIndex + 1];
-      focusType = 'fromRight'; // Position at end of creator segment
-      console.log(`🎭 Pseudo segment abandoned, returning to creator: ${targetSegmentId}`);
-    } else {
-      // Regular deletion - focus previous segment (or next if first)
-      targetSegmentId = segmentIndex > 0 
-        ? currentSegments[segmentIndex - 1]  // Focus previous segment
-        : currentSegments[segmentIndex + 1];  // Or next if deleting first
-      focusType = 'fromRight'; // Position at end
-      console.log(`🗑️ Regular deletion, will focus: ${targetSegmentId}`);
-    }
-    
-    // Get segment data before deletion for callback
-    const segmentData = renderUtils.getNodeDataById?.(from);
-    
-    // Call onDelete callback before actual deletion
-    if (renderUtils.onDelete) {
-      renderUtils.onDelete(from, segmentData);
-    }
-    
-    // Delete the segment from the segments array
-    renderUtils.updateNodeData(nodeId, (draft) => {
-      if (draft.segments) {
-        draft.segments = draft.segments.filter(id => id !== from);
-      }
-    });
-    
-    // Focus the target segment
-    renderUtils.triggerFocus?.(targetSegmentId, focusType);
-    
-  }, [nodeState?.childDelete?.counter, nodeId, renderUtils]);
-
-  // Handle child create requests from segments (via nodeState.childCreate)
-  useEffect(() => {
-    if (!nodeState?.childCreate) return;
-    
-    const { counter, from, type, isPseudo } = nodeState.childCreate;
-    
-    // Skip if counter is 0 (initial state)
-    if (counter === 0) return;
-    
-    console.log(`➕ NodeRichText [${nodeId}] received childCreate request from ${from}, type: ${type}, isPseudo: ${isPseudo}`);
-    
-    // Get fresh segments array from node data
-    const currentNodeData = renderUtils.getNodeDataById?.(nodeId);
-    const currentSegments = currentNodeData?.segments || [];
-    
-    // Find the requesting segment
-    const segmentIndex = currentSegments.indexOf(from);
-    
-    if (segmentIndex === -1) {
-      console.warn(`⚠️ Segment ${from} not found in segments array`);
-      return;
-    }
-    
-    // Generate new segment ID
-    const newSegmentId = `seg_${Math.random().toString(36).substr(2, 9)}`;
-    console.log(`➕ Creating new segment: ${newSegmentId} ${type} of ${from}`);
-    
-    // Create the new empty text segment
-    const newSegment = {
-      type: 'segment',
-      textRaw: '',
-      id: newSegmentId,
-      selfDisplay: 'text',
-      parentId: nodeId
-    };
-    
-    // Add the new segment to docsData
-    renderUtils.updateNodeData(newSegmentId, () => newSegment);
-    
-    // Insert into segments array at the appropriate position
-    const insertIndex = type === 'toRight' ? segmentIndex + 1 : segmentIndex;
-    
-    renderUtils.updateNodeData(nodeId, (draft) => {
-      if (draft.segments) {
-        draft.segments.splice(insertIndex, 0, newSegmentId);
-      }
-    });
-    
-    console.log(`➕ Inserted ${newSegmentId} at index ${insertIndex}, total segments: ${currentSegments.length + 1}`);
-    
-    // Call onCreate callback
-    if (renderUtils.onCreate) {
-      renderUtils.onCreate(newSegmentId, newSegment);
-    }
-    
-    // Focus the new segment with isPseudo flag
-    renderUtils.triggerFocus?.(newSegmentId, 'fromLeft', { isPseudo });
-    
-  }, [nodeState?.childCreate?.counter, nodeId, renderUtils]);
-
   // Handle child events from segments (via nodeState.childEvent)
   useEffect(() => {
     if (!nodeState?.childEvent) return;
@@ -468,7 +333,7 @@ const NodeTextRich = forwardRef(({ nodeId, className, parentInfo, globalInfo = n
         if (isLastSegment) {
           // At end of last segment - create new pseudo segment to right
           console.log(`↩️ Creating new pseudo segment to right`);
-          renderUtils.triggerChildCreate?.(nodeId, from, 'toRight', true);
+          renderUtils.triggerChildEvent?.(nodeId, from, 'create', null, null, { createType: 'toRight', isChildPseudo: true });
         } else {
           // At end but not last segment - focus next segment
           console.log(`↩️ Focusing next segment`);
@@ -566,6 +431,10 @@ const NodeTextRich = forwardRef(({ nodeId, className, parentInfo, globalInfo = n
           renderUtils.updateNodeData(segId, (draft) => {
             draft.parentId = newNodeId;
           });
+          
+          // Reset focus/unfocus counters to prevent segments from re-processing
+          // stale events when they remount in the new parent (especially seg_007 and seg_008)
+          renderUtils.resetFocusState?.(segId);
         });
         
         // Remove moved segments from current node
@@ -608,6 +477,300 @@ const NodeTextRich = forwardRef(({ nodeId, className, parentInfo, globalInfo = n
         
         return;
       }
+    }
+    
+    // Handle delete event
+    if (type === 'delete') {
+      const reason = additionalData?.reason;
+      const isFirstSegment = segmentIndex === 0;
+      
+      // Case 1: Delete with cursorLoc='begin' (backspace at beginning of first segment)
+      if (cursorLoc === 'begin' && isFirstSegment) {
+        console.log(`⌫ Backspace at beginning of first segment - attempting merge with prev sibling`);
+        
+        // Get previous sibling rich text node
+        const grandparentId = currentNodeData?.parentId;
+        if (!grandparentId) {
+          console.log(`⚠️ No grandparent - cannot merge`);
+          return;
+        }
+        
+        const grandparentData = renderUtils.getNodeDataById(grandparentId);
+        const siblings = grandparentData?.children || [];
+        const currentNodeIndex = siblings.indexOf(nodeId);
+        
+        if (currentNodeIndex <= 0) {
+          console.log(`⚠️ No previous sibling - keeping focus`);
+          return;
+        }
+        
+        const prevSiblingId = siblings[currentNodeIndex - 1];
+        const prevSiblingData = renderUtils.getNodeDataById(prevSiblingId);
+        
+        // Check if previous sibling is a rich text node (has segments array)
+        if (!prevSiblingData?.segments || !Array.isArray(prevSiblingData.segments)) {
+          console.log(`⚠️ Previous sibling is not richtext (no segments array) - cannot merge`);
+          return;
+        }
+        
+        const prevSegments = prevSiblingData?.segments || [];
+        
+        // Check if we can merge text segments
+        const lastPrevSegId = prevSegments[prevSegments.length - 1];
+        const firstCurrentSegId = currentSegments[0];
+        const lastPrevSegData = lastPrevSegId ? renderUtils.getNodeDataById(lastPrevSegId) : null;
+        const firstCurrentSegData = firstCurrentSegId ? renderUtils.getNodeDataById(firstCurrentSegId) : null;
+        
+        const canMergeTextSegments = 
+          lastPrevSegData?.selfDisplay === 'text' && 
+          firstCurrentSegData?.selfDisplay === 'text';
+        
+        if (canMergeTextSegments) {
+          const lastPrevText = lastPrevSegData?.textRaw || '';
+          const firstCurrentText = firstCurrentSegData?.textRaw || '';
+          
+          // If first current segment is not empty, merge the texts
+          if (firstCurrentText !== '') {
+            console.log(`🔗 Merging text segments: ${lastPrevSegId} ("${lastPrevText}") + ${firstCurrentSegId} ("${firstCurrentText}")`);
+            
+            const mergedText = lastPrevText + firstCurrentText;
+            const cursorPosInMerged = lastPrevText.length; // Cursor at boundary
+            
+            // Update last prev segment with merged text
+            renderUtils.updateNodeData(lastPrevSegId, (draft) => {
+              draft.textRaw = mergedText;
+            });
+            
+            // Delete first current segment (its text is now merged into last prev segment)
+            if (renderUtils.onDelete) {
+              renderUtils.onDelete(firstCurrentSegId, firstCurrentSegData);
+            }
+            
+            // Update remaining segments' parentId
+            const remainingSegments = currentSegments.slice(1); // Skip first (merged/deleted) segment
+            remainingSegments.forEach(segId => {
+              renderUtils.updateNodeData(segId, (draft) => {
+                draft.parentId = prevSiblingId;
+              });
+            });
+            
+            // Append remaining segments to prev sibling
+            renderUtils.updateNodeData(prevSiblingId, (draft) => {
+              if (draft.segments) {
+                remainingSegments.forEach(segId => {
+                  draft.segments.push(segId);
+                });
+              }
+            });
+            
+            // Delete current node
+            renderUtils.updateNodeData(grandparentId, (draft) => {
+              if (draft.children) {
+                draft.children = draft.children.filter(id => id !== nodeId);
+              }
+            });
+            
+            // Call onDelete callback for current node
+            if (renderUtils.onDelete) {
+              renderUtils.onDelete(nodeId, currentNodeData);
+            }
+            
+            // Focus the merged segment with cursor at merge point
+            setTimeout(() => {
+              console.log(`🔄 Restoring focus to merged segment ${lastPrevSegId} at position ${cursorPosInMerged}`);
+              renderUtils.triggerFocus?.(lastPrevSegId, 'fromLeft', { cursorPos: cursorPosInMerged });
+            }, 0);
+            
+            // Trigger bullet recalc
+            renderUtils.triggerBulletYPosCalc?.(prevSiblingId);
+            
+            console.log(`✅ Text segments merged successfully`);
+            return;
+          } else {
+            // First current segment is empty - just delete it and append remaining segments
+            console.log(`🔗 Deleting empty text segment ${firstCurrentSegId}, appending remaining to prev sibling`);
+            
+            // Delete first current segment
+            if (renderUtils.onDelete) {
+              renderUtils.onDelete(firstCurrentSegId, firstCurrentSegData);
+            }
+            
+            // Update remaining segments' parentId
+            const remainingSegments = currentSegments.slice(1); // Skip first (deleted) segment
+            remainingSegments.forEach(segId => {
+              renderUtils.updateNodeData(segId, (draft) => {
+                draft.parentId = prevSiblingId;
+              });
+            });
+            
+            // Append remaining segments to prev sibling
+            renderUtils.updateNodeData(prevSiblingId, (draft) => {
+              if (draft.segments) {
+                remainingSegments.forEach(segId => {
+                  draft.segments.push(segId);
+                });
+              }
+            });
+            
+            // Delete current node
+            renderUtils.updateNodeData(grandparentId, (draft) => {
+              if (draft.children) {
+                draft.children = draft.children.filter(id => id !== nodeId);
+              }
+            });
+            
+            // Call onDelete callback for current node
+            if (renderUtils.onDelete) {
+              renderUtils.onDelete(nodeId, currentNodeData);
+            }
+            
+            // Focus the last prev segment at the end
+            setTimeout(() => {
+              console.log(`🔄 Restoring focus to last prev segment ${lastPrevSegId} at end`);
+              renderUtils.triggerFocus?.(lastPrevSegId, 'fromRight');
+            }, 0);
+            
+            // Trigger bullet recalc
+            renderUtils.triggerBulletYPosCalc?.(prevSiblingId);
+            
+            console.log(`✅ Empty segment deleted, remaining segments appended`);
+            return;
+          }
+        }
+        
+        // Normal merge: append all segments without merging
+        currentSegments.forEach(segId => {
+          renderUtils.updateNodeData(segId, (draft) => {
+            draft.parentId = prevSiblingId;
+          });
+        });
+        
+        // Update previous sibling's segments array (use push for Immer mutation)
+        renderUtils.updateNodeData(prevSiblingId, (draft) => {
+          if (draft.segments) {
+            currentSegments.forEach(segId => {
+              draft.segments.push(segId);
+            });
+          }
+        });
+        
+        // Delete current node
+        renderUtils.updateNodeData(grandparentId, (draft) => {
+          if (draft.children) {
+            draft.children = draft.children.filter(id => id !== nodeId);
+          }
+        });
+        
+        // Call onDelete callback
+        if (renderUtils.onDelete) {
+          renderUtils.onDelete(nodeId, currentNodeData);
+        }
+        
+        console.log(`✅ Node merged into prev sibling`);
+        
+        // Restore focus after a short delay
+        setTimeout(() => {
+          renderUtils.triggerFocus?.(from, 'fromLeft');
+        }, 0);
+        
+        // Trigger bullet recalc for prev sibling
+        renderUtils.triggerBulletYPosCalc?.(prevSiblingId);
+        
+        return;
+      }
+      
+      // Case 2: Regular segment deletion (not at beginning of first segment)
+      // If this is the only segment, delete the entire node instead
+      if (currentSegments.length === 1) {
+        console.log(`🗑️ Only one segment, deleting entire node ${nodeId}`);
+        const result = renderUtils.deleteNode?.(nodeId);
+        console.log(`🗑️ Delete node result:`, result);
+        return;
+      }
+      
+      // Multiple segments - delete this segment and focus appropriate one
+      console.log(`🗑️ Deleting segment ${from} (${segmentIndex + 1}/${currentSegments.length}), reason: ${reason}`);
+      
+      // Determine which segment to focus after deletion
+      let targetSegmentId;
+      let focusType;
+      
+      if (reason === 'pseudoAbandoned') {
+        // Pseudo segment abandoned - focus the segment that created it (previous segment)
+        targetSegmentId = segmentIndex > 0 ? currentSegments[segmentIndex - 1] : currentSegments[segmentIndex + 1];
+        focusType = 'fromRight'; // Position at end of creator segment
+        console.log(`🎭 Pseudo segment abandoned, returning to creator: ${targetSegmentId}`);
+      } else {
+        // Regular deletion - focus previous segment (or next if first)
+        targetSegmentId = segmentIndex > 0 
+          ? currentSegments[segmentIndex - 1]  // Focus previous segment
+          : currentSegments[segmentIndex + 1];  // Or next if deleting first
+        focusType = 'fromRight'; // Position at end
+        console.log(`🗑️ Regular deletion, will focus: ${targetSegmentId}`);
+      }
+      
+      // Get segment data before deletion for callback
+      const segmentData = renderUtils.getNodeDataById?.(from);
+      
+      // Call onDelete callback before actual deletion
+      if (renderUtils.onDelete) {
+        renderUtils.onDelete(from, segmentData);
+      }
+      
+      // Delete the segment from the segments array
+      renderUtils.updateNodeData(nodeId, (draft) => {
+        if (draft.segments) {
+          draft.segments = draft.segments.filter(id => id !== from);
+        }
+      });
+      
+      // Focus the target segment
+      renderUtils.triggerFocus?.(targetSegmentId, focusType);
+      
+      return;
+    }
+    
+    // Handle create event
+    if (type === 'create') {
+      const { createType, isChildPseudo } = additionalData || {};
+      
+      console.log(`➕ Creating new segment ${createType} of ${from}, isChildPseudo: ${isChildPseudo}`);
+      
+      // Generate new segment ID
+      const newSegmentId = `seg_${Math.random().toString(36).substr(2, 9)}`;
+      
+      // Create the new empty text segment
+      const newSegment = {
+        type: 'segment',
+        textRaw: '',
+        id: newSegmentId,
+        selfDisplay: 'text',
+        parentId: nodeId
+      };
+      
+      // Add the new segment to docsData
+      renderUtils.updateNodeData(newSegmentId, () => newSegment);
+      
+      // Insert into segments array at the appropriate position
+      const insertIndex = createType === 'toRight' ? segmentIndex + 1 : segmentIndex;
+      
+      renderUtils.updateNodeData(nodeId, (draft) => {
+        if (draft.segments) {
+          draft.segments.splice(insertIndex, 0, newSegmentId);
+        }
+      });
+      
+      console.log(`➕ Inserted ${newSegmentId} at index ${insertIndex}, total segments: ${currentSegments.length + 1}`);
+      
+      // Call onCreate callback
+      if (renderUtils.onCreate) {
+        renderUtils.onCreate(newSegmentId, newSegment);
+      }
+      
+      // Focus the new segment with isChildPseudo flag
+      renderUtils.triggerFocus?.(newSegmentId, 'fromLeft', { isChildPseudo });
+      
+      return;
     }
     
     // TODO: Handle indent/outdent events in the future

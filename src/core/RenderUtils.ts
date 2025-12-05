@@ -37,8 +37,6 @@ export interface RenderUtilsContextValue {
   useNodeFocusCounter: (nodeId: string) => number;
   useNodeUnfocusCounter: (nodeId: string) => number;
   useNodeKeyboardCounter: (nodeId: string) => number;
-  useNodeChildDeleteCounter: (nodeId: string) => number;
-  useNodeChildCreateCounter: (nodeId: string) => number;
   useNodeChildEventCounter: (nodeId: string) => number;
   useAsset: (assetId: string) => any;
   
@@ -62,9 +60,10 @@ export interface RenderUtilsContextValue {
   // Focus management
   triggerFocus: (nodeId: string, type: string, extraData?: any) => void;
   triggerUnfocus: (nodeId: string, from: string, type: string, extraData?: any) => void;
-  triggerChildDelete: (parentNodeId: string, fromId: string, reason?: string) => void;
-  triggerChildCreate: (parentNodeId: string, fromId: string, type: string, isPseudo?: boolean) => void;
-  triggerChildEvent: (parentNodeId: string, fromId: string, type: string, cursorLoc: string, cursorPos?: {x: number, y: number} | null, additionalData?: any) => void;
+  resetFocusState: (nodeId: string) => void;
+  markFocusProcessed: (nodeId: string) => void;
+  markUnfocusProcessed: (nodeId: string) => void;
+  triggerChildEvent: (parentNodeId: string, fromId: string, type: string, cursorLoc?: string | null, cursorPos?: {x: number, y: number} | null, additionalData?: any) => void;
   triggerBulletYPosCalc: (nodeId: string) => void;
   
   // Cursor/selection utilities
@@ -356,20 +355,6 @@ export const createRenderUtilsContextValue = ({
     useNodeKeyboardCounter: (nodeId: string) => {
       if (!docId) return 0;
       const counterAtom = docsState.getKeyboardCounterAtom(docId, nodeId) as any;
-      // eslint-disable-next-line react-hooks/rules-of-hooks
-      return useAtomValue(counterAtom) as number;
-    },
-
-    useNodeChildDeleteCounter: (nodeId: string) => {
-      if (!docId) return 0;
-      const counterAtom = docsState.getChildDeleteCounterAtom(docId, nodeId) as any;
-      // eslint-disable-next-line react-hooks/rules-of-hooks
-      return useAtomValue(counterAtom) as number;
-    },
-
-    useNodeChildCreateCounter: (nodeId: string) => {
-      if (!docId) return 0;
-      const counterAtom = docsState.getChildCreateCounterAtom(docId, nodeId) as any;
       // eslint-disable-next-line react-hooks/rules-of-hooks
       return useAtomValue(counterAtom) as number;
     },
@@ -1240,19 +1225,24 @@ export const createRenderUtilsContextValue = ({
       docsState.triggerUnfocus(docId, nodeId, from, type, extraData);
     },
 
-    triggerChildDelete: (parentNodeId: string, fromId: string, reason: string = 'backspaceOnEmpty') => {
+    resetFocusState: (nodeId: string) => {
       if (!docId) return;
-      docsState.triggerChildDelete(docId, parentNodeId, fromId, reason);
+      docsState.resetFocusState(docId, nodeId);
     },
 
-    triggerChildCreate: (parentNodeId: string, fromId: string, type: string = 'toRight', isPseudo: boolean = false) => {
+    markFocusProcessed: (nodeId: string) => {
       if (!docId) return;
-      docsState.triggerChildCreate(docId, parentNodeId, fromId, type, isPseudo);
+      docsState.markFocusProcessed(docId, nodeId);
     },
 
-    triggerChildEvent: (parentNodeId: string, fromId: string, type: string, cursorLoc: string, cursorPos: {x: number, y: number} | null = null, additionalData: any = null) => {
+    markUnfocusProcessed: (nodeId: string) => {
       if (!docId) return;
-      docsState.triggerChildEvent(docId, parentNodeId, fromId, type, cursorLoc, cursorPos || undefined, additionalData || undefined);
+      docsState.markUnfocusProcessed(docId, nodeId);
+    },
+
+    triggerChildEvent: (parentNodeId: string, fromId: string, type: string, cursorLoc: string | null = null, cursorPos: {x: number, y: number} | null = null, additionalData: any = null) => {
+      if (!docId) return;
+      docsState.triggerChildEvent(docId, parentNodeId, fromId, type, cursorLoc ?? undefined, cursorPos ?? undefined, additionalData ?? undefined);
     },
 
     /**

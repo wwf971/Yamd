@@ -7,6 +7,19 @@ import {
   getCursorPos
 } from '@/components/TextUtils.js';
 
+// Custom hook that skips effect on initial mount
+function useUpdateEffect(effect, deps) {
+  const isFirst = useRef(true);
+  
+  useEffect(() => {
+    if (isFirst.current) {
+      isFirst.current = false;
+      return;
+    }
+    return effect();
+  }, deps);
+}
+
 /**
  * Text segment renderer for rich text nodes
  * This is a segment component that lives within a NodeRichText parent
@@ -17,7 +30,7 @@ const SegmentText = forwardRef(({ segmentId, parentNodeId, className, globalInfo
   const renderUtils = useRenderUtilsContext();
   const hintText = 'empty_text_segment'
   const isEmpty = useRef(null);
-  const isPseudo = useRef(false);
+  const isChildPseudo = useRef(false);
   const isShowingHintText = useRef(false); // Track if currently displaying hint text (avoids false positive if user types the hint text)
 
   const contextIsEditable = renderUtils.isEditable;
@@ -38,11 +51,11 @@ const SegmentText = forwardRef(({ segmentId, parentNodeId, className, globalInfo
   // Ref for the contentEditable span
   const textEl = useRef(null);
   
-  // Track if this segment is theoretically focused (for styling)
+  // Track if this segment is logically focused (for styling)
   const isLogicallyFocused = useRef(false);
   
-  // Debug: log every render
-  console.log(`🔄 SegmentText [${segmentId}] render: text="${text}", isEmpty=${isEmpty.current}, isLogicallyFocused=${isLogicallyFocused.current}`);
+  // // Debug: log every render
+  // console.log(`🔄 SegmentText [${segmentId}] render: text="${text}", isEmpty=${isEmpty.current}, isLogicallyFocused=${isLogicallyFocused.current}`);
   
   // Update isEmpty when text changes
   useEffect(() => {
@@ -76,24 +89,24 @@ const SegmentText = forwardRef(({ segmentId, parentNodeId, className, globalInfo
   useEffect(() => {
     if (!textEl.current) return;
     
-    // Skip if counter is 0 (initial state)
-    if (focusCounter === 0) return;
-    
     // Fetch the full state non-reactively to get the type and cursorPageX
     const state = renderUtils.getNodeStateById?.(segmentId);
     if (!state?.focus) return;
     
-    const { type, cursorPageX, isPseudo: isPseudoFromFocus } = state.focus;
+    // Skip if already processed this event
+    if (focusCounter <= state.focus.counterProcessed) return;
     
-    console.log(`🎯 SegmentText [${segmentId}] received FOCUS from ${type}, isPseudo=${isPseudoFromFocus}`);
+    const { type, cursorPageX, cursorPos, isChildPseudo: isChildPseudoFromFocus } = state.focus;
+    
+    console.log(`🎯 SegmentText [${segmentId}] received FOCUS from ${type}, isChildPseudo=${isChildPseudoFromFocus}, cursorPos=${cursorPos}`);
     console.log(`🎯 Current DOM content before focus: "${textEl.current?.textContent}", isEmpty=${isEmpty.current}`);
     
     // Mark as logically focused
     isLogicallyFocused.current = true;
     
-    // Store isPseudo state
-    if (isPseudoFromFocus === true) {
-      isPseudo.current = true;
+    // Store isChildPseudo state
+    if (isChildPseudoFromFocus === true) {
+      isChildPseudo.current = true;
       console.log(`🎭 SegmentText [${segmentId}] entering pseudo mode`);
     }
     
@@ -109,6 +122,13 @@ const SegmentText = forwardRef(({ segmentId, parentNodeId, className, globalInfo
     
     if(isEmpty.current) {
       setCursorToBegin(textEl.current);
+      return;
+    }
+
+    // If specific cursor position is provided, use it
+    if (typeof cursorPos === 'number') {
+      console.log(`🎯 SegmentText [${segmentId}] setting cursor to position ${cursorPos}`);
+      setCursorPos(textEl.current, cursorPos);
       return;
     }
 
@@ -133,16 +153,19 @@ const SegmentText = forwardRef(({ segmentId, parentNodeId, className, globalInfo
       setCursorToBegin(textEl.current);
     }
     
+    // Mark this focus event as processed
+    renderUtils.markFocusProcessed?.(segmentId);
+    
   }, [focusCounter, segmentId, renderUtils]);
   
   // Handle unfocus requests (from clicking other segments)
   useEffect(() => {
-    // Skip if counter is 0 (initial state)
-    if (unfocusCounter === 0) return;
-    
     // Fetch the full state non-reactively to get the type
     const state = renderUtils.getNodeStateById?.(segmentId);
     if (!state?.unfocus) return;
+    
+    // Skip if already processed this event
+    if (unfocusCounter <= state.unfocus.counterProcessed) return;
     
     const { type } = state.unfocus;
     
@@ -152,9 +175,9 @@ const SegmentText = forwardRef(({ segmentId, parentNodeId, className, globalInfo
     isLogicallyFocused.current = false;
     
     // Clear pseudo mode on unfocus
-    if (isPseudo.current) {
+    if (isChildPseudo.current) {
       console.log(`🎭 SegmentText [${segmentId}] clearing pseudo mode on unfocus`);
-      isPseudo.current = false;
+      isChildPseudo.current = false;
     }
     
     // Remove focus styles
@@ -176,11 +199,22 @@ const SegmentText = forwardRef(({ segmentId, parentNodeId, className, globalInfo
       }
     }
     
+    // Mark this unfocus event as processed
+    renderUtils.markUnfocusProcessed?.(segmentId);
+    
   }, [unfocusCounter, segmentId, renderUtils, hintText]);
   
-  // Handle keyboard events forwarded from YamdDoc (for backward compatibility)
-  useEffect(() => {
-    if (keyboardCounter === 0) return;
+  // Handle keyboard events forwarded from YamdDoc (skip on initial mount and duplicates)
+  useUpdateEffect(() => {
+    // Get segment data to check last processed counter
+    const segmentData = renderUtils.getNodeDataById?.(segmentId);
+    const lastProcessedKeyboardCounter = segmentData?.lastProcessedKeyboardCounter || 0;
+    
+    // Skip if we've already processed this counter (persists across remounts)
+    if (keyboardCounter === lastProcessedKeyboardCounter) {
+      console.log(`⏭️ SegmentText [${segmentId}] skipping duplicate keyboard counter: ${keyboardCounter}`);
+      return;
+    }
     
     const state = renderUtils.getNodeStateById?.(segmentId);
     if (!state?.keyboard?.event) return;
@@ -189,12 +223,17 @@ const SegmentText = forwardRef(({ segmentId, parentNodeId, className, globalInfo
     
     console.log(`⌨️ SegmentText [${segmentId}] received keyboard event: ${event.key}, counter: ${keyboardCounter}`);
     
+    // Update last processed counter in atom (persists across remounts)
+    renderUtils.updateNodeData(segmentId, (draft) => {
+      draft.lastProcessedKeyboardCounter = keyboardCounter;
+    });
+    
     // Call handleKeyDown with synthetic event
     handleKeyDown(event);
     
   }, [keyboardCounter, segmentId, renderUtils, handleKeyDown]);
 
-  // Handle key events forwarded from YamdDoc (theoretical focus model)
+  // Handle key events forwarded from YamdDoc (logical focus model)
   const handleKeyDown = useCallback((e) => {
     // Check if this is a modifier key combination or special key
     const hasModifier = e.ctrlKey || e.altKey || e.metaKey;
@@ -205,9 +244,9 @@ const SegmentText = forwardRef(({ segmentId, parentNodeId, className, globalInfo
     // Let browser insert it, then update the store
     if (!hasModifier && !isArrowKey && !isSpecialKey && e.key.length === 1) {
       // If in pseudo mode, exit pseudo mode when user types
-      if (isPseudo.current) {
+      if (isChildPseudo.current) {
         console.log(`🎭 SegmentText [${segmentId}] exiting pseudo mode (user typed)`);
-        isPseudo.current = false;
+        isChildPseudo.current = false;
       }
       
       // If showing hint text, clear it first before letting browser insert the character
@@ -261,16 +300,18 @@ const SegmentText = forwardRef(({ segmentId, parentNodeId, className, globalInfo
         currentText = '';
       }
       
-      // If segment is already empty (showing hint), request deletion from parent
-      if (isEmpty.current && currentText === '') {
+      // Check cursor position
+      const cursorPos = getCursorPos(textEl.current);
+      
+      // Case 1: Backspace at beginning - always trigger with cursorLoc='begin'
+      // This allows parent to decide whether to merge with prev sibling or just delete segment
+      if (cursorPos === 0 || (isEmpty.current && currentText === '')) {
         e.preventDefault();
         
-        // Use different reason for pseudo segments
-        const reason = isPseudo.current ? 'pseudoAbandoned' : 'backspaceOnEmpty';
-        console.log(`🗑️ SegmentText [${segmentId}] requesting deletion from parent (${reason})`);
+        const reason = isChildPseudo.current ? 'pseudoAbandoned' : (isEmpty.current ? 'backspaceOnEmpty' : null);
+        console.log(`⌫ SegmentText [${segmentId}] backspace at beginning (isEmpty=${isEmpty.current}) - triggering delete event`);
         
-        // Notify parent to delete this segment
-        renderUtils.triggerChildDelete?.(parentNodeId, segmentId, reason);
+        renderUtils.triggerChildEvent?.(parentNodeId, segmentId, 'delete', 'begin', null, { reason });
         return;
       }
       
@@ -323,10 +364,10 @@ const SegmentText = forwardRef(({ segmentId, parentNodeId, className, globalInfo
     // Navigate left with Left arrow (at beginning or empty)
     if (e.key === 'ArrowLeft') {
       // If in pseudo mode and empty, delete segment instead of unfocus
-      if (isPseudo.current && isEmpty.current) {
+      if (isChildPseudo.current && isEmpty.current) {
         e.preventDefault();
         console.log(`🎭 SegmentText [${segmentId}] deleting pseudo segment (ArrowLeft)`);
-        renderUtils.triggerChildDelete?.(parentNodeId, segmentId, 'pseudoAbandoned');
+        renderUtils.triggerChildEvent?.(parentNodeId, segmentId, 'delete', null, null, { reason: 'pseudoAbandoned' });
         return;
       }
       
@@ -367,10 +408,10 @@ const SegmentText = forwardRef(({ segmentId, parentNodeId, className, globalInfo
       isEmpty.current = (domText === '' || isShowingHintText.current);
       
       // If in pseudo mode and empty, delete segment instead of unfocus
-      if (isPseudo.current && isEmpty.current) {
+      if (isChildPseudo.current && isEmpty.current) {
         e.preventDefault();
         console.log(`🎭 SegmentText [${segmentId}] deleting pseudo segment (ArrowRight)`);
-        renderUtils.triggerChildDelete?.(parentNodeId, segmentId, 'pseudoAbandoned');
+        renderUtils.triggerChildEvent?.(parentNodeId, segmentId, 'delete', null, null, { reason: 'pseudoAbandoned' });
         return;
       }
       
@@ -407,10 +448,10 @@ const SegmentText = forwardRef(({ segmentId, parentNodeId, className, globalInfo
     // Navigate up with Up arrow (always unfocus)
     if (e.key === 'ArrowUp') {
       // If in pseudo mode and empty, delete segment
-      if (isPseudo.current && isEmpty.current) {
+      if (isChildPseudo.current && isEmpty.current) {
         e.preventDefault();
         console.log(`🎭 SegmentText [${segmentId}] deleting pseudo segment (ArrowUp)`);
-        renderUtils.triggerChildDelete?.(parentNodeId, segmentId, 'pseudoAbandoned');
+        renderUtils.triggerChildEvent?.(parentNodeId, segmentId, 'delete', null, null, { reason: 'pseudoAbandoned' });
         return;
       }
       
@@ -423,10 +464,10 @@ const SegmentText = forwardRef(({ segmentId, parentNodeId, className, globalInfo
     // Navigate down with Down arrow (always unfocus)
     if (e.key === 'ArrowDown') {
       // If in pseudo mode and empty, delete segment
-      if (isPseudo.current && isEmpty.current) {
+      if (isChildPseudo.current && isEmpty.current) {
         e.preventDefault();
         console.log(`🎭 SegmentText [${segmentId}] deleting pseudo segment (ArrowDown)`);
-        renderUtils.triggerChildDelete?.(parentNodeId, segmentId, 'pseudoAbandoned');
+        renderUtils.triggerChildEvent?.(parentNodeId, segmentId, 'delete', null, null, { reason: 'pseudoAbandoned' });
         return;
       }
       
@@ -441,9 +482,9 @@ const SegmentText = forwardRef(({ segmentId, parentNodeId, className, globalInfo
       e.preventDefault();
       
       // If in pseudo mode and empty, delete segment
-      if (isPseudo.current && isEmpty.current) {
+      if (isChildPseudo.current && isEmpty.current) {
         console.log(`🎭 SegmentText [${segmentId}] deleting pseudo segment (Enter)`);
-        renderUtils.triggerChildDelete?.(parentNodeId, segmentId, 'pseudoAbandoned');
+        renderUtils.triggerChildEvent?.(parentNodeId, segmentId, 'delete', null, null, { reason: 'pseudoAbandoned' });
         return;
       }
       
@@ -518,7 +559,7 @@ const SegmentText = forwardRef(({ segmentId, parentNodeId, className, globalInfo
     }
   }, [segmentId, parentNodeId, renderUtils]);
 
-  // Handle mouse down/click to report theoretical focus
+  // Handle mouse down/click to report logical focus
   const handleMouseDown = (e) => {
     if (!finalIsEditable) return;
     
@@ -531,7 +572,7 @@ const SegmentText = forwardRef(({ segmentId, parentNodeId, className, globalInfo
       console.log(`🖱️ SegmentText [${segmentId}] mouseDown, cursor at ${pos}/${len}, text to right: "${textToRight}"`);
     });
     
-    // Mark as theoretically focused
+    // Mark as logically focused
     isLogicallyFocused.current = true;
     
     // Keep hint text visible when focused (acts as placeholder)
@@ -584,7 +625,7 @@ const SegmentText = forwardRef(({ segmentId, parentNodeId, className, globalInfo
     }
   }, []);
   
-  // Editable mode: theoretical focus (allows cross-segment selection)
+  // Editable mode: logical focus (allows cross-segment selection)
   // No nested contentEditable - part of parent YamdDoc's contentEditable context
   return (
     <span
