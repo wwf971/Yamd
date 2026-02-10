@@ -6,6 +6,10 @@
   background-color: #fff;
 }
 
+.test-cross-select-wide {
+  max-width: 1200px;
+}
+
 .test-cross-select-title {
   font-size: 16px;
   font-weight: 600;

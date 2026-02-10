@@ -215,7 +215,7 @@ const YamdNode = React.memo(({ nodeId, parentInfo = null, globalInfo = null }) =
  * @param {object} nextProps - Next props
  * @returns {boolean} - True if props are equal (skip re-render), false otherwise
  */
-const shouldRerender = (prevProps, nextProps) => {
+function shouldRerender(prevProps, nextProps) {
   // Always re-render if nodeId changes
   if (prevProps.nodeId !== nextProps.nodeId) {
     return false;
@@ -247,7 +247,7 @@ const shouldRerender = (prevProps, nextProps) => {
   
   // Props are equal, skip re-render
   return true;
-};
+}
 
 /**
  * Component for rendering children based on childDisplay style from parentInfo

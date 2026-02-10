@@ -51,63 +51,6 @@ const SegmentRef = ({ segmentId, parentNodeId, globalInfo }) => {
     }
   }, [isEditing, editBackup]);
   
-  // Handle unfocus requests (from clicking other segments)
-  useEffect(() => {
-    // Fetch the full state non-reactively to get the type
-    const state = renderUtils.getNodeStateById?.(segmentId);
-    if (!state?.unfocus) return;
-    
-    // Skip if already processed this event
-    if (unfocusCounter <= state.unfocus.counterProcessed) return;
-    
-    const { type } = state.unfocus;
-    
-    console.log(`🔕 SegmentRef [${segmentId}] received unfocus:`, { counter: unfocusCounter, type, isEditing });
-    
-    // Exit edit mode and mark as not focused (always call handleUnfocus, let it handle the state)
-    handleUnfocus(true, false); // Save changes but don't blur (might not be in DOM)
-    
-    // Mark this unfocus event as processed
-    renderUtils.markUnfocusProcessed?.(segmentId);
-    
-  }, [unfocusCounter, segmentId, handleUnfocus, renderUtils]);
-  // Note: isEditing removed from deps to avoid re-processing when exiting edit mode
-  
-  // Handle keyboard events forwarded from YamdDoc
-  useEffect(() => {
-    // Skip if counter is 0 (initial state) or not editing
-    if (keyboardCounter === 0 || !isEditing) return;
-    
-    // Skip if not actually focused (prevent handling stale events after unfocus)
-    if (!isLogicallyFocused.current) return;
-    
-    // Fetch the full state non-reactively to get the event
-    const state = renderUtils.getNodeStateById?.(segmentId);
-    if (!state?.keyboard?.event) return;
-    
-    const event = state.keyboard.event;
-    
-    console.log(`⌨️ SegmentRef [${segmentId}] received keyboard event:`, event);
-    
-    // Determine which field contains the cursor using selection API
-    const selection = window.getSelection();
-    let field = 'linkText'; // default
-    
-    if (selection && selection.anchorNode) {
-      // Check if cursor is inside linkIdRef
-      if (linkIdRef.current && linkIdRef.current.contains(selection.anchorNode)) {
-        field = 'linkId';
-      } else if (linkTextRef.current && linkTextRef.current.contains(selection.anchorNode)) {
-        field = 'linkText';
-      }
-    }
-    
-    console.log(`⌨️ SegmentRef [${segmentId}] determined field: ${field}`);
-    
-    handleKeyDown(event, field);
-    
-  }, [keyboardCounter, segmentId, renderUtils, handleKeyDown]);
-  
   // Handle focus requests
   useEffect(() => {
     // Fetch the full state non-reactively to get the type
@@ -333,6 +276,63 @@ const SegmentRef = ({ segmentId, parentNodeId, globalInfo }) => {
       }
     }
   }, [isEditing, segmentId, parentNodeId, linkTextRef, linkIdRef, handleUnfocus, renderUtils]);
+  
+  // Handle unfocus requests (from clicking other segments)
+  useEffect(() => {
+    // Fetch the full state non-reactively to get the type
+    const state = renderUtils.getNodeStateById?.(segmentId);
+    if (!state?.unfocus) return;
+    
+    // Skip if already processed this event
+    if (unfocusCounter <= state.unfocus.counterProcessed) return;
+    
+    const { type } = state.unfocus;
+    
+    console.log(`🔕 SegmentRef [${segmentId}] received unfocus:`, { counter: unfocusCounter, type, isEditing });
+    
+    // Exit edit mode and mark as not focused (always call handleUnfocus, let it handle the state)
+    handleUnfocus(true, false); // Save changes but don't blur (might not be in DOM)
+    
+    // Mark this unfocus event as processed
+    renderUtils.markUnfocusProcessed?.(segmentId);
+    
+  }, [unfocusCounter, segmentId, handleUnfocus, renderUtils]);
+  // Note: isEditing removed from deps to avoid re-processing when exiting edit mode
+  
+  // Handle keyboard events forwarded from YamdDoc
+  useEffect(() => {
+    // Skip if counter is 0 (initial state) or not editing
+    if (keyboardCounter === 0 || !isEditing) return;
+    
+    // Skip if not actually focused (prevent handling stale events after unfocus)
+    if (!isLogicallyFocused.current) return;
+    
+    // Fetch the full state non-reactively to get the event
+    const state = renderUtils.getNodeStateById?.(segmentId);
+    if (!state?.keyboard?.event) return;
+    
+    const event = state.keyboard.event;
+    
+    console.log(`⌨️ SegmentRef [${segmentId}] received keyboard event:`, event);
+    
+    // Determine which field contains the cursor using selection API
+    const selection = window.getSelection();
+    let field = 'linkText'; // default
+    
+    if (selection && selection.anchorNode) {
+      // Check if cursor is inside linkIdRef
+      if (linkIdRef.current && linkIdRef.current.contains(selection.anchorNode)) {
+        field = 'linkId';
+      } else if (linkTextRef.current && linkTextRef.current.contains(selection.anchorNode)) {
+        field = 'linkText';
+      }
+    }
+    
+    console.log(`⌨️ SegmentRef [${segmentId}] determined field: ${field}`);
+    
+    handleKeyDown(event, field);
+    
+  }, [keyboardCounter, segmentId, renderUtils, handleKeyDown]);
   
   // Cancel edit and restore backup
   const cancelEdit = () => {

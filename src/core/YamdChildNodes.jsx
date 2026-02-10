@@ -3,6 +3,7 @@ import YamdTimeline from '@/components/NodeTimeline.jsx';
 import { LIST_SETTINGS } from '@/config/RenderConfig.js';
 import YamdNode from '@/core/YamdNode.jsx';
 import { useRenderUtilsContext } from '@/core/RenderUtils.ts';
+import { getClosestSegmentForClick } from '@/components/TextUtils.js';
 
 /**
  * Component for rendering children nodes based on childDisplay style from parentInfo
@@ -43,21 +44,45 @@ const YamdChildNodes = ({
     // e.currentTarget is the element the handler is attached to
     // e.target is the actual element that was clicked
     if (e.target !== e.currentTarget) {
-      console.log(`🖱️ YamdChildNodes: click on child element of ${childId}, ignoring`);
+      // click falls onto a child element. child element will handle it
+      // console.log(`[CLICK EVENT]YamdChildNodes: click on child element of ${childId}, ignoring`);
       return;
+    } else {
+      // console.log(`[CLICK EVENT]YamdChildNodes: click on container for child ${childId}, focusing with cursor coords`);
+      
+      // Convert clientX/Y to pageX/Y
+      const cursorPageX = e.clientX + window.scrollX;
+      const cursorPageY = e.clientY + window.scrollY;
+      
+      // Trigger focus on the child node with cursor coordinates
+      renderUtils.triggerFocus?.(childId, 'parentClick', { cursorPageX, cursorPageY });
     }
+  };
+
+  const handleChildGapClick = (e) => {
+    if (!isEditable) return;
     
-    console.log(`🖱️ YamdChildNodes: click on container for child ${childId}, focusing with cursor coords`);
+    const targetEl = e.target instanceof Element ? e.target : null;
+    if (!targetEl) return;
     
-    // Convert clientX/Y to pageX/Y
+    // If click is inside a child wrapper, let that child handle it
+    const clickedChild = targetEl.closest('[data-yamd-child-id]');
+    if (clickedChild) return;
+    
+    const containerEl = e.currentTarget;
+    const childEls = Array.from(containerEl.querySelectorAll('[data-yamd-child-id]'));
+    if (childEls.length === 0) return;
+    
+    const { index } = getClosestSegmentForClick(childEls, e.clientX, e.clientY);
+    const nearestChildEl = childEls[index];
+    const nearestChildId = nearestChildEl?.dataset?.yamdChildId;
+    if (!nearestChildId) return;
+    
     const cursorPageX = e.clientX + window.scrollX;
     const cursorPageY = e.clientY + window.scrollY;
-    
-    // Trigger focus on the child node with cursor coordinates
-    renderUtils.triggerFocus?.(childId, 'parentClick', { cursorPageX, cursorPageY });
+    renderUtils.triggerFocus?.(nearestChildId, 'parentClick', { cursorPageX, cursorPageY });
   };
   
-
   // ordered/unordered list renderer. using divs instead of ul/ol/li
   // supports multiple containerClassName and itemClassName
   const renderChildNodes = (containerClassName, itemClassName, defaultChildClass = 'yamd-list-content') => (
@@ -66,6 +91,7 @@ const YamdChildNodes = ({
         <div 
           key={childId} 
           className={joinClassNames(itemClassName)}
+          data-yamd-child-id={childId}
           onClick={isEditable ? (e) => handleChildContainerClick(e, childId) : undefined}
         >
           <YamdNode
@@ -94,7 +120,10 @@ const YamdChildNodes = ({
     case 'unordered_list':
     case 'ul':
       return (
-        <div style={getContainerStyle()} >
+        <div
+          style={getContainerStyle()}
+          onClick={isEditable ? handleChildGapClick : undefined}
+        >
           {renderChildNodes(['yamd-list', 'yamd-ulist'],
             ['yamd-list-item',
             'yamd-full-width'
@@ -106,7 +135,10 @@ const YamdChildNodes = ({
     case 'ordered_list':
     case 'ol':
       return (
-        <div style={getContainerStyle()}>
+        <div
+          style={getContainerStyle()}
+          onClick={isEditable ? handleChildGapClick : undefined}
+        >
           {renderChildNodes(['yamd-list', 'yamd-olist'],
             [
               'yamd-list-item',
@@ -119,7 +151,10 @@ const YamdChildNodes = ({
     case 'plain_list':
     case 'pl':
       return (
-        <div style={getContainerStyle()}>
+        <div
+          style={getContainerStyle()}
+          onClick={isEditable ? handleChildGapClick : undefined}
+        >
           {renderChildNodes(['yamd-list', 'yamd-plist'], [
             'yamd-list-item',
             'yamd-plist-item',
@@ -133,13 +168,17 @@ const YamdChildNodes = ({
     case 'paragraph':
     case 'p':
       return (
-        <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'flex-start', maxWidth: '100%'}}>
+        <div
+          style={{ display: 'flex', flexDirection: 'row', alignItems: 'flex-start', maxWidth: '100%'}}
+          onClick={isEditable ? handleChildGapClick : undefined}
+        >
           <div style={{ width: shouldAddIndent ? LIST_SETTINGS.child_indent_x : '0px', height: '0px' }} />
           <div className="yamd-paragraphs">
             {childIds.map(childId => (
               <div 
                 key={childId} 
                 className="yamd-paragraph"
+                data-yamd-child-id={childId}
                 onClick={isEditable ? (e) => handleChildContainerClick(e, childId) : undefined}
               >
                 <YamdNode
@@ -166,14 +205,21 @@ const YamdChildNodes = ({
     default:
       // Default: render as tags
       return (
-        <div className="yamd-tags">
+        <div
+          className="yamd-tags"
+          onClick={isEditable ? handleChildGapClick : undefined}
+        >
           {childIds.map(childId => (
-            <YamdNode
+            <div
               key={childId}
-              nodeId={childId} 
-              parentInfo={{ ...parentInfo, childClass: childClass || 'yamd-tag' }}
-              globalInfo={globalInfo}
-            />
+              data-yamd-child-id={childId}
+            >
+              <YamdNode
+                nodeId={childId} 
+                parentInfo={{ ...parentInfo, childClass: childClass || 'yamd-tag' }}
+                globalInfo={globalInfo}
+              />
+            </div>
           ))}
         </div>
       );

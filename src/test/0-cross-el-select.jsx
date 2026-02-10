@@ -1,5 +1,5 @@
 import React from 'react';
-import HtmlRenderPanel from './htmlRender.jsx';
+import { HtmlRender } from '@wwf971/react-comp-misc';
 import './0-cross-el-select.css';
 
 const buildSpanHtml = (text, isEditable, indent = '  ', tagName = 'span') => {
@@ -68,11 +68,11 @@ const CrossElementSelectTest = () => {
   const cases = [...spanCases, ...divCases];
 
   return (
-    <div className="test-cross-select" style={{ maxWidth: '1200px' }}>
+    <div className="test-cross-select test-cross-select-wide">
       <div className="test-cross-select-title">Cross Element Selection</div>
       <div className="test-cross-select-list">
         {cases.map((item) => (
-          <HtmlRenderPanel
+          <HtmlRender
             key={item.title}
             title={item.title}
             rawHtml={item.html}

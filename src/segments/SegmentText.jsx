@@ -204,35 +204,6 @@ const SegmentText = forwardRef(({ segmentId, parentNodeId, className, globalInfo
     
   }, [unfocusCounter, segmentId, renderUtils, hintText]);
   
-  // Handle keyboard events forwarded from YamdDoc (skip on initial mount and duplicates)
-  useUpdateEffect(() => {
-    // Get segment data to check last processed counter
-    const segmentData = renderUtils.getNodeDataById?.(segmentId);
-    const lastProcessedKeyboardCounter = segmentData?.lastProcessedKeyboardCounter || 0;
-    
-    // Skip if we've already processed this counter (persists across remounts)
-    if (keyboardCounter === lastProcessedKeyboardCounter) {
-      console.log(`⏭️ SegmentText [${segmentId}] skipping duplicate keyboard counter: ${keyboardCounter}`);
-      return;
-    }
-    
-    const state = renderUtils.getNodeStateById?.(segmentId);
-    if (!state?.keyboard?.event) return;
-    
-    const { event } = state.keyboard;
-    
-    console.log(`⌨️ SegmentText [${segmentId}] received keyboard event: ${event.key}, counter: ${keyboardCounter}`);
-    
-    // Update last processed counter in atom (persists across remounts)
-    renderUtils.updateNodeData(segmentId, (draft) => {
-      draft.lastProcessedKeyboardCounter = keyboardCounter;
-    });
-    
-    // Call handleKeyDown with synthetic event
-    handleKeyDown(event);
-    
-  }, [keyboardCounter, segmentId, renderUtils, handleKeyDown]);
-
   // Handle key events forwarded from YamdDoc (logical focus model)
   const handleKeyDown = useCallback((e) => {
     // Check if this is a modifier key combination or special key
@@ -558,6 +529,35 @@ const SegmentText = forwardRef(({ segmentId, parentNodeId, className, globalInfo
       textEl.current?.blur();
     }
   }, [segmentId, parentNodeId, renderUtils]);
+
+  // Handle keyboard events forwarded from YamdDoc (skip on initial mount and duplicates)
+  useUpdateEffect(() => {
+    // Get segment data to check last processed counter
+    const segmentData = renderUtils.getNodeDataById?.(segmentId);
+    const lastProcessedKeyboardCounter = segmentData?.lastProcessedKeyboardCounter || 0;
+    
+    // Skip if we've already processed this counter (persists across remounts)
+    if (keyboardCounter === lastProcessedKeyboardCounter) {
+      console.log(`⏭️ SegmentText [${segmentId}] skipping duplicate keyboard counter: ${keyboardCounter}`);
+      return;
+    }
+    
+    const state = renderUtils.getNodeStateById?.(segmentId);
+    if (!state?.keyboard?.event) return;
+    
+    const { event } = state.keyboard;
+    
+    console.log(`⌨️ SegmentText [${segmentId}] received keyboard event: ${event.key}, counter: ${keyboardCounter}`);
+    
+    // Update last processed counter in atom (persists across remounts)
+    renderUtils.updateNodeData(segmentId, (draft) => {
+      draft.lastProcessedKeyboardCounter = keyboardCounter;
+    });
+    
+    // Call handleKeyDown with synthetic event
+    handleKeyDown(event);
+    
+  }, [keyboardCounter, segmentId, renderUtils, handleKeyDown]);
 
   // Handle mouse down/click to report logical focus
   const handleMouseDown = (e) => {

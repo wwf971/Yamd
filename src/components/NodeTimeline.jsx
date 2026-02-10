@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import YamdNode from '@/core/YamdNode.jsx';
 import { TIMELINE_BULLET_SETTINGS } from '@/config/RenderConfig.js';
-import { calcConnectLineHeights, AddTimelineBulletBeforeYamdNode } from '@/components/NodeTimeline.js';
+import { calcConnectLineHeights, AddTimelineBulletBeforeYamdNode } from '@/components/NodeTimelineBullet.jsx';
 
 /**
  * Main YamdTimeline component - renders timeline with bullets and vertical lines
