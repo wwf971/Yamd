@@ -92,9 +92,14 @@
 /* Split View Section */
 .split-view-section {
   flex: 1;
-  display: flex;
-  gap: 15px;
   overflow: hidden;
+  min-height: 0;
+}
+
+.split-view-pane {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
   min-height: 0;
 }
 
@@ -154,6 +159,21 @@
   font-weight: 600;
   border-bottom: 1px solid #229954;
   flex-shrink: 0;
+}
+
+.flattened-panel-status {
+  padding: 6px 8px;
+  background-color: #f0f0f0;
+  border-bottom: 1px solid #ddd;
+  font-family: 'Courier New', Consolas, monospace;
+  font-size: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.flattened-panel-status-row {
+  color: #333;
 }
 
 .flattened-panel-textarea {

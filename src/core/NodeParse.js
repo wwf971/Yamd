@@ -3,7 +3,7 @@ import { immer } from 'zustand/middleware/immer';
 import { nanoid } from 'nanoid';
 import { cloneDeep } from 'lodash';
 
-import { parseNodeStyle } from './markdown-yaml/ParseUtils.js';
+import { parseNodeStyle } from '../markdown-yaml/ParseUtils.js';
 
 // node Parse Store for handling JSON data parsing
 export const useNodeParseStore = create(

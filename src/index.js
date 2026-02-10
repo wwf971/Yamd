@@ -4,7 +4,6 @@ export { default as YamdNode, getNodeClass } from '@/core/YamdNode.jsx';
 export { default as YamdChildNodes } from '@/core/YamdChildNodes.jsx';
 export { default as YamdImageList } from '@/components/NodeImageList.jsx';
 export { default as YamdVideoList } from '@/components/NodeVideoList.jsx';
-export { default as TestYamd } from './TestYamd.jsx';
 
 // Export parsing utilities
 export {

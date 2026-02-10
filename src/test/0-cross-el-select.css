@@ -1,0 +1,37 @@
+.test-cross-select {
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background-color: #fff;
+}
+
+.test-cross-select-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #2c3e50;
+}
+
+.test-cross-select-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.test-cross-select-parent {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid #dedede;
+  border-radius: 4px;
+  background-color: #ffffff;
+}
+
+.test-cross-select-node {
+  padding: 2px 4px;
+  border-radius: 2px;
+  border: 1px solid #e6e6e6;
+  background-color: #f8f8f8;
+  line-height: 1.3;
+}

@@ -3,17 +3,24 @@ import ReactDOM from 'react-dom/client';
 import TestRender from './src/dev/TestRender.jsx';
 import TestEdit from './src/dev/TestEdit.jsx';
 import TestCustom from './src/dev/TestCustom.jsx';
-import { MasterDetail, Tab, SubTab } from '@fugu/layout';
+import CrossElementSelectTest from './src/test/0-cross-el-select.jsx';
+import { MasterDetailInfiLevel, MasterDetailInfiLevelTab as Tab, MasterDetailInfiLevelSubTab as SubTab } from '@wwf971/react-comp-misc';
 
 /**
  * Main App component using slot-based MasterDetail API
  */
 const App = () => {
   return (
-    <MasterDetail
+    <MasterDetailInfiLevel
       title="YAMD Test Suite"
       sidebarWidth="200px"
     >
+      <Tab label="HTML Tests">
+        <SubTab label="Cross Element Select">
+          <CrossElementSelectTest />
+        </SubTab>
+      </Tab>
+      
       <Tab label="Document Renderer">
         <SubTab label="Main Renderer">
             <TestRender />
@@ -31,7 +38,9 @@ const App = () => {
           <TestCustom />
         </SubTab>
       </Tab>
-    </MasterDetail>
+
+
+    </MasterDetailInfiLevel>
   );
 };
 

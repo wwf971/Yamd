@@ -16,7 +16,7 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["src/*"],
-      "@fugu/layout": ["../layout/src/index.js"]
+      "@wwf971/react-comp-misc": ["../react-comp-misc/src/index.js"]
     }
   },
   "include": ["src/**/*", "main.jsx"],

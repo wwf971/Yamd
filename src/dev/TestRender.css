@@ -158,23 +158,35 @@
   color: #666;
 }
 
-/* Rendered document */
-.rendered-document-section {
-  margin-top: 20px;
+/* Flattened + Rendered dual panel */
+.render-dual-section {
+  margin-top: 12px;
+  height: 520px;
 }
 
-.rendered-document-title {
-  margin: 0 0 15px 0;
-  color: #333;
-  font-size: 1.1rem;
+.dual-pane-content {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.doc-data-shell {
+  flex: 1;
+  min-height: 0;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  overflow: hidden;
 }
 
 .rendered-document-container {
-  border: 2px solid #28a745;
-  border-radius: 8px;
-  padding: 20px;
+  flex: 1;
+  min-height: 0;
+  border: 1px solid #28a745;
+  border-radius: 4px;
+  padding: 8px;
   background-color: #f8fff8;
-  min-height: 200px;
+  overflow: auto;
 }
 
 /* Pipeline info */

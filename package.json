@@ -1,14 +1,14 @@
 {
-  "name": "YAMD",
+  "name": "@wwf971/yamd",
   "version": "1.0.0",
   "description": "A renderer/editor for markdown-like documents",
   "main": "src/index.js",
   "type": "module",
   "scripts": {
-    "dev": "webpack serve",
-    "build": "webpack --mode=production",
-    "start": "webpack serve",
-    "build:lib": "webpack --mode=production --config webpack.lib.config.js"
+    "dev": "vite",
+    "build": "vite build",
+    "start": "vite",
+    "preview": "vite preview"
   },
   "keywords": [
     "yaml",
@@ -21,29 +21,20 @@
   "license": "ISC",
   "packageManager": "pnpm@10.12.1",
   "dependencies": {
-    "@fugu/layout": "workspace:*",
+    "@wwf971/react-comp-misc": "workspace:*",
     "immer": "^10.1.1",
     "jotai": "^2.15.1",
     "js-yaml": "^4.1.0",
     "zustand": "^5.0.0"
   },
   "devDependencies": {
-    "@babel/core": "^7.28.0",
-    "@babel/preset-env": "^7.28.0",
-    "@babel/preset-react": "^7.27.1",
-    "@babel/preset-typescript": "^7.26.0",
-    "@types/react": "^19.1.9",
-    "@types/react-dom": "^19.1.7",
-    "babel-loader": "^10.0.0",
-    "css-loader": "^7.1.2",
-    "html-webpack-plugin": "^5.6.3",
-    "react": "^19.1.1",
-    "react-dom": "^19.1.1",
-    "style-loader": "^4.0.0",
+    "@types/react": "^19.2.7",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^4.3.4",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3",
     "typescript": "^5.7.2",
-    "webpack": "^5.101.0",
-    "webpack-cli": "^6.0.1",
-    "webpack-dev-server": "^5.2.2"
+    "vite": "^6.0.5"
   },
   "peerDependencies": {
     "react": ">=18.0.0",

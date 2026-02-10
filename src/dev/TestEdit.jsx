@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import YamdDoc from '@/core/YamdDoc.jsx';
+import { PanelDual } from '@wwf971/react-comp-misc';
 import { useDocStore, docsData } from '@/core/DocStore.js';
 import { loadMathJax } from '@/mathjax/MathJaxLoad.js';
 import { 
@@ -188,63 +189,59 @@ const TestEdit = () => {
 
       {/* Bottom Row: Split View */}
       <div className="split-view-section">
-        {/* Left Panel: Rendered Document */}
-        <div className="rendered-panel">
-          <h3 className="rendered-panel-title">Rendered Document (Editable)</h3>
-          <div className="rendered-panel-content">
-            {docId ? (
-              <YamdDoc 
-                docId={docId}
-                disableRefJump={false} 
-                isEditable={true}
-                onCurrentSegmentChange={setCurrentSegId}
-                onCreate={handleCreate}
-                onDelete={handleDelete}
-              />
-            ) : (
-              <div className="rendered-panel-placeholder">
-                {isLoading ? 'Processing...' : 'No document to display'}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Right Panel: Flattened Data */}
-        <div className="flattened-panel">
-          <h3 className="flattened-panel-title">Flattened Data (Real-time Updates)</h3>
-          <div style={{ 
-            padding: '8px 12px', 
-            backgroundColor: '#f0f0f0', 
-            borderBottom: '1px solid #ddd',
-            fontFamily: 'monospace',
-            fontSize: '12px'
-          }}>
-            <div><strong>Current Segment:</strong> {currentSegmentId || 'none'}</div>
-            <div style={{ marginTop: '4px' }}>
-              <strong>Active Element:</strong> {
-                activeElement 
-                  ? `<${activeElement.tagName.toLowerCase()}${
-                      activeElement.id ? ` id="${activeElement.id}"` : ''
-                    }${
-                      activeElement.className ? ` class="${activeElement.className}"` : ''
-                    }${
-                      activeElement.dataset?.segmentId ? ` data-segment-id="${activeElement.dataset.segmentId}"` : ''
-                    }${
-                      activeElement.dataset?.docId ? ` data-doc-id="${activeElement.dataset.docId}"` : ''
-                    }${
-                      activeElement.contentEditable === 'true' ? ' contenteditable="true"' : ''
-                    }>`
-                  : 'none'
-              }
+        <PanelDual orientation="vertical" initialRatio={0.6}>
+          <div className="split-view-pane rendered-panel">
+            <h3 className="rendered-panel-title">Rendered Document (Editable)</h3>
+            <div className="rendered-panel-content">
+              {docId ? (
+                <YamdDoc
+                  docId={docId}
+                  disableRefJump={false}
+                  isEditable={true}
+                  onCurrentSegmentChange={setCurrentSegId}
+                  onCreate={handleCreate}
+                  onDelete={handleDelete}
+                />
+              ) : (
+                <div className="rendered-panel-placeholder">
+                  {isLoading ? 'Processing...' : 'No document to display'}
+                </div>
+              )}
             </div>
           </div>
-          <DocDataDisplay 
-            key={`${docId}-${refreshTrigger}`}
-            docId={docId} 
-            nodeIds={nodeIds} 
-            isLoading={isLoading}
-          />
-        </div>
+
+          <div className="split-view-pane flattened-panel">
+            <h3 className="flattened-panel-title">Flattened Data (Real-time Updates)</h3>
+            <div className="flattened-panel-status">
+              <div className="flattened-panel-status-row">
+                <strong>Current Segment:</strong> {currentSegmentId || 'none'}
+              </div>
+              <div className="flattened-panel-status-row">
+                <strong>Active Element:</strong> {
+                  activeElement
+                    ? `<${activeElement.tagName.toLowerCase()}${
+                        activeElement.id ? ` id="${activeElement.id}"` : ''
+                      }${
+                        activeElement.className ? ` class="${activeElement.className}"` : ''
+                      }${
+                        activeElement.dataset?.segmentId ? ` data-segment-id="${activeElement.dataset.segmentId}"` : ''
+                      }${
+                        activeElement.dataset?.docId ? ` data-doc-id="${activeElement.dataset.docId}"` : ''
+                      }${
+                        activeElement.contentEditable === 'true' ? ' contenteditable="true"' : ''
+                      }>`
+                    : 'none'
+                }
+              </div>
+            </div>
+            <DocDataDisplay
+              key={`${docId}-${refreshTrigger}`}
+              docId={docId}
+              nodeIds={nodeIds}
+              isLoading={isLoading}
+            />
+          </div>
+        </PanelDual>
       </div>
     </div>
   );
