@@ -115,9 +115,90 @@ const YamdDoc = ({
     }
   }, [isEditable, currentSegId, cancelCurrentSegId]);
 
+  // Helper function to check if click is below the last item
+  const isClickBelowLastItem = useCallback((clickY) => {
+    if (clickY === undefined) return false;
+    
+    // Find the node with the lowest bottom position among all registered nodes
+    let lowestBottom = -Infinity;
+    
+    for (const [nodeId, nodeElement] of nodeRefsMap.current.entries()) {
+      if (nodeElement) {
+        const rect = nodeElement.getBoundingClientRect();
+        if (rect.bottom > lowestBottom) {
+          lowestBottom = rect.bottom;
+        }
+      }
+    }
+    
+    return lowestBottom !== -Infinity && clickY > lowestBottom;
+  }, []);
+
+  // Handle mousedown - check if click is below last item and prevent cursor placement
+  const handleMouseDown = useCallback((e) => {
+    if (!isEditable) return;
+    
+    // If click is below the last item, prevent default to stop cursor placement
+    if (isClickBelowLastItem(e.clientY)) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+  }, [isEditable, isClickBelowLastItem]);
+
   // Handle click on root - check if click lands on root element itself
   const handleClick = useCallback((e, currentRootNodeId) => {
+    // onClick fires on mouse release, not on mouse down.
     if (!isEditable) return;
+    
+    // Check if click is below the last item's bounding rect
+    // If so, unfocus the document instead of focusing any segment
+    if (isClickBelowLastItem(e.clientY)) {
+      e.preventDefault();
+      e.stopPropagation();
+      cancelCurrentSegId();
+      
+      // Clear any selection/cursor that the browser might have created
+      // Use requestAnimationFrame to ensure it happens after browser's default behavior
+      requestAnimationFrame(() => {
+        const selection = window.getSelection();
+        if (selection) {
+          selection.removeAllRanges();
+        }
+      });
+      
+      return;
+    }
+    
+    // Check selection synchronously before any async operations
+    // If selection spans multiple segments, focus on the end segment but preserve selection
+    const selection = window.getSelection();
+    if (selection && selection.rangeCount > 0 && !selection.isCollapsed) {
+      const range = selection.getRangeAt(0);
+      
+      // Find segments for start and end - search across component boundaries
+      const findSegment = (node) => {
+        let current = node.nodeType === Node.TEXT_NODE ? node.parentElement : node;
+        while (current) {
+          if (current.hasAttribute && current.hasAttribute('data-segment-id')) {
+            return current.getAttribute('data-segment-id');
+          }
+          current = current.parentElement;
+        }
+        return null;
+      };
+      
+      const startSegId = findSegment(range.startContainer);
+      const endSegId = findSegment(range.endContainer);
+      
+      // If selection spans multiple segments, focus on the end segment (preserves selection)
+      if (startSegId && endSegId && startSegId !== endSegId) {
+        e.preventDefault();
+        e.stopPropagation();
+        // Focus on the end segment - the focus handler will preserve the selection
+        docsState.triggerFocus(docId, endSegId, 'fromLeft');
+        return;
+      }
+    }
     
     // Check if click landed directly on the root wrapper (between nodes)
     // e.currentTarget is the element the handler is attached to
@@ -130,30 +211,61 @@ const YamdDoc = ({
       // Use the browser's natural selection/cursor position to find the nearest segment
       // This is much more efficient than calculating distances to all segments
       requestAnimationFrame(() => {
+        const selection = window.getSelection();
+        if (!selection || selection.rangeCount === 0) return;
+        
+        // Double-check: if selection is not collapsed, verify it doesn't span multiple segments
+        if (!selection.isCollapsed) {
+          const range = selection.getRangeAt(0);
+          const findSegment = (node) => {
+            let current = node.nodeType === Node.TEXT_NODE ? node.parentElement : node;
+            while (current) {
+              if (current.hasAttribute && current.hasAttribute('data-segment-id')) {
+                return current.getAttribute('data-segment-id');
+              }
+              current = current.parentElement;
+            }
+            return null;
+          };
+          
+          const startSegId = findSegment(range.startContainer);
+          const endSegId = findSegment(range.endContainer);
+          
+          // If selection spans multiple segments, focus on the end segment (preserves selection)
+          if (startSegId && endSegId && startSegId !== endSegId) {
+            docsState.triggerFocus(docId, endSegId, 'fromLeft');
+            return;
+          }
+        }
+        
         const { segId, focusType, isDocumentBoundary, boundaryPosition } = findSegFromSelection(rootElement);
         
         if (segId) {
           docsState.triggerFocus(docId, segId, focusType);
         } else if (isDocumentBoundary && currentRootNodeId) {
           // Click is at document boundary (before first or after last node)
-          // Helper to get node data from Zustand store
           const getNodeData = (nodeId) => {
             const store = useDocStore.getState();
             return store.docNodes?.[docId]?.[nodeId];
           };
           
-          // Find first or last segment in the document tree
-          const boundarySegId = boundaryPosition === 'start'
-            ? getFirstSegInTree(currentRootNodeId, getNodeData)
-            : getLastSegInTree(currentRootNodeId, getNodeData);
-          
-          if (boundarySegId) {
-            docsState.triggerFocus(docId, boundarySegId, focusType);
+          if (boundaryPosition === 'end') {
+            // Click is after the last node - focus the last segment
+            const boundarySegId = getLastSegInTree(currentRootNodeId, getNodeData);
+            if (boundarySegId) {
+              docsState.triggerFocus(docId, boundarySegId, focusType);
+            }
+          } else {
+            // Click is before the first node - focus the first segment
+            const boundarySegId = getFirstSegInTree(currentRootNodeId, getNodeData);
+            if (boundarySegId) {
+              docsState.triggerFocus(docId, boundarySegId, focusType);
+            }
           }
         }
       });
     }
-  }, [docId, isEditable]);
+  }, [docId, isEditable, cancelCurrentSegId]);
 
   // handle reference click from NodeTextRichRef components
   const handleRefClickCallback = useCallback((refData) => {
@@ -311,6 +423,7 @@ const YamdDoc = ({
         suppressContentEditableWarning={isEditable ? true : undefined}
         onKeyDown={handleKeyDown}
         onBlur={handleBlur}
+        onMouseDown={handleMouseDown}
         onClick={(e) => handleClick(e, rootNodeId)}
       >
         

@@ -798,8 +798,6 @@ class DocsBulletState {
     }
   }
 
-
-
   /**
    * Remove all bullet states for a document
    * @param {string} docId - Document ID

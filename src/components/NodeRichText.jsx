@@ -812,8 +812,40 @@ const NodeTextRich = forwardRef(({ nodeId, className, parentInfo, globalInfo = n
 
   // Handle click - focus nearest segment if click lands between segments
   const handleClick = (e) => {
-    console.log(`🖱️ NodeRichText [${nodeId}] click, target:`, e.target, 'textRef:', textRef.current);
+    // console.log(`[🖱️CLICK EVENT] NodeRichText [${nodeId}] click, target:`, e.target, 'textRef:', textRef.current);
     if (!isEditable) return;
+    
+    // Check selection synchronously before any async operations
+    // If selection spans multiple segments, focus on the end segment but preserve selection
+    const selection = window.getSelection();
+    if (selection && selection.rangeCount > 0 && !selection.isCollapsed) {
+      const range = selection.getRangeAt(0);
+      
+      // Find segments for start and end - search across component boundaries
+      // Segment IDs are unique across the entire document
+      const findSegment = (node) => {
+        let current = node.nodeType === Node.TEXT_NODE ? node.parentElement : node;
+        while (current) {
+          if (current.hasAttribute && current.hasAttribute('data-segment-id')) {
+            return current.getAttribute('data-segment-id');
+          }
+          current = current.parentElement;
+        }
+        return null;
+      };
+      
+      const startSegId = findSegment(range.startContainer);
+      const endSegId = findSegment(range.endContainer);
+      
+      // If selection spans multiple segments, focus on the end segment (preserves selection)
+      if (startSegId && endSegId && startSegId !== endSegId) {
+        e.preventDefault();
+        e.stopPropagation();
+        // Focus on the end segment - the focus handler will preserve the selection
+        renderUtils.triggerFocus(endSegId, 'fromLeft');
+        return;
+      }
+    }
     
     // If user was dragging to select text, don't interfere
     if (isDraggingRef.current) {
@@ -835,6 +867,33 @@ const NodeTextRich = forwardRef(({ nodeId, className, parentInfo, globalInfo = n
     
     // Use requestAnimationFrame to ensure we can work with the selection after browser updates
     requestAnimationFrame(() => {
+      // Double-check: if selection is not collapsed, verify it doesn't span multiple segments
+      const selection = window.getSelection();
+      if (selection && selection.rangeCount > 0 && !selection.isCollapsed) {
+        const range = selection.getRangeAt(0);
+        
+        // Find segments for start and end - search across component boundaries
+        const findSegment = (node) => {
+          let current = node.nodeType === Node.TEXT_NODE ? node.parentElement : node;
+          while (current) {
+            if (current.hasAttribute && current.hasAttribute('data-segment-id')) {
+              return current.getAttribute('data-segment-id');
+            }
+            current = current.parentElement;
+          }
+          return null;
+        };
+        
+        const startSegId = findSegment(range.startContainer);
+        const endSegId = findSegment(range.endContainer);
+        
+        // If selection spans multiple segments, focus on the end segment (preserves selection)
+        if (startSegId && endSegId && startSegId !== endSegId) {
+          renderUtils.triggerFocus(endSegId, 'fromLeft');
+          return;
+        }
+      }
+      
       // Get all segment elements
       const segElements = segments.map(segId => 
         textRef.current?.querySelector(`[data-segment-id="${segId}"]`)

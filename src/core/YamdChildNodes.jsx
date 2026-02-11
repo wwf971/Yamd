@@ -45,10 +45,10 @@ const YamdChildNodes = ({
     // e.target is the actual element that was clicked
     if (e.target !== e.currentTarget) {
       // click falls onto a child element. child element will handle it
-      // console.log(`[CLICK EVENT]YamdChildNodes: click on child element of ${childId}, ignoring`);
+      // console.log(`[🖱️CLICK EVENT]YamdChildNodes: click on child element of ${childId}, ignoring`);
       return;
     } else {
-      // console.log(`[CLICK EVENT]YamdChildNodes: click on container for child ${childId}, focusing with cursor coords`);
+      // console.log(`[🖱️CLICK EVENT]YamdChildNodes: click on container for child ${childId}, focusing with cursor coords`);
       
       // Convert clientX/Y to pageX/Y
       const cursorPageX = e.clientX + window.scrollX;

@@ -45,115 +45,93 @@ const YamdNode = React.memo(({ nodeId, parentInfo = null, globalInfo = null }) =
     // Handle special leaf node types first
     if (nodeData.type === 'latex') {
       return (
-        <AddListBulletBeforeNode 
-          childNode={
-            <SegmentLaTeX
-              nodeId={nodeId}
-              parentInfo={parentInfo}
-              globalInfo={globalInfo}
-            />
-          }
-          alignBullet='flex-start'
-        />
+        <AddListBulletBeforeNode>
+          <SegmentLaTeX
+            nodeId={nodeId}
+            parentInfo={parentInfo}
+            globalInfo={globalInfo}
+          />
+        </AddListBulletBeforeNode>
       );
     }
     
     if (nodeData.type === 'image') {
       return (
-        <AddListBulletBeforeNode 
-          childNode={
-            <NodeImage
-              nodeId={nodeId}
-              parentInfo={parentInfo}
-              globalInfo={globalInfo}
-            />
-          }
-          alignBullet='flex-start'
-        />
+        <AddListBulletBeforeNode>
+          <NodeImage
+            nodeId={nodeId}
+            parentInfo={parentInfo}
+            globalInfo={globalInfo}
+          />
+        </AddListBulletBeforeNode>
       );
     }
     
     if (nodeData.type === 'video') {
       return (
-        <AddListBulletBeforeNode 
-          childNode={
-            <NodeVideo
-              nodeId={nodeId}
-              parentInfo={parentInfo}
-              globalInfo={globalInfo}
-            />
-          }
-          alignBullet='flex-start'
-        />
+        <AddListBulletBeforeNode>
+          <NodeVideo
+            nodeId={nodeId}
+            parentInfo={parentInfo}
+            globalInfo={globalInfo}
+          />
+        </AddListBulletBeforeNode>
       );
     }
     
     if (nodeData.type === 'image-list') {
       return (
-        <AddListBulletBeforeNode 
-          childNode={
-            <YamdImageList
-              nodeId={nodeId}
-              parentInfo={parentInfo}
-              globalInfo={globalInfo}
-            />
-          }
-          alignBullet='flex-start'
-        />
+        <AddListBulletBeforeNode>
+          <YamdImageList
+            nodeId={nodeId}
+            parentInfo={parentInfo}
+            globalInfo={globalInfo}
+          />
+        </AddListBulletBeforeNode>
       );
     }
     
     if (nodeData.type === 'video-list') {
       return (
-        <AddListBulletBeforeNode 
-          childNode={
-            <YamdVideoList
-              nodeId={nodeId}
-              parentInfo={parentInfo}
-              globalInfo={globalInfo}
-            />
-          }
-          alignBullet='flex-start'
-        />
+        <AddListBulletBeforeNode>
+          <YamdVideoList
+            nodeId={nodeId}
+            parentInfo={parentInfo}
+            globalInfo={globalInfo}
+          />
+        </AddListBulletBeforeNode>
       );
     }
 
     if (nodeData.type === 'custom') {
       return (
-        <AddListBulletBeforeNode
-          childNode={globalInfo.renderCustomNode(nodeData, parentInfo)}
-          alignBullet='flex-start'
-        />
+        <AddListBulletBeforeNode>
+          {globalInfo.renderCustomNode(nodeData, parentInfo)}
+        </AddListBulletBeforeNode>
       );
     }
     
     switch (selfDisplay) {
     case 'panel':
       return (
-        <AddListBulletBeforeNode
-          childNode={
-            <NodePanel 
-              nodeId={nodeId} 
-              parentInfo={parentInfo}
-              globalInfo={globalInfo} 
-            />
-          }
-          alignBullet='flex-start'
-        />
+        <AddListBulletBeforeNode>
+          <NodePanel 
+            nodeId={nodeId} 
+            parentInfo={parentInfo}
+            globalInfo={globalInfo} 
+          />
+        </AddListBulletBeforeNode>
       );
     
     case 'divider':
       return (
-        <AddListBulletBeforeNode 
-          childNode={
-            <NodeDivider 
-              nodeId={nodeId} 
-              parentInfo={parentInfo}
-              globalInfo={globalInfo} 
-            />
-          }
-          alignBullet='flex-start'
-        />
+        <AddListBulletBeforeNode>
+          <NodeDivider 
+            nodeId={nodeId} 
+            parentInfo={parentInfo}
+            globalInfo={globalInfo} 
+          />
+        </AddListBulletBeforeNode>
       );
     
     case 'key':
@@ -190,16 +168,13 @@ const YamdNode = React.memo(({ nodeId, parentInfo = null, globalInfo = null }) =
           - bb
           - cc
         */
-        <AddListBulletBeforeNode
-          childNode={
-            <ListItem 
-              nodeId={nodeId} 
-              parentInfo={parentInfo}
-              globalInfo={globalInfo} 
-            />
-          }
-          alignBullet='flex-start'
-        />
+        <AddListBulletBeforeNode>
+          <ListItem 
+            nodeId={nodeId} 
+            parentInfo={parentInfo}
+            globalInfo={globalInfo} 
+          />
+        </AddListBulletBeforeNode>
       );
     }
   };

@@ -676,4 +676,12 @@ const SegmentLaTeX = ({ segmentId, parentNodeId, globalInfo }) => {
   );
 };
 
-export default SegmentLaTeX;
+const areEqual = (prevProps, nextProps) => {
+  return (
+    prevProps.segmentId === nextProps.segmentId &&
+    prevProps.parentNodeId === nextProps.parentNodeId &&
+    prevProps.globalInfo === nextProps.globalInfo
+  );
+};
+
+export default React.memo(SegmentLaTeX, areEqual);

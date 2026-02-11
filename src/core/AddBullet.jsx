@@ -70,11 +70,16 @@ const injectIntoParentInfo = (parentInfo, additionalProps) => {
  * @param {string} alignBullet - Bullet alignment ('center', 'flex-start', etc.)
  * @returns {JSX.Element} - Wrapped component with bullet if needed
  */
-export const AddListBulletBeforeNode = React.memo(({ childNode, alignBullet = 'center' }) => {
-  // Extract props from childNode
-  const parentInfo = childNode?.props?.parentInfo;
-  const globalInfo = childNode?.props?.globalInfo;
-  const childId = childNode?.props?.nodeId;
+export const AddListBulletBeforeNode = React.memo(({ childNode, children }) => {
+  const resolvedChild = childNode ?? (React.Children.count(children) === 1 ? React.Children.only(children) : null);
+  if (!React.isValidElement(resolvedChild)) {
+    return null;
+  }
+  
+  // Extract props from child node
+  const parentInfo = resolvedChild?.props?.parentInfo;
+  const globalInfo = resolvedChild?.props?.globalInfo;
+  const childId = resolvedChild?.props?.nodeId;
   
   // Check if we should render bullet
   let shouldRenderBullet = parentInfo?.childDisplay === 'ul' || parentInfo?.childDisplay === 'ol';
@@ -124,14 +129,14 @@ export const AddListBulletBeforeNode = React.memo(({ childNode, alignBullet = 'c
   }), [parentInfo]);
 
   // clone childNode with enhanced parentInfo
-  const enhancedChildNode = React.cloneElement(childNode, {
-    ...childNode.props,
+  const enhancedChildNode = React.cloneElement(resolvedChild, {
+    ...resolvedChild.props,
     parentInfo: childParentInfo,
   });
 
   // AFTER all hooks, check if we should render bullet
   if (!shouldRenderBullet) {
-    return childNode; // Just render childNode without bullet
+    return resolvedChild; // Just render child node without bullet
   }
 
   // Use Jotai result for positioning, fallback to default if no result

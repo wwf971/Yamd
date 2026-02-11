@@ -77,6 +77,33 @@ const ListItem = React.memo(({ nodeId, parentInfo, globalInfo }) => {
   const childDisplay = renderUtils.getChildDisplay(nodeData, false, parentInfo);
   const childClass = nodeData.attr?.childClass;
   const shouldRenderBullet = parentInfo?.childDisplay === 'ul' || parentInfo?.childDisplay === 'ol';
+
+  const THROTTLE_MS = 100; // Minimum time between calculations
+  // Recalculate bullet position when layout changes (e.g., width change wraps text)
+  useEffect(() => {
+    if (!shouldRenderBullet || !nodeId || !docId || !nodeRef.current) return;
+    let rafId = null;
+    let lastCalcTime = 0;
+
+    const observer = new ResizeObserver(() => {
+      if (rafId) cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(() => {
+        const now = Date.now();
+        if (now - lastCalcTime < THROTTLE_MS) return;
+        if (!nodeBulletState.hasAnyBulletReqs(docId, nodeId)) return;
+        lastCalcTime = now;
+        // console.log(`[LAYOUT CHANGE] ListItem [${nodeId}] layout changed, recalculating bullet position`);
+        calcBulletYPos(nodeId, docId, nodeRef, textContentRef, globalInfo);
+      });
+    });
+    
+    observer.observe(nodeRef.current);
+    
+    return () => {
+      if (rafId) cancelAnimationFrame(rafId);
+      observer.disconnect();
+    };
+  }, [shouldRenderBullet, nodeId, docId, globalInfo]);
   
   // Use the utility function to get appropriate CSS class
   const nodeClass = getNodeClass(nodeData, parentInfo) || 'yamd-title-default';
@@ -95,11 +122,11 @@ const ListItem = React.memo(({ nodeId, parentInfo, globalInfo }) => {
     // e.currentTarget is the element the handler is attached to
     // e.target is the actual element that was clicked
     if (e.target !== e.currentTarget) {
-      console.log(`🖱️ ListItem [${nodeId}] click on child element, ignoring`);
+      console.log(`[🖱️CLICK EVENT] ListItem [${nodeId}] click on child element, ignoring`);
       return;
     }
     
-    console.log(`🖱️ ListItem [${nodeId}] click on wrapper, focusing rich text node with cursor coords`);
+    console.log(`[🖱️CLICK EVENT] ListItem [${nodeId}] click on wrapper, focusing rich text node with cursor coords`);
     
     // Convert clientX/Y to pageX/Y
     const cursorPageX = e.clientX + window.scrollX;

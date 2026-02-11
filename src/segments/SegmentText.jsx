@@ -21,6 +21,177 @@ function useUpdateEffect(effect, deps) {
 }
 
 /**
+ * Handle programmatic focus on a text segment
+ * @param {Object} params - Parameters object
+ * @param {Object} params.textEl - Reference to the text element (ref object with .current property)
+ * @param {string} params.segmentId - ID of the segment
+ * @param {Object} params.state - Node state from renderUtils
+ * @param {number} params.focusCounter - Current focus counter value
+ * @param {Object} params.renderUtils - Render utils object
+ * @param {Object} params.isEmpty - Ref to track if segment is empty (ref object with .current property)
+ * @param {Object} params.isChildPseudo - Ref to track pseudo mode (ref object with .current property)
+ * @param {Object} params.isLogicallyFocused - Ref to track logical focus state (ref object with .current property)
+ */
+function handleProgramaticFocus({ textEl, segmentId, state, focusCounter, renderUtils, isEmpty, isChildPseudo, isLogicallyFocused }) {
+  if (!textEl.current) return;
+  
+  if (!state?.focus) return;
+  
+  // Skip if already processed this event
+  if (focusCounter <= state.focus.counterProcessed) return;
+  
+  const { type, cursorPageX, cursorPos, isChildPseudo: isChildPseudoFromFocus } = state.focus;
+  
+  console.log(`🎯 SegmentText [${segmentId}] received FOCUS from ${type}, isChildPseudo=${isChildPseudoFromFocus}, cursorPos=${cursorPos}`);
+  console.log(`🎯 Current DOM content before focus: "${textEl.current?.textContent}", isEmpty=${isEmpty.current}`);
+  
+  // Check if there's a cross-segment selection - if so, preserve it by skipping cursor positioning
+  const selection = window.getSelection();
+  let hasCrossSegmentSelection = false;
+  if (selection && selection.rangeCount > 0 && !selection.isCollapsed) {
+    const range = selection.getRangeAt(0);
+    const findSegment = (node) => {
+      let current = node.nodeType === Node.TEXT_NODE ? node.parentElement : node;
+      while (current) {
+        if (current.hasAttribute && current.hasAttribute('data-segment-id')) {
+          return current.getAttribute('data-segment-id');
+        }
+        current = current.parentElement;
+      }
+      return null;
+    };
+    
+    const startSegId = findSegment(range.startContainer);
+    const endSegId = findSegment(range.endContainer);
+    
+    // If selection spans multiple segments, preserve it
+    if (startSegId && endSegId && startSegId !== endSegId) {
+      hasCrossSegmentSelection = true;
+      console.log(`🎯 SegmentText [${segmentId}] preserving cross-segment selection, skipping cursor positioning`);
+    }
+  }
+  
+  // Mark as logically focused
+  isLogicallyFocused.current = true;
+  
+  // Store isChildPseudo state
+  if (isChildPseudoFromFocus === true) {
+    isChildPseudo.current = true;
+    console.log(`🎭 SegmentText [${segmentId}] entering pseudo mode`);
+  }
+  
+  // Apply focus styles
+  textEl.current.style.backgroundColor = '#fff3cd';
+  textEl.current.style.border = '1px solid #ffc107';
+  
+  // Report to parent that this segment is now focused
+  renderUtils.setCurrentSegId?.(segmentId);
+  
+  // If there's a cross-segment selection, don't touch the cursor/selection
+  if (hasCrossSegmentSelection) {
+    // Mark this focus event as processed
+    renderUtils.markFocusProcessed?.(segmentId);
+    return;
+  }
+  
+  // Keep hint text visible when focused on empty segment (acts as placeholder)
+  // It will be cleared when user starts typing
+  
+  if(isEmpty.current) {
+    setCursorToBegin(textEl.current);
+    return;
+  }
+
+  // If specific cursor position is provided, use it
+  if (typeof cursorPos === 'number') {
+    console.log(`🎯 SegmentText [${segmentId}] setting cursor to position ${cursorPos}`);
+    setCursorPos(textEl.current, cursorPos);
+    return;
+  }
+
+  // Set cursor position based on focus type (theoretical focus - no .focus() call)
+  // For empty segments, position based on focus type (beginning or end of hint text)
+  if (type === 'fromLeft') {
+    // Coming from left segment - position at beginning
+    setCursorToBegin(textEl.current);
+  } else if (type === 'fromRight') {
+    // Coming from right segment - position at end
+    setCursorToEnd(textEl.current)
+  } else if (type === 'fromUp' && cursorPageX !== undefined) {
+    // Coming from above - find closest horizontal position
+    const closestPos = getClosestCharIndex(textEl.current, cursorPageX, 'backward');
+    setCursorPos(textEl.current, closestPos);
+  } else if (type === 'fromDown' && cursorPageX !== undefined) {
+    // Coming from below - find closest horizontal position
+    const closestPos = getClosestCharIndex(textEl.current, cursorPageX, 'forward');
+    setCursorPos(textEl.current, closestPos);
+  } else {
+    // Default - position at beginning
+    setCursorToBegin(textEl.current);
+  }
+  
+  // Mark this focus event as processed
+  renderUtils.markFocusProcessed?.(segmentId);
+}
+
+/**
+ * Handle programmatic unfocus on a text segment
+ * @param {Object} params - Parameters object
+ * @param {Object} params.textEl - Reference to the text element (ref object with .current property)
+ * @param {string} params.segmentId - ID of the segment
+ * @param {Object} params.state - Node state from renderUtils
+ * @param {number} params.unfocusCounter - Current unfocus counter value
+ * @param {Object} params.renderUtils - Render utils object
+ * @param {Object} params.isLogicallyFocused - Ref to track logical focus state (ref object with .current property)
+ * @param {Object} params.isChildPseudo - Ref to track pseudo mode (ref object with .current property)
+ * @param {Object} params.isEmpty - Ref to track if segment is empty (ref object with .current property)
+ * @param {Object} params.isShowingHintText - Ref to track if hint text is showing (ref object with .current property)
+ * @param {string} params.text - Current text content of the segment
+ * @param {string} params.hintText - Hint text to show when segment is empty
+ */
+function handleProgramaticUnfocus({ textEl, segmentId, state, unfocusCounter, renderUtils, isLogicallyFocused, isChildPseudo, isEmpty, isShowingHintText, text, hintText }) {
+  if (!state?.unfocus) return;
+  
+  // Skip if already processed this event
+  if (unfocusCounter <= state.unfocus.counterProcessed) return;
+  
+  const { type } = state.unfocus;
+  
+  console.log(`🔕 SegmentText [${segmentId}] received UNFOCUS (${type})`);
+  
+  // Mark as not focused
+  isLogicallyFocused.current = false;
+  
+  // Clear pseudo mode on unfocus
+  if (isChildPseudo.current) {
+    console.log(`🎭 SegmentText [${segmentId}] clearing pseudo mode on unfocus`);
+    isChildPseudo.current = false;
+  }
+  
+  // Remove focus styles
+  if (textEl.current) {
+    textEl.current.style.backgroundColor = 'transparent';
+    textEl.current.style.border = '1px solid transparent';
+    
+    // Restore hint text if segment is actually empty (check data, not DOM)
+    // Only show hint if the actual text data is empty
+    if (text === '') {
+      textEl.current.textContent = hintText;
+      textEl.current.style.color = '#ccc';
+      textEl.current.style.fontStyle = 'italic';
+      isEmpty.current = true;
+      isShowingHintText.current = true;
+    } else {
+      // Not empty - ensure hint text flag is cleared
+      isShowingHintText.current = false;
+    }
+  }
+  
+  // Mark this unfocus event as processed
+  renderUtils.markUnfocusProcessed?.(segmentId);
+}
+
+/**
  * Text segment renderer for rich text nodes
  * This is a segment component that lives within a NodeRichText parent
  * Supports inline editing and triggers unfocus requests for navigation
@@ -87,122 +258,39 @@ const SegmentText = forwardRef(({ segmentId, parentNodeId, className, globalInfo
 
   // Handle focus requests from parent NodeRichText
   useEffect(() => {
-    if (!textEl.current) return;
-    
     // Fetch the full state non-reactively to get the type and cursorPageX
     const state = renderUtils.getNodeStateById?.(segmentId);
-    if (!state?.focus) return;
-    
-    // Skip if already processed this event
-    if (focusCounter <= state.focus.counterProcessed) return;
-    
-    const { type, cursorPageX, cursorPos, isChildPseudo: isChildPseudoFromFocus } = state.focus;
-    
-    console.log(`🎯 SegmentText [${segmentId}] received FOCUS from ${type}, isChildPseudo=${isChildPseudoFromFocus}, cursorPos=${cursorPos}`);
-    console.log(`🎯 Current DOM content before focus: "${textEl.current?.textContent}", isEmpty=${isEmpty.current}`);
-    
-    // Mark as logically focused
-    isLogicallyFocused.current = true;
-    
-    // Store isChildPseudo state
-    if (isChildPseudoFromFocus === true) {
-      isChildPseudo.current = true;
-      console.log(`🎭 SegmentText [${segmentId}] entering pseudo mode`);
-    }
-    
-    // Apply focus styles
-    textEl.current.style.backgroundColor = '#fff3cd';
-    textEl.current.style.border = '1px solid #ffc107';
-    
-    // Report to parent that this segment is now focused
-    renderUtils.setCurrentSegId?.(segmentId);
-    
-    // Keep hint text visible when focused on empty segment (acts as placeholder)
-    // It will be cleared when user starts typing
-    
-    if(isEmpty.current) {
-      setCursorToBegin(textEl.current);
-      return;
-    }
-
-    // If specific cursor position is provided, use it
-    if (typeof cursorPos === 'number') {
-      console.log(`🎯 SegmentText [${segmentId}] setting cursor to position ${cursorPos}`);
-      setCursorPos(textEl.current, cursorPos);
-      return;
-    }
-
-    // Set cursor position based on focus type (theoretical focus - no .focus() call)
-    // For empty segments, position based on focus type (beginning or end of hint text)
-    if (type === 'fromLeft') {
-      // Coming from left segment - position at beginning
-      setCursorToBegin(textEl.current);
-    } else if (type === 'fromRight') {
-      // Coming from right segment - position at end
-      setCursorToEnd(textEl.current)
-    } else if (type === 'fromUp' && cursorPageX !== undefined) {
-      // Coming from above - find closest horizontal position
-      const closestPos = getClosestCharIndex(textEl.current, cursorPageX, 'backward');
-      setCursorPos(textEl.current, closestPos);
-    } else if (type === 'fromDown' && cursorPageX !== undefined) {
-      // Coming from below - find closest horizontal position
-      const closestPos = getClosestCharIndex(textEl.current, cursorPageX, 'forward');
-      setCursorPos(textEl.current, closestPos);
-    } else {
-      // Default - position at beginning
-      setCursorToBegin(textEl.current);
-    }
-    
-    // Mark this focus event as processed
-    renderUtils.markFocusProcessed?.(segmentId);
-    
+    handleProgramaticFocus({
+      textEl,
+      segmentId,
+      state,
+      focusCounter,
+      renderUtils,
+      isEmpty,
+      isChildPseudo,
+      isLogicallyFocused
+    });
   }, [focusCounter, segmentId, renderUtils]);
   
   // Handle unfocus requests (from clicking other segments)
   useEffect(() => {
     // Fetch the full state non-reactively to get the type
     const state = renderUtils.getNodeStateById?.(segmentId);
-    if (!state?.unfocus) return;
     
-    // Skip if already processed this event
-    if (unfocusCounter <= state.unfocus.counterProcessed) return;
-    
-    const { type } = state.unfocus;
-    
-    console.log(`🔕 SegmentText [${segmentId}] received UNFOCUS (${type})`);
-    
-    // Mark as not focused
-    isLogicallyFocused.current = false;
-    
-    // Clear pseudo mode on unfocus
-    if (isChildPseudo.current) {
-      console.log(`🎭 SegmentText [${segmentId}] clearing pseudo mode on unfocus`);
-      isChildPseudo.current = false;
-    }
-    
-    // Remove focus styles
-    if (textEl.current) {
-      textEl.current.style.backgroundColor = 'transparent';
-      textEl.current.style.border = '1px solid transparent';
-      
-      // Restore hint text if segment is actually empty (check data, not DOM)
-      // Only show hint if the actual text data is empty
-      if (text === '') {
-        textEl.current.textContent = hintText;
-        textEl.current.style.color = '#ccc';
-        textEl.current.style.fontStyle = 'italic';
-        isEmpty.current = true;
-        isShowingHintText.current = true;
-      } else {
-        // Not empty - ensure hint text flag is cleared
-        isShowingHintText.current = false;
-      }
-    }
-    
-    // Mark this unfocus event as processed
-    renderUtils.markUnfocusProcessed?.(segmentId);
-    
-  }, [unfocusCounter, segmentId, renderUtils, hintText]);
+    handleProgramaticUnfocus({
+      textEl,
+      segmentId,
+      state,
+      unfocusCounter,
+      renderUtils,
+      isLogicallyFocused,
+      isChildPseudo,
+      isEmpty,
+      isShowingHintText,
+      text,
+      hintText
+    });
+  }, [unfocusCounter, segmentId, renderUtils, hintText, text]);
   
   // Handle key events forwarded from YamdDoc (logical focus model)
   const handleKeyDown = useCallback((e) => {
@@ -562,6 +650,10 @@ const SegmentText = forwardRef(({ segmentId, parentNodeId, className, globalInfo
   // Handle mouse down/click to report logical focus
   const handleMouseDown = (e) => {
     if (!finalIsEditable) return;
+    
+    // Don't check for cross-selection here - let the browser handle selection updates
+    // The click handler (in parent components) will check for cross-selection on mouse up
+    // This allows clicks to proceed normally and collapse selections when clicking elsewhere
     
     // Log cursor position after click
     requestAnimationFrame(() => {
