@@ -7,7 +7,7 @@ import React from 'react';
 import NodeWrapper from '@/custom/NodeWrapper.jsx';
 
 /**
- * Handle reference click from NodeTextRichRef components
+ * Handle reference click from SegmentsRef components
  * @param {object} refData - Reference data containing refId, targetId, sourceElement
  * @param {object} containerRef - Reference to the container element
  * @param {function} setRefState - Function to update reference state
@@ -58,7 +58,7 @@ export const handleRefClick = (refData, containerRef, setRefState) => {
 };
 
 /**
- * Handle bibliography click from NodeTextRichBib components
+ * Handle bibliography click from NodeRichTextBib components
  * @param {object} bibData - Bibliography data containing bibId, sourceElement
  * @param {object} containerRef - Reference to the container element
  * @param {function} setRefState - Function to update reference state

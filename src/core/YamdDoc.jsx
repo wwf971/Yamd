@@ -1,7 +1,7 @@
 import React, { useState, useRef, useCallback, useMemo, useEffect, useLayoutEffect } from 'react';
 import { useAtom } from 'jotai';
 import YamdNode from '@/core/YamdNode.jsx';
-import YamdChildNodes from '@/core/YamdChildNodes.jsx';
+import Children from '@/core/Children.jsx';
 import YamdRefHandler from '@/components/NodeRefHandler.jsx';
 import YamdBibsList from '@/components/NodeBibsList.jsx';
 import NodeWrapper from '@/custom/NodeWrapper.jsx';
@@ -94,11 +94,6 @@ const YamdDoc = ({
       onCurrentSegmentChange(null);
     }
   }, [isEditable, docId, onCurrentSegmentChange]);
-  
-  // Handle keyboard events at root level and forward to focused segment
-  const handleKeyDown = useCallback((e) => {
-    handleRootKeyDown(e, isEditable, currentSegId, docId);
-  }, [isEditable, currentSegId, docId]);
 
   // Handle blur events on root - unfocus current segment when clicking outside
   const handleBlur = useCallback((e) => {
@@ -267,12 +262,12 @@ const YamdDoc = ({
     }
   }, [docId, isEditable, cancelCurrentSegId]);
 
-  // handle reference click from NodeTextRichRef components
+  // handle reference click from SegmentsRef components
   const handleRefClickCallback = useCallback((refData) => {
     handleRefClick(refData, containerRef, setRefState);
   }, []);
 
-  // handle bibliography click from NodeTextRichBib components
+  // handle bibliography click from NodeRichTextBib components
   const handleBibClickCallback = useCallback((bibData) => {
     handleBibClick(bibData, containerRef, setRefState, disableRefJump, disableBibsList);
   }, [disableRefJump, disableBibsList]);
@@ -313,9 +308,10 @@ const YamdDoc = ({
        * Render custom node - calls user-provided custom node renderer wrapped in NodeWrapper
        * @param {object} nodeData - The node data with type='custom' and customType
        * @param {object} parentInfo - Parent context information
+       * @param {object} globalInfo - Global info object
        * @returns {React.Element} Rendered custom node component
        */
-      renderCustomNode: (nodeData, parentInfo) => {
+      renderCustomNode: (nodeData, parentInfo, globalInfo) => {
         if (!customNodeRenderer) {
           return <div className="yamd-error">No custom node renderer provided</div>;
         }
@@ -374,7 +370,7 @@ const YamdDoc = ({
     firstChildRef = null
   }) => {
     return (
-      <YamdChildNodes
+      <Children
         childIds={childIds}
         shouldAddIndent={shouldAddIndent}
         parentInfo={parentInfo}
@@ -400,6 +396,33 @@ const YamdDoc = ({
     }), 
     [registerNodeRef, renderChildNodes, isEditable, docId, setCurrentSegId, cancelCurrentSegId, onCreate, onDelete]
   );
+
+  // Handle keyboard events at root level
+  const handleKeyDown = useCallback((e) => {
+    // Handle Tab/Shift+Tab at root level for indent/outdent (node-level operation)
+    // This is more appropriate than forwarding to segments since indent/outdent affects node structure
+    if (e.key === 'Tab' && isEditable && currentSegId) {
+      e.preventDefault();
+      
+      // Get the node ID from the current segment
+      const segmentData = docsData.getAtomValue(docsData.getNodeData(docId, currentSegId));
+      const nodeId = segmentData?.parentId;
+      
+      if (nodeId) {
+        if (e.shiftKey) {
+          console.log(`🔙 YamdDoc: Tab+Shift pressed - outdenting node ${nodeId}`);
+          renderUtilsContextValue.outdentNode?.(nodeId);
+        } else {
+          console.log(`➡️ YamdDoc: Tab pressed - indenting node ${nodeId}`);
+          renderUtilsContextValue.indentNode?.(nodeId);
+        }
+      }
+      return;
+    }
+    
+    // Forward other keyboard events to focused segment
+    handleRootKeyDown(e, isEditable, currentSegId, docId);
+  }, [isEditable, currentSegId, docId, renderUtilsContextValue]);
 
   // Get document data from Jotai atoms
   const [rootNodeId] = useAtom(docsData.getRootNodeId(docId));

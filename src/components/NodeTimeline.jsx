@@ -5,7 +5,7 @@ import { calcConnectLineHeights, AddTimelineBulletBeforeYamdNode } from '@/compo
 
 /**
  * Main YamdTimeline component - renders timeline with bullets and vertical lines
- * Similar structure to YamdChildNodes but with timeline-specific bullet rendering
+ * Similar structure to Children but with timeline-specific bullet rendering
  */
 const YamdTimeline = ({ childIds, globalInfo, parentInfo }) => {
   const [lineHeights, setLineHeights] = useState([]);
@@ -55,7 +55,7 @@ const YamdTimeline = ({ childIds, globalInfo, parentInfo }) => {
     );
   });
 
-  // Render children similar to YamdChildNodes but with timeline bullets
+  // Render children similar to Children but with timeline bullets
   const renderChildNodes = () => (
     <div className="yamd-timeline" style={{ position: 'relative' }}>
       {/* Render timeline items */}

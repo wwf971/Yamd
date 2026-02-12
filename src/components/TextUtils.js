@@ -89,6 +89,31 @@ export const setCursorPos = (element, position) => {
 };
 
 /**
+ * Set selection range in a contentEditable element
+ * @param {HTMLElement} element - The contentEditable element
+ * @param {number} startPos - The start position of the selection
+ * @param {number} endPos - The end position of the selection
+ */
+export const setSelectionRange = (element, startPos, endPos) => {
+  if (!element) return;
+  
+  const range = document.createRange();
+  const sel = window.getSelection();
+  
+  const textNode = element.firstChild;
+  if (textNode && textNode.nodeType === Node.TEXT_NODE) {
+    const textLength = textNode.textContent?.length || 0;
+    const safeStart = Math.min(startPos, textLength);
+    const safeEnd = Math.min(endPos, textLength);
+    
+    range.setStart(textNode, safeStart);
+    range.setEnd(textNode, safeEnd);
+    sel?.removeAllRanges();
+    sel?.addRange(range);
+  }
+};
+
+/**
  * Set cursor to the end of a contentEditable element
  * @param {HTMLElement} element - The contentEditable element
  */

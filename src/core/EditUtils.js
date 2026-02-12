@@ -1,148 +1,234 @@
 /**
  * EditUtils - Functions for editing the document structure
- * These functions modify the flattened docData structure to perform operations like indent/outdent
+ * Core logic for indent/outdent operations that work with static node data.
+ * These functions are used by RenderUtils.ts which adapts them to work with Jotai atoms.
  */
-
-/**
- * Outdent a node - move it up one level in the hierarchy
- * Makes the node a child of its parent's parent, positioned after the original parent
- * 
- * @param {string} nodeId - ID of the node to outdent
- * @param {object} docData - Flattened document data with nodes, rootNodeId, etc.
- * @returns {object} - {code: number, message?: string, data?: object}
- */
-export function outdentNode(nodeId, docData) {
-  // Validate input
-  if (!nodeId || !docData || !docData.nodes) {
-    return { code: -1, message: 'Invalid input: nodeId and docData.nodes required' };
-  }
-
-  const nodes = docData.nodes;
-  const targetNode = nodes[nodeId];
-  
-  if (!targetNode) {
-    return { code: -1, message: `Node ${nodeId} not found` };
-  }
-
-  if (!targetNode.parentId) {
-    return { code: -1, message: 'Cannot outdent root node - it has no parent' };
-  }
-
-  const parentNode = nodes[targetNode.parentId];
-  if (!parentNode) {
-    return { code: -1, message: `Parent node ${targetNode.parentId} not found` };
-  }
-
-  if (!parentNode.parentId) {
-    return { code: -1, message: 'Cannot outdent - parent is already at root level' };
-  }
-
-  const grandparentNode = nodes[parentNode.parentId];
-  if (!grandparentNode) {
-    return { code: -1, message: `Grandparent node ${parentNode.parentId} not found` };
-  }
-
-  // Create a deep copy of docData to avoid mutating the original
-  const newDocData = JSON.parse(JSON.stringify(docData));
-  const newNodes = newDocData.nodes;
-
-  // Step 1: Remove node from its current parent's children array
-  const newParentNode = newNodes[targetNode.parentId];
-  const nodeIndex = newParentNode.children.indexOf(nodeId);
-  if (nodeIndex === -1) {
-    return { code: -1, message: 'Node not found in parent\'s children array' };
-  }
-  newParentNode.children.splice(nodeIndex, 1);
-
-  // Step 2: Update the target node's parentId to point to grandparent
-  const newTargetNode = newNodes[nodeId];
-  newTargetNode.parentId = parentNode.parentId;
-
-  // Step 3: Insert node into grandparent's children array, right after the original parent
-  const newGrandparentNode = newNodes[parentNode.parentId];
-  const parentIndex = newGrandparentNode.children.indexOf(targetNode.parentId);
-  if (parentIndex === -1) {
-    return { code: -1, message: 'Parent not found in grandparent\'s children array' };
-  }
-  
-  // Insert after the parent (parentIndex + 1)
-  newGrandparentNode.children.splice(parentIndex + 1, 0, nodeId);
-
-  return { 
-    code: 0, 
-    message: `Node ${nodeId} outdented successfully`, 
-    data: newDocData 
-  };
-}
 
 /**
  * Indent a node - move it down one level in the hierarchy
  * Makes the node a child of its previous sibling
  * 
  * @param {string} nodeId - ID of the node to indent
- * @param {object} docData - Flattened document data with nodes, rootNodeId, etc.
- * @returns {object} - {code: number, message?: string, data?: object}
+ * @param {object} nodes - Object mapping nodeId to node data { [nodeId]: nodeData }
+ * @returns {object} - {code: number, message?: string, changes?: Array<{nodeId, updates}>}
  */
-export function indentNode(nodeId, docData) {
-  // Validate input
-  if (!nodeId || !docData || !docData.nodes) {
-    return { code: -1, message: 'Invalid input: nodeId and docData.nodes required' };
-  }
-
-  const nodes = docData.nodes;
+export function indentNode(nodeId, nodes) {
   const targetNode = nodes[nodeId];
+  if (!targetNode || !targetNode.parentId) {
+    return { code: -1, message: 'Cannot indent - node has no parent' };
+  }
   
-  if (!targetNode) {
-    return { code: -1, message: `Node ${nodeId} not found` };
-  }
-
-  if (!targetNode.parentId) {
-    return { code: -1, message: 'Cannot indent root node - it has no parent' };
-  }
-
   const parentNode = nodes[targetNode.parentId];
-  if (!parentNode) {
-    return { code: -1, message: `Parent node ${targetNode.parentId} not found` };
+  if (!parentNode || !parentNode.children) {
+    return { code: -1, message: 'Cannot indent - parent node not found or has no children' };
   }
-
-  // Find the node's position in parent's children array
+  
   const nodeIndex = parentNode.children.indexOf(nodeId);
   if (nodeIndex === -1) {
-    return { code: -1, message: 'Node not found in parent\'s children array' };
+    return { code: -1, message: 'Cannot indent - node not found in parent\'s children array' };
   }
-
+  
   if (nodeIndex === 0) {
     return { code: -1, message: 'Cannot indent - node is the first child (no previous sibling)' };
   }
 
-  // Get the previous sibling (which will become the new parent)
   const newParentId = parentNode.children[nodeIndex - 1];
   const newParentNode = nodes[newParentId];
+  // Allow indenting under any node that can have children (not just text nodes)
+  // This allows indenting under list items, sections, etc.
+
+  // Get the node's children before moving it
+  const nodeChildren = targetNode.children || [];
+
+  // Build list of changes to apply
+  const changes = [];
+
+  // Change 1: Remove node from current parent's children
+  changes.push({
+    nodeId: targetNode.parentId,
+    updates: (draft) => {
+      if (draft && draft.children) {
+        const idx = draft.children.indexOf(nodeId);
+        if (idx !== -1) {
+          draft.children.splice(idx, 1);
+        }
+      }
+    }
+  });
+
+  // Change 2: Update parentId for all of the node's children (they become siblings of the indented node)
+  nodeChildren.forEach((childId) => {
+    changes.push({
+      nodeId: childId,
+      updates: (draft) => {
+        if (draft) {
+          draft.parentId = newParentId;
+        }
+      }
+    });
+  });
+
+  // Change 3: Update node's parentId and clear its children
+  changes.push({
+    nodeId: nodeId,
+    updates: (draft) => {
+      if (draft) {
+        draft.parentId = newParentId;
+        draft.children = []; // Clear children since they're now siblings
+      }
+    }
+  });
+
+  // Change 4: Add node and its children to previous sibling's children
+  changes.push({
+    nodeId: newParentId,
+    updates: (draft) => {
+      if (draft) {
+        if (!draft.children) {
+          draft.children = [];
+        }
+        // Add the indented node first, then its former children (they become siblings of the indented node)
+        // This maintains the original order: the node appears before its former children
+        draft.children.push(nodeId, ...nodeChildren);
+        
+        // Set default childDisplay to 'ul' if not already set
+        if (!draft.attr) {
+          draft.attr = {};
+        }
+        if (!draft.attr.childDisplay) {
+          draft.attr.childDisplay = 'ul';
+        }
+      }
+    }
+  });
+
+  return {
+    code: 0,
+    message: `Node ${nodeId} indented under ${newParentId}`,
+    data: { prevSiblingId: newParentId, nodeChildrenCount: nodeChildren.length },
+    changes
+  };
+}
+
+/**
+ * Outdent a node - move it up one level in the hierarchy
+ * Makes the node a child of its parent's parent, positioned after the original parent
+ * 
+ * @param {string} nodeId - ID of the node to outdent
+ * @param {object} nodes - Object mapping nodeId to node data { [nodeId]: nodeData }
+ * @returns {object} - {code: number, message?: string, changes?: Array<{nodeId, updates}>}
+ */
+export function outdentNode(nodeId, nodes) {
+  const targetNode = nodes[nodeId];
+  if (!targetNode || !targetNode.parentId) {
+    return { code: -1, message: 'Cannot outdent - node has no parent' };
+  }
   
-  if (!newParentNode) {
-    return { code: -1, message: `New parent node ${newParentId} not found` };
+  const parentNode = nodes[targetNode.parentId];
+  if (!parentNode) {
+    return { code: -1, message: `Cannot outdent - parent node ${targetNode.parentId} not found` };
+  }
+  
+  // Cannot outdent if parent is root (no grandparent)
+  if (!parentNode.parentId) {
+    return { code: -1, message: 'Cannot outdent - parent is root node (no grandparent)' };
+  }
+  
+  const grandparentNode = nodes[parentNode.parentId];
+  const siblings = parentNode.children || [];
+  const currentIndex = siblings.indexOf(nodeId);
+  
+  // Capture the parent's index in grandparent's children BEFORE making any changes
+  const parentIndexInGrandparent = grandparentNode.children.indexOf(targetNode.parentId);
+  if (parentIndexInGrandparent === -1) {
+    return { code: -1, message: 'Parent not found in grandparent\'s children array' };
   }
 
-  // Create a deep copy of docData to avoid mutating the original
-  const newDocData = JSON.parse(JSON.stringify(docData));
-  const newNodes = newDocData.nodes;
+  // Get all siblings after the current node (they will become children of the outdented node)
+  const followingSiblings = siblings.slice(currentIndex + 1);
 
-  // Step 1: Remove node from its current parent's children array
-  const currentParentNode = newNodes[targetNode.parentId];
-  currentParentNode.children.splice(nodeIndex, 1);
+  // Build list of changes to apply
+  const changes = [];
 
-  // Step 2: Update the target node's parentId to point to the new parent (previous sibling)
-  const newTargetNode = newNodes[nodeId];
-  newTargetNode.parentId = newParentId;
+  // Change 1: Remove node and all following siblings from parent's children
+  changes.push({
+    nodeId: targetNode.parentId,
+    updates: (draft) => {
+      if (draft && draft.children) {
+        // Remove the node and all following siblings
+        const idx = draft.children.indexOf(nodeId);
+        if (idx !== -1) {
+          draft.children.splice(idx, followingSiblings.length + 1);
+        }
+      }
+    }
+  });
 
-  // Step 3: Add node to the new parent's children array (at the end)
-  const actualNewParentNode = newNodes[newParentId];
-  actualNewParentNode.children.push(nodeId);
+  // Change 2: Update following siblings' parentId to the outdented node
+  followingSiblings.forEach((siblingId) => {
+    changes.push({
+      nodeId: siblingId,
+      updates: (draft) => {
+        if (draft) {
+          draft.parentId = nodeId;
+        }
+      }
+    });
+  });
 
-  return { 
-    code: 0, 
-    message: `Node ${nodeId} indented successfully`, 
-    data: newDocData 
+  // Change 3: Update node's parentId to grandparent and add following siblings as children
+  changes.push({
+    nodeId: nodeId,
+    updates: (draft) => {
+      if (draft) {
+        draft.parentId = parentNode.parentId;
+        // Add following siblings as children (preserve existing children, then add new ones)
+        if (!draft.children) {
+          draft.children = [];
+        }
+        draft.children.push(...followingSiblings);
+        
+        // Copy childDisplay from original parent to maintain display style for new children
+        if (parentNode.attr?.childDisplay) {
+          if (!draft.attr) {
+            draft.attr = {};
+          }
+          draft.attr.childDisplay = parentNode.attr.childDisplay;
+        }
+      }
+    }
+  });
+
+  // Change 4: Insert node into grandparent's children array, right after the original parent
+  // Use the captured index to avoid issues with stale references
+  changes.push({
+    nodeId: parentNode.parentId,
+    updates: (draft) => {
+      if (draft && draft.children) {
+        // Use the captured index, but verify the parent is still at that position
+        // (it should be, since we haven't modified grandparent's children yet)
+        if (draft.children[parentIndexInGrandparent] === targetNode.parentId) {
+          // Insert right after parent
+          draft.children.splice(parentIndexInGrandparent + 1, 0, nodeId);
+        } else {
+          // Fallback: find parent again (shouldn't happen, but safe)
+          const parentIndex = draft.children.indexOf(targetNode.parentId);
+          if (parentIndex !== -1) {
+            draft.children.splice(parentIndex + 1, 0, nodeId);
+          } else {
+            // Last resort: add at end
+            draft.children.push(nodeId);
+          }
+        }
+      }
+    }
+  });
+
+  return {
+    code: 0,
+    message: `Node ${nodeId} outdented to ${parentNode.parentId}`,
+    data: { grandparentId: parentNode.parentId },
+    changes
   };
 }
 
@@ -150,17 +236,11 @@ export function indentNode(nodeId, docData) {
  * Move a node up in its sibling order (swap with previous sibling)
  * 
  * @param {string} nodeId - ID of the node to move up
- * @param {object} docData - Flattened document data
- * @returns {object} - {code: number, message?: string, data?: object}
+ * @param {object} nodes - Object mapping nodeId to node data { [nodeId]: nodeData }
+ * @returns {object} - {code: number, message?: string, changes?: Array<{nodeId, updates}>}
  */
-export function moveNodeUp(nodeId, docData) {
-  if (!nodeId || !docData || !docData.nodes) {
-    return { code: -1, message: 'Invalid input: nodeId and docData.nodes required' };
-  }
-
-  const nodes = docData.nodes;
+export function moveNodeUp(nodeId, nodes) {
   const targetNode = nodes[nodeId];
-  
   if (!targetNode || !targetNode.parentId) {
     return { code: -1, message: 'Node not found or is root node' };
   }
@@ -172,18 +252,28 @@ export function moveNodeUp(nodeId, docData) {
     return { code: -1, message: 'Node is already at the top of its siblings' };
   }
 
-  // Create a deep copy of docData
-  const newDocData = JSON.parse(JSON.stringify(docData));
-  const newParentNode = newDocData.nodes[targetNode.parentId];
+  // Build list of changes to apply
+  const changes = [];
 
   // Swap with previous sibling
-  [newParentNode.children[nodeIndex - 1], newParentNode.children[nodeIndex]] = 
-  [newParentNode.children[nodeIndex], newParentNode.children[nodeIndex - 1]];
+  changes.push({
+    nodeId: targetNode.parentId,
+    updates: (draft) => {
+      if (draft && draft.children) {
+        const idx = draft.children.indexOf(nodeId);
+        if (idx > 0) {
+          // Swap with previous sibling
+          [draft.children[idx - 1], draft.children[idx]] = 
+          [draft.children[idx], draft.children[idx - 1]];
+        }
+      }
+    }
+  });
 
-  return { 
-    code: 0, 
-    message: `Node ${nodeId} moved up successfully`, 
-    data: newDocData 
+  return {
+    code: 0,
+    message: `Node ${nodeId} moved up successfully`,
+    changes
   };
 }
 
@@ -191,17 +281,11 @@ export function moveNodeUp(nodeId, docData) {
  * Move a node down in its sibling order (swap with next sibling)
  * 
  * @param {string} nodeId - ID of the node to move down
- * @param {object} docData - Flattened document data
- * @returns {object} - {code: number, message?: string, data?: object}
+ * @param {object} nodes - Object mapping nodeId to node data { [nodeId]: nodeData }
+ * @returns {object} - {code: number, message?: string, changes?: Array<{nodeId, updates}>}
  */
-export function moveNodeDown(nodeId, docData) {
-  if (!nodeId || !docData || !docData.nodes) {
-    return { code: -1, message: 'Invalid input: nodeId and docData.nodes required' };
-  }
-
-  const nodes = docData.nodes;
+export function moveNodeDown(nodeId, nodes) {
   const targetNode = nodes[nodeId];
-  
   if (!targetNode || !targetNode.parentId) {
     return { code: -1, message: 'Node not found or is root node' };
   }
@@ -213,66 +297,28 @@ export function moveNodeDown(nodeId, docData) {
     return { code: -1, message: 'Node is already at the bottom of its siblings' };
   }
 
-  // Create a deep copy of docData
-  const newDocData = JSON.parse(JSON.stringify(docData));
-  const newParentNode = newDocData.nodes[targetNode.parentId];
+  // Build list of changes to apply
+  const changes = [];
 
   // Swap with next sibling
-  [newParentNode.children[nodeIndex], newParentNode.children[nodeIndex + 1]] = 
-  [newParentNode.children[nodeIndex + 1], newParentNode.children[nodeIndex]];
-
-  return { 
-    code: 0, 
-    message: `Node ${nodeId} moved down successfully`, 
-    data: newDocData 
-  };
-}
-
-/**
- * Delete a node from the document
- * Removes the node from its parent's children array and deletes it from the nodes object
- * This function is designed to work with Immer - it validates but doesn't copy data
- * 
- * @param {string} nodeId - ID of the node to delete
- * @param {object} docData - Flattened document data (will be mutated by Immer)
- * @returns {object} - {code: number, message?: string}
- */
-export function deleteNode(nodeId, docData) {
-  if (!nodeId || !docData || !docData.nodes) {
-    return { code: -1, message: 'Invalid input: nodeId and docData.nodes required' };
-  }
-
-  const nodes = docData.nodes;
-  const targetNode = nodes[nodeId];
-  
-  if (!targetNode) {
-    return { code: -1, message: `Node ${nodeId} not found` };
-  }
-
-  if (!targetNode.parentId) {
-    return { code: -1, message: 'Cannot delete root node' };
-  }
-
-  const parentNode = nodes[targetNode.parentId];
-  if (!parentNode) {
-    return { code: -1, message: `Parent node ${targetNode.parentId} not found` };
-  }
-
-  const nodeIndex = parentNode.children.indexOf(nodeId);
-  if (nodeIndex === -1) {
-    return { code: -1, message: 'Node not found in parent\'s children array' };
-  }
-
-  // These mutations will be handled safely by Immer in the store
-  // Step 1: Remove node from parent's children array
-  parentNode.children.splice(nodeIndex, 1);
-
-  // Step 2: Delete the node from the nodes object
-  delete nodes[nodeId];
+  changes.push({
+    nodeId: targetNode.parentId,
+    updates: (draft) => {
+      if (draft && draft.children) {
+        const idx = draft.children.indexOf(nodeId);
+        if (idx !== -1 && idx < draft.children.length - 1) {
+          // Swap with next sibling
+          [draft.children[idx], draft.children[idx + 1]] = 
+          [draft.children[idx + 1], draft.children[idx]];
+        }
+      }
+    }
+  });
 
   return {
     code: 0,
-    message: `Node ${nodeId} deleted successfully`
+    message: `Node ${nodeId} moved down successfully`,
+    changes
   };
 }
 

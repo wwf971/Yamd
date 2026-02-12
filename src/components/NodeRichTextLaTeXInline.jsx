@@ -5,7 +5,7 @@ import { useRenderUtilsContext } from '@/core/RenderUtils.ts';
  * LaTeX inline renderer component
  * Handles rendering of LaTeX segments with asset-based HTML conversion
  */
-const NodeTextRichLaTeXInline = ({ segment, globalInfo }) => {
+const SegmentsLaTeXInline = ({ segment, globalInfo }) => {
   // Get render utils from context
   const renderUtils = useRenderUtilsContext();
   
@@ -48,4 +48,4 @@ const NodeTextRichLaTeXInline = ({ segment, globalInfo }) => {
   }
 };
 
-export default NodeTextRichLaTeXInline;
+export default SegmentsLaTeXInline;

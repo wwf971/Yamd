@@ -104,17 +104,16 @@
 }
 
 /* Left Panel - Rendered Document */
-.rendered-panel {
+.panel-rendered {
   flex: 1;
   display: flex;
   flex-direction: column;
   background-color: white;
-  border-radius: 6px;
   border: 1px solid #ddd;
   overflow: hidden;
 }
 
-.rendered-panel-title {
+.panel-rendered-title {
   margin: 0;
   padding: 12px 15px;
   background-color: #3498db;
@@ -125,14 +124,14 @@
   flex-shrink: 0;
 }
 
-.rendered-panel-content {
+.panel-rendered-content {
   flex: 1;
   padding: 15px;
   overflow: auto;
   background-color: #fafafa;
 }
 
-.rendered-panel-placeholder {
+.panel-rendered-placeholder {
   color: #95a5a6;
   font-style: italic;
   text-align: center;
@@ -145,7 +144,6 @@
   display: flex;
   flex-direction: column;
   background-color: white;
-  border-radius: 6px;
   border: 1px solid #ddd;
   overflow: hidden;
 }

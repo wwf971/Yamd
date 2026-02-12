@@ -1,6 +1,6 @@
 /**
- * NodeTextRich utility functions for bullet positioning
- * Extracted from NodeTextRich.jsx to keep component clean
+ * Segments utility functions for bullet positioning
+ * Extracted from Segments.jsx to keep component clean
  */
 
 /**

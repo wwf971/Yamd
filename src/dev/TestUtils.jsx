@@ -1,6 +1,7 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { useAtomValue, atom } from 'jotai';
 import { docsData } from '@/core/DocStore.js';
+import { RefreshIcon } from '@wwf971/react-comp-misc';
 
 /**
  * NodeDataDisplay - Component to display a single node's data with real-time Jotai updates
@@ -74,7 +75,13 @@ export const NodeDataDisplay = ({ docId, nodeId, onUpdate, refreshTrigger }) => 
         fontSize: '12px',
         transition: 'color 0.3s ease'
       }}>
-        {nodeId} {isHighlighted && '🔄'}
+        {nodeId} {isHighlighted && (
+          <RefreshIcon
+            width={12}
+            height={12}
+            style={{ marginLeft: '4px', verticalAlign: 'middle' }}
+          />
+        )}
       </div>
       <pre style={{ 
         margin: 0, 
@@ -143,25 +150,19 @@ export const DocDataDisplay = ({ docId, nodeIds, isLoading }) => {
   
   return (
     <div 
-      ref={containerRef}
       style={{ 
         height: '100%',
-        overflowY: 'auto',
-        padding: '12px',
         backgroundColor: '#fff',
+        display: 'flex',
+        flexDirection: 'column',
         position: 'relative'
       }}
     >
       {hasValidData ? (
         <>
           <div style={{
-            position: 'sticky',
-            top: 0,
-            backgroundColor: '#fff',
-            padding: '8px 0',
-            marginBottom: '8px',
+            padding: '8px 8px',
             borderBottom: '2px solid #ddd',
-            zIndex: 10,
             fontSize: '12px',
             color: '#666',
             display: 'flex',
@@ -179,23 +180,36 @@ export const DocDataDisplay = ({ docId, nodeIds, isLoading }) => {
                 border: 'none',
                 borderRadius: '3px',
                 cursor: 'pointer',
-                fontWeight: '500'
+                fontWeight: '500',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px'
               }}
               onMouseEnter={(e) => e.target.style.backgroundColor = '#45a049'}
               onMouseLeave={(e) => e.target.style.backgroundColor = '#4CAF50'}
             >
-              🔄 Refresh
+              <RefreshIcon width={12} height={12} />
+              Refresh
             </button>
           </div>
-          {nodeIds.map(nodeId => (
-            <NodeDataDisplay 
-              key={`${docId}-${nodeId}`}
-              docId={docId} 
-              nodeId={nodeId}
-              onUpdate={handleNodeUpdate}
-              refreshTrigger={refreshTrigger}
-            />
-          ))}
+          <div
+            ref={containerRef}
+            style={{ 
+              flex: 1,
+              overflowY: 'auto',
+              padding: '6px 8px'
+            }}
+          >
+            {nodeIds.map(nodeId => (
+              <NodeDataDisplay 
+                key={`${docId}-${nodeId}`}
+                docId={docId} 
+                nodeId={nodeId}
+                onUpdate={handleNodeUpdate}
+                refreshTrigger={refreshTrigger}
+              />
+            ))}
+          </div>
         </>
       ) : (
         <div style={{ 

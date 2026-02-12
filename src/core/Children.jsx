@@ -12,7 +12,7 @@ import { getClosestSegmentForClick } from '@/components/TextUtils.js';
  * @param {boolean} shouldAddIndent - Whether to add indentation to children (controlled by parent component type)
  * @param {object} globalInfo - Global context with getNodeDataById, getAssetById, getRefById, and fetchExternalData methods
  */
-const YamdChildNodes = ({ 
+const Children = ({ 
   childIds, 
   parentInfo = null,
   shouldAddIndent = false,
@@ -24,7 +24,7 @@ const YamdChildNodes = ({
 
   // render children based on parentInfo.childDisplay
   if (!childIds || childIds.length === 0) return null;
-  // console.log('🔍 YamdChildNodes rendering childIds:', childIds);
+  // console.log('🔍 Children rendering childIds:', childIds);
   const childDisplay = parentInfo?.childDisplay || 'pl';
   const childClass = parentInfo?.childClass;
   
@@ -45,10 +45,10 @@ const YamdChildNodes = ({
     // e.target is the actual element that was clicked
     if (e.target !== e.currentTarget) {
       // click falls onto a child element. child element will handle it
-      // console.log(`[🖱️CLICK EVENT]YamdChildNodes: click on child element of ${childId}, ignoring`);
+      // console.log(`[🖱️CLICK EVENT]Children: click on child element of ${childId}, ignoring`);
       return;
     } else {
-      // console.log(`[🖱️CLICK EVENT]YamdChildNodes: click on container for child ${childId}, focusing with cursor coords`);
+      // console.log(`[🖱️CLICK EVENT]Children: click on container for child ${childId}, focusing with cursor coords`);
       
       // Convert clientX/Y to pageX/Y
       const cursorPageX = e.clientX + window.scrollX;
@@ -226,4 +226,4 @@ const YamdChildNodes = ({
   }
 };
 
-export default YamdChildNodes;
+export default Children;

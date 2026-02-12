@@ -106,76 +106,76 @@ const YamdNode = React.memo(({ nodeId, parentInfo = null, globalInfo = null }) =
     if (nodeData.type === 'custom') {
       return (
         <AddListBulletBeforeNode>
-          {globalInfo.renderCustomNode(nodeData, parentInfo)}
+          {globalInfo.renderCustomNode(nodeData, parentInfo, globalInfo)}
         </AddListBulletBeforeNode>
       );
     }
     
     switch (selfDisplay) {
-    case 'panel':
-      return (
-        <AddListBulletBeforeNode>
-          <NodePanel 
+      case 'panel':
+        return (
+          <AddListBulletBeforeNode>
+            <NodePanel 
+              nodeId={nodeId} 
+              parentInfo={parentInfo}
+              globalInfo={globalInfo} 
+            />
+          </AddListBulletBeforeNode>
+        );
+      
+      case 'divider':
+        return (
+          <AddListBulletBeforeNode>
+            <NodeDivider 
+              nodeId={nodeId} 
+              parentInfo={parentInfo}
+              globalInfo={globalInfo} 
+            />
+          </AddListBulletBeforeNode>
+        );
+      
+      case 'key':
+        return (
+          <YamdNodeKey 
             nodeId={nodeId} 
             parentInfo={parentInfo}
             globalInfo={globalInfo} 
           />
-        </AddListBulletBeforeNode>
-      );
-    
-    case 'divider':
-      return (
-        <AddListBulletBeforeNode>
-          <NodeDivider 
+        );
+      
+      case 'top-right':
+        return (
+          <YamdNodeTopRight 
             nodeId={nodeId} 
             parentInfo={parentInfo}
             globalInfo={globalInfo} 
           />
-        </AddListBulletBeforeNode>
-      );
-    
-    case 'key':
-      return (
-        <YamdNodeKey 
-          nodeId={nodeId} 
-          parentInfo={parentInfo}
-          globalInfo={globalInfo} 
-        />
-      );
-    
-    case 'top-right':
-      return (
-        <YamdNodeTopRight 
-          nodeId={nodeId} 
-          parentInfo={parentInfo}
-          globalInfo={globalInfo} 
-        />
-      );
-    
-    case 'none':
-      return (
-        <YamdNodeAnonym 
-          nodeId={nodeId} 
-          parentInfo={parentInfo}
-          globalInfo={globalInfo} 
-        />
-      );
-    
-    default:
-      return (
-        /*
-        - aa[child=ul]
-          - bb
-          - cc
-        */
-        <AddListBulletBeforeNode>
-          <ListItem 
+        );
+      
+      case 'none':
+        return (
+          <YamdNodeAnonym 
             nodeId={nodeId} 
             parentInfo={parentInfo}
             globalInfo={globalInfo} 
           />
-        </AddListBulletBeforeNode>
-      );
+        );
+      
+      default:
+        return (
+          /*
+          - aa[child=ul]
+            - bb
+            - cc
+          */
+          <AddListBulletBeforeNode>
+            <ListItem 
+              nodeId={nodeId} 
+              parentInfo={parentInfo}
+              globalInfo={globalInfo} 
+            />
+          </AddListBulletBeforeNode>
+        );
     }
   };
   

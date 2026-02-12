@@ -190,9 +190,9 @@ const TestEdit = () => {
       {/* Bottom Row: Split View */}
       <div className="split-view-section">
         <PanelDual orientation="vertical" initialRatio={0.6}>
-          <div className="split-view-pane rendered-panel">
-            <h3 className="rendered-panel-title">Rendered Document (Editable)</h3>
-            <div className="rendered-panel-content">
+          <div className="split-view-pane panel-rendered">
+            <h3 className="panel-rendered-title">Rendered Document (Editable)</h3>
+            <div className="panel-rendered-content">
               {docId ? (
                 <YamdDoc
                   docId={docId}
@@ -203,7 +203,7 @@ const TestEdit = () => {
                   onDelete={handleDelete}
                 />
               ) : (
-                <div className="rendered-panel-placeholder">
+                <div className="panel-rendered-placeholder">
                   {isLoading ? 'Processing...' : 'No document to display'}
                 </div>
               )}

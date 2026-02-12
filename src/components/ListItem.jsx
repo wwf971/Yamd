@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, useLayoutEffect, useState } from 'react';
 import { getNodeClass } from '@/core/YamdNode.jsx';
 import { useRenderUtilsContext } from '@/core/RenderUtils.ts';
-import NodeTextRich from './NodeRichText.jsx';
+import Segments from './Segments.jsx';
 import { createBulletEqualityFn } from '@/core/RenderUtils.ts';
 import { docsBulletState, nodeBulletState } from '@/core/DocStore.js';
 
@@ -21,7 +21,7 @@ const ListItem = React.memo(({ nodeId, parentInfo, globalInfo }) => {
     }
   }, [nodeId, renderUtils.registerNodeRef]);
   
-  // ref to access NodeTextRich methods (for bullet positioning)
+  // ref to access Segments methods (for bullet positioning)
   const textContentRef = useRef(null);
   
   // ===== JOTAI LOGIC =====
@@ -142,9 +142,9 @@ const ListItem = React.memo(({ nodeId, parentInfo, globalInfo }) => {
       className="yamd-node-text"
       onClick={isEditable ? handleClick : undefined}
     >
-      {/* self content - always use NodeTextRich */}
+      {/* self content - always use Segments */}
       {hasTextContent && (
-        <NodeTextRich 
+        <Segments 
           ref={textContentRef}
           nodeId={nodeId}
           className={nodeClass}

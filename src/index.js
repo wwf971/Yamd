@@ -1,7 +1,7 @@
 // Main entry point for Yamd module
 export { default as YamdDoc } from '@/core/YamdDoc.jsx';
 export { default as YamdNode, getNodeClass } from '@/core/YamdNode.jsx';
-export { default as YamdChildNodes } from '@/core/YamdChildNodes.jsx';
+export { default as Children } from '@/core/Children.jsx';
 export { default as YamdImageList } from '@/components/NodeImageList.jsx';
 export { default as YamdVideoList } from '@/components/NodeVideoList.jsx';
 

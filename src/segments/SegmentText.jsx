@@ -4,7 +4,7 @@ import {
   isCursorAtEnd, isCursorAtBeginning,
   getCursorPageX, getClosestCharIndex,
   setCursorPos, setCursorToEnd, setCursorToBegin,
-  getCursorPos
+  getCursorPos, setSelectionRange
 } from '@/components/TextUtils.js';
 
 // Custom hook that skips effect on initial mount
@@ -40,7 +40,7 @@ function handleProgramaticFocus({ textEl, segmentId, state, focusCounter, render
   // Skip if already processed this event
   if (focusCounter <= state.focus.counterProcessed) return;
   
-  const { type, cursorPageX, cursorPos, isChildPseudo: isChildPseudoFromFocus } = state.focus;
+  const { type, cursorPageX, cursorPos, selectionStart, selectionEnd, isChildPseudo: isChildPseudoFromFocus } = state.focus;
   
   console.log(`🎯 SegmentText [${segmentId}] received FOCUS from ${type}, isChildPseudo=${isChildPseudoFromFocus}, cursorPos=${cursorPos}`);
   console.log(`🎯 Current DOM content before focus: "${textEl.current?.textContent}", isEmpty=${isEmpty.current}`);
@@ -102,6 +102,13 @@ function handleProgramaticFocus({ textEl, segmentId, state, focusCounter, render
     return;
   }
 
+  // If selection range is provided, restore it
+  if (typeof selectionStart === 'number' && typeof selectionEnd === 'number') {
+    console.log(`🎯 SegmentText [${segmentId}] restoring selection from ${selectionStart} to ${selectionEnd}`);
+    setSelectionRange(textEl.current, selectionStart, selectionEnd);
+    return;
+  }
+  
   // If specific cursor position is provided, use it
   if (typeof cursorPos === 'number') {
     console.log(`🎯 SegmentText [${segmentId}] setting cursor to position ${cursorPos}`);
@@ -193,7 +200,7 @@ function handleProgramaticUnfocus({ textEl, segmentId, state, unfocusCounter, re
 
 /**
  * Text segment renderer for rich text nodes
- * This is a segment component that lives within a NodeRichText parent
+ * This is a segment component that lives within a Segments parent
  * Supports inline editing and triggers unfocus requests for navigation
  */
 const SegmentText = forwardRef(({ segmentId, parentNodeId, className, globalInfo, isEditable = null}, ref) => {
@@ -256,7 +263,7 @@ const SegmentText = forwardRef(({ segmentId, parentNodeId, className, globalInfo
     }
   }, [text, hintText, segmentId]);
 
-  // Handle focus requests from parent NodeRichText
+  // Handle focus requests from parent Segments
   useEffect(() => {
     // Fetch the full state non-reactively to get the type and cursorPageX
     const state = renderUtils.getNodeStateById?.(segmentId);
@@ -533,6 +540,14 @@ const SegmentText = forwardRef(({ segmentId, parentNodeId, className, globalInfo
       const cursorPageX = getCursorPageX(textEl.current);
       console.log(`🔔 SegmentText [${segmentId}] triggering unfocus DOWN`);
       renderUtils.triggerUnfocus(parentNodeId, segmentId, 'down', { cursorPageX });
+      return;
+    }
+    
+    // Tab/Shift+Tab key handling is done at root level (YamdDoc.jsx) for indent/outdent operations
+    // This is because indent/outdent are node-level operations, not segment-level
+    // If Tab/Shift+Tab reaches here, it means it wasn't handled at root (shouldn't happen in normal flow)
+    if (e.key === 'Tab') {
+      // Let it pass through - root level handler should have caught it
       return;
     }
     

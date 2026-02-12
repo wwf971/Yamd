@@ -167,9 +167,9 @@ const TestCustom = () => {
       {docId && docData && (
         <div className="split-view-section">
           {/* Left Panel: Rendered Document */}
-          <div className="rendered-panel">
-            <h3 className="rendered-panel-title">Rendered Document with Custom Nodes</h3>
-            <div className="rendered-panel-content">
+          <div className="panel-rendered">
+            <h3 className="panel-rendered-title">Rendered Document with Custom Nodes</h3>
+            <div className="panel-rendered-content">
               <YamdDoc 
                 docId={docId}
                 disableRefJump={false}
