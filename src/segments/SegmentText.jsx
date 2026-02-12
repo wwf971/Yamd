@@ -1,10 +1,10 @@
 import React, { useRef, useEffect, useCallback, forwardRef } from 'react';
 import { useRenderUtilsContext } from '@/core/RenderUtils.ts';
 import {
-  isCursorAtEnd, isCursorAtBeginning,
   getCursorPageX, getClosestCharIndex,
   setCursorPos, setCursorToEnd, setCursorToBegin,
-  getCursorPos, setSelectionRange
+  getCursorPos, setSelectionRange,
+  findSegIdFromNode
 } from '@/components/TextUtils.js';
 
 // Custom hook that skips effect on initial mount
@@ -42,32 +42,21 @@ function handleProgramaticFocus({ textEl, segmentId, state, focusCounter, render
   
   const { type, cursorPageX, cursorPos, selectionStart, selectionEnd, isChildPseudo: isChildPseudoFromFocus } = state.focus;
   
-  console.log(`🎯 SegmentText [${segmentId}] received FOCUS from ${type}, isChildPseudo=${isChildPseudoFromFocus}, cursorPos=${cursorPos}`);
-  console.log(`🎯 Current DOM content before focus: "${textEl.current?.textContent}", isEmpty=${isEmpty.current}`);
+  // console.log(`[🎯FOCUS] SegmentText [${segmentId}] received FOCUS from ${type}, isChildPseudo=${isChildPseudoFromFocus}, cursorPos=${cursorPos}`);
+  // console.log(`[🎯FOCUS] Current DOM content before focus: "${textEl.current?.textContent}", isEmpty=${isEmpty.current}`);
   
   // Check if there's a cross-segment selection - if so, preserve it by skipping cursor positioning
   const selection = window.getSelection();
-  let hasCrossSegmentSelection = false;
+  let hasCrossSegSelection = false;
   if (selection && selection.rangeCount > 0 && !selection.isCollapsed) {
     const range = selection.getRangeAt(0);
-    const findSegment = (node) => {
-      let current = node.nodeType === Node.TEXT_NODE ? node.parentElement : node;
-      while (current) {
-        if (current.hasAttribute && current.hasAttribute('data-segment-id')) {
-          return current.getAttribute('data-segment-id');
-        }
-        current = current.parentElement;
-      }
-      return null;
-    };
-    
-    const startSegId = findSegment(range.startContainer);
-    const endSegId = findSegment(range.endContainer);
+    const segStartId = findSegIdFromNode(range.startContainer);
+    const segEndId = findSegIdFromNode(range.endContainer);
     
     // If selection spans multiple segments, preserve it
-    if (startSegId && endSegId && startSegId !== endSegId) {
-      hasCrossSegmentSelection = true;
-      console.log(`🎯 SegmentText [${segmentId}] preserving cross-segment selection, skipping cursor positioning`);
+    if (segStartId && segEndId && segStartId !== segEndId) {
+      hasCrossSegSelection = true;
+      // console.log(`[🎯FOCUS] SegmentText [${segmentId}] preserving cross-segment selection, skipping cursor positioning`);
     }
   }
   
@@ -88,7 +77,7 @@ function handleProgramaticFocus({ textEl, segmentId, state, focusCounter, render
   renderUtils.setCurrentSegId?.(segmentId);
   
   // If there's a cross-segment selection, don't touch the cursor/selection
-  if (hasCrossSegmentSelection) {
+  if (hasCrossSegSelection) {
     // Mark this focus event as processed
     renderUtils.markFocusProcessed?.(segmentId);
     return;
@@ -245,7 +234,7 @@ const SegmentText = forwardRef(({ segmentId, parentNodeId, className, globalInfo
     if (textEl.current && !isLogicallyFocused.current) {
       if (text === '') {
         // Show hint text
-        console.log(`💭 SegmentText [${segmentId}] updating DOM with hint text (text is empty, not focused)`);
+        // console.log(`💭 SegmentText [${segmentId}] updating DOM with hint text (text is empty, not focused)`);
         textEl.current.textContent = hintText;
         textEl.current.style.color = '#ccc';
         textEl.current.style.fontStyle = 'italic';
@@ -253,7 +242,7 @@ const SegmentText = forwardRef(({ segmentId, parentNodeId, className, globalInfo
         isShowingHintText.current = true;
       } else {
         // Show actual text
-        console.log(`💭 SegmentText [${segmentId}] updating DOM with actual text: "${text}"`);
+        // console.log(`💭 SegmentText [${segmentId}] updating DOM with actual text: "${text}"`);
         textEl.current.textContent = text;
         textEl.current.style.color = '';
         textEl.current.style.fontStyle = '';

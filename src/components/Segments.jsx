@@ -6,7 +6,7 @@ import NodeRichTextBib from './NodeRichTextBib.jsx';
 import { calcBulletYPos as _calcBulletYPos} from './Segments.js';
 import { useRenderUtilsContext } from '@/core/RenderUtils.ts';
 import { getMoveUpTargetId, getMoveDownTargetId } from '@/core/EditUtils.js';
-import { getClosestSegmentIndex, getClosestSegmentForClick } from './TextUtils.js';
+import { getClosestSegmentIndex, getClosestSegmentForClick, findSegIdFromNode } from './TextUtils.js';
 
 /**
  * Rich text renderer with inline LaTeX math support
@@ -865,26 +865,15 @@ const Segments = forwardRef(({ nodeId, className, parentInfo, globalInfo = null 
       
       // Find segments for start and end - search across component boundaries
       // Segment IDs are unique across the entire document
-      const findSegment = (node) => {
-        let current = node.nodeType === Node.TEXT_NODE ? node.parentElement : node;
-        while (current) {
-          if (current.hasAttribute && current.hasAttribute('data-segment-id')) {
-            return current.getAttribute('data-segment-id');
-          }
-          current = current.parentElement;
-        }
-        return null;
-      };
-      
-      const startSegId = findSegment(range.startContainer);
-      const endSegId = findSegment(range.endContainer);
+      const segStartId = findSegIdFromNode(range.startContainer);
+      const segEndId = findSegIdFromNode(range.endContainer);
       
       // If selection spans multiple segments, focus on the end segment (preserves selection)
-      if (startSegId && endSegId && startSegId !== endSegId) {
+      if (segStartId && segEndId && segStartId !== segEndId) {
         e.preventDefault();
         e.stopPropagation();
         // Focus on the end segment - the focus handler will preserve the selection
-        renderUtils.triggerFocus(endSegId, 'fromLeft');
+        renderUtils.triggerFocus(segEndId, 'fromLeft');
         return;
       }
     }
@@ -915,23 +904,12 @@ const Segments = forwardRef(({ nodeId, className, parentInfo, globalInfo = null 
         const range = selection.getRangeAt(0);
         
         // Find segments for start and end - search across component boundaries
-        const findSegment = (node) => {
-          let current = node.nodeType === Node.TEXT_NODE ? node.parentElement : node;
-          while (current) {
-            if (current.hasAttribute && current.hasAttribute('data-segment-id')) {
-              return current.getAttribute('data-segment-id');
-            }
-            current = current.parentElement;
-          }
-          return null;
-        };
-        
-        const startSegId = findSegment(range.startContainer);
-        const endSegId = findSegment(range.endContainer);
+        const segStartId = findSegIdFromNode(range.startContainer);
+        const segEndId = findSegIdFromNode(range.endContainer);
         
         // If selection spans multiple segments, focus on the end segment (preserves selection)
-        if (startSegId && endSegId && startSegId !== endSegId) {
-          renderUtils.triggerFocus(endSegId, 'fromLeft');
+        if (segStartId && segEndId && segStartId !== segEndId) {
+          renderUtils.triggerFocus(segEndId, 'fromLeft');
           return;
         }
       }

@@ -3,6 +3,7 @@
  * Core logic for indent/outdent operations that work with static node data.
  * These functions are used by RenderUtils.ts which adapts them to work with Jotai atoms.
  */
+import { findSegIdFromNode } from '@/components/TextUtils.js';
 
 /**
  * Indent a node - move it down one level in the hierarchy
@@ -481,3 +482,411 @@ export function getNodeEditInfo(nodeId, docData) {
     }
   };
 }
+
+/**
+ * Get selected nodes from DOM selection by walking segments in document order.
+ * This returns the set of rich text node IDs that contain the selected segments.
+ *
+ * @param {object} params
+ * @param {string} params.rootNodeId - Root node ID for traversal
+ * @param {function} params.getNodeDataById - Function to get node data by ID
+ * @param {HTMLElement|null} [params.rootContainer] - Optional DOM root to validate selection scope
+ * @param {Selection|null} [params.selection] - Optional selection (defaults to window.getSelection())
+ * @returns {object} - {code, message?, data?}
+ */
+export function getSelectedNodes({ rootNodeId, getNodeDataById, rootContainer = null, selection = null }) {
+  if (!rootNodeId || !getNodeDataById) {
+    return { code: -1, message: 'Invalid input: rootNodeId and getNodeDataById are required' };
+  }
+
+  const activeSelection = selection || (typeof window !== 'undefined' ? window.getSelection() : null);
+  if (!activeSelection || activeSelection.rangeCount === 0) {
+    return { code: -1, message: 'No DOM selection available' };
+  }
+
+  const range = activeSelection.getRangeAt(0);
+  const segStartId = findSegIdFromNode(range.startContainer, rootContainer);
+  const segEndId = findSegIdFromNode(range.endContainer, rootContainer);
+
+  if (!segStartId || !segEndId) {
+    return { code: -1, message: 'Selection does not map to valid segments' };
+  }
+
+  const orderedSegments = _collectSegsInOrder(rootNodeId, getNodeDataById);
+  const startIndex = orderedSegments.indexOf(segStartId);
+  const endIndex = orderedSegments.indexOf(segEndId);
+
+  if (startIndex === -1 || endIndex === -1) {
+    return { code: -1, message: 'Selection segments not found in document order' };
+  }
+
+  const fromIndex = Math.min(startIndex, endIndex);
+  const toIndex = Math.max(startIndex, endIndex);
+
+  const nodesSelectedIdArray = [];
+  const nodeIdSet = new Set();
+  for (let i = fromIndex; i <= toIndex; i += 1) {
+    const segmentId = orderedSegments[i];
+    const segmentData = getNodeDataById(segmentId);
+    const parentId = segmentData?.parentId;
+    if (parentId && !nodeIdSet.has(parentId)) {
+      nodeIdSet.add(parentId);
+      nodesSelectedIdArray.push(parentId);
+    }
+  }
+
+  return {
+    code: 0,
+    data: {
+      nodesSelectedIdArray,
+      isCollapsed: activeSelection.isCollapsed
+    }
+  };
+}
+
+/**
+ * Compute top-level subtree roots from selected node IDs.
+ * A subtree root is a selected node whose parent is not selected.
+ *
+ * @param {object} params
+ * @param {string[]} params.nodesSelectedIdArray - Selected node IDs in document order
+ * @param {function} params.getNodeDataById - Function to get node data by ID
+ * @returns {object} - {code, message?, data?}
+ */
+/**
+ * Check if multi-node indent can be performed based on the selection rule.
+ *
+ * @param {object} params
+ * @param {string[]} params.nodesSelectedIdArray - Selected node IDs in document order
+ * @param {function} params.getNodeDataById - Function to get node data by ID
+ * @returns {object} - {code, message?}
+ */
+export function canIndentMultiNodes({ nodesSelectedIdArray, getNodeDataById }) {
+  if (!Array.isArray(nodesSelectedIdArray) || nodesSelectedIdArray.length === 0) {
+    return { code: -1, message: 'No selected nodes' };
+  }
+  if (!getNodeDataById) {
+    return { code: -1, message: 'Invalid input: getNodeDataById is required' };
+  }
+
+  const firstNodeId = nodesSelectedIdArray[0];
+  const firstNode = getNodeDataById(firstNodeId);
+  const parentId = firstNode?.parentId;
+  if (!parentId) {
+    return { code: -1, message: 'Cannot indent: first selected node has no parent' };
+  }
+
+  const parentNode = getNodeDataById(parentId);
+  const siblings = parentNode?.children || [];
+  const firstIndex = siblings.indexOf(firstNodeId);
+  if (firstIndex <= 0) {
+    return { code: -1, message: 'Cannot indent: first selected node has no previous sibling' };
+  }
+
+  return { code: 0 };
+}
+
+/**
+ * Check if multi-node outdent can be performed based on the selection rule.
+ *
+ * @param {object} params
+ * @param {string[]} params.nodesSelectedIdArray - Selected node IDs in document order
+ * @param {function} params.getNodeDataById - Function to get node data by ID
+ * @returns {object} - {code, message?}
+ */
+export function canOutdentMultiNodes({ nodesSelectedIdArray, getNodeDataById }) {
+  if (!Array.isArray(nodesSelectedIdArray) || nodesSelectedIdArray.length === 0) {
+    return { code: -1, message: 'No selected nodes' };
+  }
+  if (!getNodeDataById) {
+    return { code: -1, message: 'Invalid input: getNodeDataById is required' };
+  }
+
+  const lastNodeId = nodesSelectedIdArray[nodesSelectedIdArray.length - 1];
+  const lastNode = getNodeDataById(lastNodeId);
+  const lastChildren = lastNode?.children || [];
+  if (lastChildren.length > 0) {
+    return { code: -1, message: 'Cannot outdent: last selected node has children' };
+  }
+
+  return { code: 0 };
+}
+
+/**
+ * Perform multi-node indent by applying single-node indent on selected nodes in order.
+ *
+ * @param {object} params
+ * @param {string[]} params.nodesSelectedIdArray - Selected nodes in document order
+ * @param {object} params.nodes - Object mapping nodeId to node data
+ * @returns {object} - {code, message?, changes?}
+ */
+export function applyMultiNodeIndent({ nodesSelectedIdArray, nodes, getNodeDataById }) {
+  if (!Array.isArray(nodesSelectedIdArray) || nodesSelectedIdArray.length === 0) {
+    return { code: -1, message: 'No selected nodes' };
+  }
+  if (!nodes) {
+    return { code: -1, message: 'Invalid input: nodes is required' };
+  }
+
+  const workingNodes = _cloneNodesMap(nodes);
+  const allChanges = [];
+
+  for (const nodeId of nodesSelectedIdArray) {
+    const ensureResult = _ensureIndentNodes(nodeId, workingNodes, getNodeDataById);
+    if (ensureResult.code !== 0) {
+      return ensureResult;
+    }
+
+    const result = indentNode(nodeId, workingNodes);
+    if (result.code !== 0) {
+      return { code: result.code, message: result.message || 'Indent failed' };
+    }
+    result.changes.forEach((change) => {
+      allChanges.push(change);
+      _applyChangeToNodes(workingNodes, change);
+    });
+  }
+
+  return { code: 0, changes: allChanges };
+}
+
+/**
+ * Perform multi-node outdent by applying single-node outdent on selected nodes in reverse order.
+ *
+ * @param {object} params
+ * @param {string[]} params.nodesSelectedIdArray - Selected nodes in document order
+ * @param {object} params.nodes - Object mapping nodeId to node data
+ * @returns {object} - {code, message?, changes?}
+ */
+export function applyMultiNodeOutdent({ nodesSelectedIdArray, nodes, getNodeDataById }) {
+  if (!Array.isArray(nodesSelectedIdArray) || nodesSelectedIdArray.length === 0) {
+    return { code: -1, message: 'No selected nodes' };
+  }
+  if (!nodes) {
+    return { code: -1, message: 'Invalid input: nodes is required' };
+  }
+
+  const workingNodes = _cloneNodesMap(nodes);
+  const allChanges = [];
+
+  for (let i = nodesSelectedIdArray.length - 1; i >= 0; i -= 1) {
+    const nodeId = nodesSelectedIdArray[i];
+    const ensureResult = _ensureOutdentNodes(nodeId, workingNodes, getNodeDataById);
+    if (ensureResult.code !== 0) {
+      return ensureResult;
+    }
+
+    const result = outdentNode(nodeId, workingNodes);
+    if (result.code !== 0) {
+      return { code: result.code, message: result.message || 'Outdent failed' };
+    }
+    result.changes.forEach((change) => {
+      allChanges.push(change);
+      _applyChangeToNodes(workingNodes, change);
+    });
+  }
+
+  return { code: 0, changes: allChanges };
+}
+
+/**
+ * Pipeline for multi-node indent: selection -> validation -> edits.
+ *
+ * @param {object} params
+ * @param {string} params.rootNodeId - Root node ID for traversal
+ * @param {function} params.getNodeDataById - Function to get node data by ID
+ * @param {object} params.nodes - Object mapping nodeId to node data
+ * @param {HTMLElement|null} [params.rootContainer] - Optional DOM root to validate selection scope
+ * @param {Selection|null} [params.selection] - Optional selection (defaults to window.getSelection())
+ * @returns {object} - {code, message?, changes?}
+ */
+export function multiNodeIndent({ rootNodeId, getNodeDataById, nodes, rootContainer = null, selection = null }) {
+  const selectedResult = getSelectedNodes({ rootNodeId, getNodeDataById, rootContainer, selection });
+  if (selectedResult.code !== 0) return selectedResult;
+
+  const nodesSelectedIdArray = selectedResult.data.nodesSelectedIdArray;
+  const canIndentResult = canIndentMultiNodes({ nodesSelectedIdArray, getNodeDataById });
+  if (canIndentResult.code !== 0) return canIndentResult;
+
+  return applyMultiNodeIndent({ nodesSelectedIdArray, nodes, getNodeDataById });
+}
+
+/**
+ * Pipeline for multi-node outdent: selection -> validation -> edits.
+ *
+ * @param {object} params
+ * @param {string} params.rootNodeId - Root node ID for traversal
+ * @param {function} params.getNodeDataById - Function to get node data by ID
+ * @param {object} params.nodes - Object mapping nodeId to node data
+ * @param {HTMLElement|null} [params.rootContainer] - Optional DOM root to validate selection scope
+ * @param {Selection|null} [params.selection] - Optional selection (defaults to window.getSelection())
+ * @returns {object} - {code, message?, changes?}
+ */
+export function multiNodeOutdent({ rootNodeId, getNodeDataById, nodes, rootContainer = null, selection = null }) {
+  const selectedResult = getSelectedNodes({ rootNodeId, getNodeDataById, rootContainer, selection });
+  if (selectedResult.code !== 0) return selectedResult;
+
+  const nodesSelectedIdArray = selectedResult.data.nodesSelectedIdArray;
+  const canOutdentResult = canOutdentMultiNodes({ nodesSelectedIdArray, getNodeDataById });
+  if (canOutdentResult.code !== 0) return canOutdentResult;
+
+  return applyMultiNodeOutdent({ nodesSelectedIdArray, nodes, getNodeDataById });
+}
+
+const _cloneNodesMap = (nodes) => {
+  const cloned = {};
+  Object.keys(nodes || {}).forEach((nodeId) => {
+    const node = nodes[nodeId];
+    cloned[nodeId] = node ? _shallowCloneNode(node) : node;
+  });
+  return cloned;
+};
+
+const _applyChangeToNodes = (nodes, change) => {
+  if (!nodes || !change) return;
+  const nodeId = change.nodeId;
+  if (!nodeId || !nodes[nodeId]) return;
+  const draft = _shallowCloneNode(nodes[nodeId]);
+  change.updates(draft);
+  nodes[nodeId] = draft;
+};
+
+const _ensureIndentNodes = (nodeId, nodes, getNodeDataById) => {
+  const targetNode = _ensureNode(nodes, nodeId, getNodeDataById);
+  if (!targetNode) {
+    return { code: -1, message: `Missing node data for ${nodeId}` };
+  }
+
+  const parentId = targetNode.parentId;
+  if (!parentId) {
+    return { code: -1, message: `Cannot indent: node ${nodeId} has no parent` };
+  }
+
+  const parentNode = _ensureNode(nodes, parentId, getNodeDataById);
+  if (!parentNode) {
+    return { code: -1, message: `Missing parent data for ${nodeId}` };
+  }
+
+  const siblings = parentNode.children || [];
+  const currentIndex = siblings.indexOf(nodeId);
+  if (currentIndex <= 0) {
+    return { code: -1, message: `Cannot indent: node ${nodeId} has no previous sibling` };
+  }
+
+  const prevSiblingId = siblings[currentIndex - 1];
+  const prevSiblingNode = _ensureNode(nodes, prevSiblingId, getNodeDataById);
+  if (!prevSiblingNode) {
+    return { code: -1, message: `Missing previous sibling data for ${nodeId}` };
+  }
+
+  (targetNode.children || []).forEach((childId) => {
+    _ensureNode(nodes, childId, getNodeDataById);
+  });
+
+  return { code: 0 };
+};
+
+const _ensureOutdentNodes = (nodeId, nodes, getNodeDataById) => {
+  const targetNode = _ensureNode(nodes, nodeId, getNodeDataById);
+  if (!targetNode) {
+    return { code: -1, message: `Missing node data for ${nodeId}` };
+  }
+
+  const parentId = targetNode.parentId;
+  if (!parentId) {
+    return { code: -1, message: `Cannot outdent: node ${nodeId} has no parent` };
+  }
+
+  const parentNode = _ensureNode(nodes, parentId, getNodeDataById);
+  if (!parentNode) {
+    return { code: -1, message: `Missing parent data for ${nodeId}` };
+  }
+
+  const grandparentId = parentNode.parentId;
+  if (!grandparentId) {
+    return { code: -1, message: `Cannot outdent: parent of ${nodeId} has no parent` };
+  }
+
+  const grandparentNode = _ensureNode(nodes, grandparentId, getNodeDataById);
+  if (!grandparentNode) {
+    return { code: -1, message: `Missing grandparent data for ${nodeId}` };
+  }
+
+  const siblings = parentNode.children || [];
+  const currentIndex = siblings.indexOf(nodeId);
+  if (currentIndex === -1) {
+    return { code: -1, message: `Cannot outdent: node ${nodeId} not found in parent children` };
+  }
+
+  const followingSiblings = siblings.slice(currentIndex + 1);
+  followingSiblings.forEach((siblingId) => {
+    _ensureNode(nodes, siblingId, getNodeDataById);
+  });
+
+  return { code: 0 };
+};
+
+const _ensureNode = (nodes, nodeId, getNodeDataById) => {
+  if (!nodeId) return null;
+  if (!nodes[nodeId] && getNodeDataById) {
+    const loaded = getNodeDataById(nodeId);
+    if (loaded) {
+      nodes[nodeId] = _shallowCloneNode(loaded);
+    }
+  }
+  return nodes[nodeId] || null;
+};
+
+const _shallowCloneNode = (node) => {
+  if (!node || typeof node !== 'object') return node;
+  return {
+    ...node,
+    children: Array.isArray(node.children) ? [...node.children] : node.children,
+    segments: Array.isArray(node.segments) ? [...node.segments] : node.segments,
+    attr: node.attr ? { ...node.attr } : node.attr
+  };
+};
+
+/**
+ * Check if the current DOM selection spans multiple segments.
+ *
+ * @param {object} params
+ * @param {HTMLElement|null} [params.rootContainer] - Optional DOM root to validate selection scope
+ * @param {Selection|null} [params.selection] - Optional selection (defaults to window.getSelection())
+ * @returns {boolean}
+ */
+export function isCrossSelection({ rootContainer = null, selection = null } = {}) {
+  const activeSelection = selection || (typeof window !== 'undefined' ? window.getSelection() : null);
+  if (!activeSelection || activeSelection.rangeCount === 0) {
+    return false;
+  }
+
+  const range = activeSelection.getRangeAt(0);
+  const segStartId = findSegIdFromNode(range.startContainer, rootContainer);
+  const segEndId = findSegIdFromNode(range.endContainer, rootContainer);
+
+  if (!segStartId || !segEndId) {
+    return false;
+  }
+
+  return segStartId !== segEndId;
+}
+
+const _collectSegsInOrder = (nodeId, getNodeDataById, result = []) => {
+  const node = getNodeDataById(nodeId);
+  if (!node) return result;
+
+  if (Array.isArray(node.segments)) {
+    node.segments.forEach((segId) => {
+      if (segId) result.push(segId);
+    });
+  }
+
+  if (Array.isArray(node.children)) {
+    node.children.forEach((childId) => {
+      _collectSegsInOrder(childId, getNodeDataById, result);
+    });
+  }
+
+  return result;
+};

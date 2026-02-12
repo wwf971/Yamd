@@ -431,6 +431,20 @@ export const getClosestSegmentForClick = (segElements, clickX, clickY = null) =>
  * @param {HTMLElement} rootContainer - The root container to stop traversal at
  * @returns {{ segId: string | null, focusType: string, isDocumentBoundary: boolean, boundaryPosition: 'start' | 'end' | null }} - Object with segment ID, focus type, and boundary info
  */
+export const findSegIdFromNode = (node, rootContainer = null) => {
+  let current = node?.nodeType === Node.TEXT_NODE ? node.parentElement : node;
+  while (current) {
+    if (current.hasAttribute && current.hasAttribute('data-segment-id')) {
+      return current.getAttribute('data-segment-id');
+    }
+    if (rootContainer && current === rootContainer) {
+      break;
+    }
+    current = current.parentElement;
+  }
+  return null;
+};
+
 export const findSegFromSelection = (rootContainer) => {
   if (!rootContainer) {
     return { segId: null, focusType: 'fromLeft', isDocumentBoundary: false, boundaryPosition: null };
@@ -446,18 +460,18 @@ export const findSegFromSelection = (rootContainer) => {
   
   // Traverse up from anchor node to find the nearest segment element with data-segment-id
   let currentNode = anchorNode.nodeType === Node.TEXT_NODE ? anchorNode.parentElement : anchorNode;
-  let segmentElement = null;
+  let segEl = null;
   
   while (currentNode && currentNode !== rootContainer) {
     if (currentNode.hasAttribute && currentNode.hasAttribute('data-segment-id')) {
-      segmentElement = currentNode;
+      segEl = currentNode;
       break;
     }
     currentNode = currentNode.parentElement;
   }
   
   // If no segment found, check if selection is at document boundary
-  if (!segmentElement) {
+  if (!segEl) {
     // Check if selection is collapsed and in the root container
     if (selection.isCollapsed && anchorNode === rootContainer) {
       const focusOffset = selection.focusOffset;
@@ -474,13 +488,13 @@ export const findSegFromSelection = (rootContainer) => {
     return { segId: null, focusType: 'fromLeft', isDocumentBoundary: false, boundaryPosition: null };
   }
   
-  const segId = segmentElement.getAttribute('data-segment-id');
+  const segId = segEl.getAttribute('data-segment-id');
   
   // Determine focus direction based on cursor position relative to segment center
   let focusType = 'fromLeft';
   
   try {
-    const rect = segmentElement.getBoundingClientRect();
+    const rect = segEl.getBoundingClientRect();
     const rangeRect = range.getBoundingClientRect();
     const centerX = rect.left + rect.width / 2;
     const cursorX = rangeRect.left;

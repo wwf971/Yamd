@@ -2,7 +2,7 @@ import React, { createContext, useContext } from 'react';
 import { useAtomValue } from 'jotai';
 import { produce as immer } from 'immer';
 import { docsData, docsState, nodeBulletState } from '@/core/DocStore.js';
-import { indentNode as indentNodeUtil, outdentNode as outdentNodeUtil } from '@/core/EditUtils.js';
+import { indentNode as indentNodeUtil, outdentNode as outdentNodeUtil, isCrossSelection, multiNodeIndent, multiNodeOutdent } from '@/core/EditUtils.js';
 import { getCursorPos } from '@/components/TextUtils.js';
 
 /**
@@ -10,6 +10,148 @@ import { getCursorPos } from '@/components/TextUtils.js';
  * These values are used directly in inline styles for guaranteed consistency
  */
 import { BULLET_DIMENSIONS, LIST_SETTINGS, TIMELINE_BULLET_SETTINGS } from '@/config/RenderConfig.js';
+
+const _captureSegmentSelection = (docId: string, nodeId: string) => {
+  let cursorPos: number | undefined = undefined;
+  let selectionStart: number | undefined = undefined;
+  let selectionEnd: number | undefined = undefined;
+  let focusedSegmentId: string | undefined = undefined;
+  let segStartId: string | undefined = undefined;
+  let segEndId: string | undefined = undefined;
+  const selection = window.getSelection();
+  if (selection && selection.rangeCount > 0) {
+    const range = selection.getRangeAt(0);
+    const startInfo = _getSegmentInfoFromNode(range.startContainer);
+    const endInfo = _getSegmentInfoFromNode(range.endContainer);
+    segStartId = startInfo?.segmentId;
+    segEndId = endInfo?.segmentId;
+
+    if (segStartId && segEndId) {
+      if (selection.isCollapsed && startInfo?.element) {
+        cursorPos = getCursorPos(startInfo.element);
+      } else if (startInfo?.element && endInfo?.element) {
+        const preStartRange = range.cloneRange();
+        preStartRange.selectNodeContents(startInfo.element);
+        preStartRange.setEnd(range.startContainer, range.startOffset);
+        selectionStart = preStartRange.toString().length;
+
+        const preEndRange = range.cloneRange();
+        preEndRange.selectNodeContents(endInfo.element);
+        preEndRange.setEnd(range.endContainer, range.endOffset);
+        selectionEnd = preEndRange.toString().length;
+      }
+    }
+
+    if (segEndId) {
+      focusedSegmentId = segEndId;
+      const currentNode = docsData.getAtomValue(docsData.getNodeData(docId, nodeId)) as any;
+      if (currentNode?.segments && !currentNode.segments.includes(segEndId)) {
+        focusedSegmentId = undefined;
+      }
+    }
+  }
+
+  return {
+    focusedSegmentId,
+    cursorPos,
+    selectionStart,
+    selectionEnd,
+    segStartId,
+    segEndId
+  };
+};
+
+const _restoreSegmentSelection = (docId: string, nodeId: string, type: string, focusState: any) => {
+  const {
+    focusedSegmentId,
+    cursorPos,
+    selectionStart,
+    selectionEnd,
+    segStartId,
+    segEndId
+  } = focusState || {};
+
+  const isCrossSelection = segStartId && segEndId && segStartId !== segEndId;
+  if (isCrossSelection) {
+    const restored = _restoreCrossSelection({
+      segStartId,
+      segEndId,
+      selectionStart,
+      selectionEnd
+    });
+    if (restored && segEndId) {
+      docsState.triggerFocus(docId, segEndId, type);
+      return;
+    }
+  }
+
+  if (focusedSegmentId) {
+    if (selectionStart !== undefined && selectionEnd !== undefined) {
+      docsState.triggerFocus(docId, focusedSegmentId, type, {
+        selectionStart,
+        selectionEnd,
+        cursorPos: undefined
+      });
+    } else if (cursorPos !== undefined) {
+      docsState.triggerFocus(docId, focusedSegmentId, type, {
+        cursorPos,
+        selectionStart: undefined,
+        selectionEnd: undefined
+      });
+    } else {
+      docsState.triggerFocus(docId, focusedSegmentId, type, {
+        cursorPos: undefined,
+        selectionStart: undefined,
+        selectionEnd: undefined
+      });
+    }
+  } else {
+    docsState.triggerFocus(docId, nodeId, type);
+  }
+};
+
+const _getSegmentInfoFromNode = (node: Node | null) => {
+  let current: Node | null = node?.nodeType === Node.TEXT_NODE ? node.parentNode : node;
+  while (current) {
+    if (current.nodeType === Node.ELEMENT_NODE) {
+      const element = current as HTMLElement;
+      const segmentId = element.getAttribute?.('data-segment-id');
+      if (segmentId) {
+        return { segmentId, element };
+      }
+    }
+    current = current.parentNode;
+  }
+  return null;
+};
+
+const _restoreCrossSelection = ({ segStartId, segEndId, selectionStart, selectionEnd }: any) => {
+  const startEl = document.querySelector(`[data-segment-id="${segStartId}"]`) as HTMLElement | null;
+  const endEl = document.querySelector(`[data-segment-id="${segEndId}"]`) as HTMLElement | null;
+  if (!startEl || !endEl) return false;
+
+  const startTextNode = _findFirstTextNode(startEl);
+  const endTextNode = _findFirstTextNode(endEl);
+  if (!startTextNode || !endTextNode) return false;
+
+  const startLen = startTextNode.textContent?.length || 0;
+  const endLen = endTextNode.textContent?.length || 0;
+  const startOffset = Math.min(selectionStart ?? 0, startLen);
+  const endOffset = Math.min(selectionEnd ?? 0, endLen);
+
+  const range = document.createRange();
+  range.setStart(startTextNode, startOffset);
+  range.setEnd(endTextNode, endOffset);
+  const sel = window.getSelection();
+  sel?.removeAllRanges();
+  sel?.addRange(range);
+  return true;
+};
+
+const _findFirstTextNode = (element: HTMLElement) => {
+  const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT, null);
+  return walker.nextNode() as Text | null;
+};
 
 // ============================================================================
 // TypeScript Type Definitions
@@ -984,10 +1126,36 @@ export const createRenderUtilsContextValue = ({
      * @returns {object} - Result object with code, message, and data
      */
     indentNode: (nodeId: string) => {
-      console.log(`🔄 Indent operation started for node: ${nodeId}`);
+      console.log(`[🔄INDENT]Indent operation started for node: ${nodeId}`);
       if (!docId) return { code: -1, message: 'No docId available', data: null };
       
       try {
+        const focusState = _captureSegmentSelection(docId, nodeId);
+
+        if (isCrossSelection()) {
+          const rootNodeId = docsData.getAtomValue(docsData.getRootNodeId(docId));
+          const getNodeDataById = (id: string) => docsData.getAtomValue(docsData.getNodeData(docId, id));
+          const result: any = multiNodeIndent({
+            rootNodeId,
+            getNodeDataById,
+            nodes: {}
+          });
+
+          if (result.code !== 0) {
+            console.warn(`[⚠️INDENT] Multi-node indent rejected: ${result.message}`);
+            return { code: result.code, message: result.message, data: null };
+          }
+
+          result.changes.forEach((change: any) => {
+            docsData.setAtom(docsData.getNodeData(docId, change.nodeId), (prev: any) => immer(prev, change.updates));
+          });
+
+          requestAnimationFrame(() => {
+            _restoreSegmentSelection(docId, nodeId, 'indented', focusState);
+          });
+          return { code: 0, message: 'Multi-node indent completed', data: null };
+        }
+
         // Extract relevant nodes from atoms
         const currentNode = docsData.getAtomValue(docsData.getNodeData(docId, nodeId)) as any;
         const nodes: any = { [nodeId]: currentNode };
@@ -1006,7 +1174,7 @@ export const createRenderUtilsContextValue = ({
         // Call EditUtils function
         const result: any = indentNodeUtil(nodeId, nodes);
         if (result.code !== 0) {
-          console.warn(`⚠️ Indent validation failed for ${nodeId}: ${result.message}`);
+          console.warn(`[⚠️INDENT] Indent validation failed for ${nodeId}: ${result.message}`);
           return { code: result.code, message: result.message, data: null };
         }
         
@@ -1015,8 +1183,10 @@ export const createRenderUtilsContextValue = ({
           docsData.setAtom(docsData.getNodeData(docId, change.nodeId), (prev: any) => immer(prev, change.updates));
         });
         
-        console.log(`✅ Indent operation completed for ${nodeId}, now child of ${result.data?.prevSiblingId}${result.data?.nodeChildrenCount > 0 ? `, unwrapped ${result.data.nodeChildrenCount} children` : ''}`);
-        docsState.triggerFocus(docId, nodeId, 'indented');
+        console.log(`[✅INDENT] Indent operation completed for ${nodeId}, now child of ${result.data?.prevSiblingId}${result.data?.nodeChildrenCount > 0 ? `, unwrapped ${result.data.nodeChildrenCount} children` : ''}`);
+        requestAnimationFrame(() => {
+          _restoreSegmentSelection(docId, nodeId, 'indented', focusState);
+        });
         
         setTimeout(() => {
           if (nodeBulletState.hasAnyBulletReqs(docId, nodeId)) {
@@ -1024,7 +1194,7 @@ export const createRenderUtilsContextValue = ({
             Object.keys(requests).forEach(containerClassName => {
               nodeBulletState.reqCalcBulletYPos(docId, nodeId, containerClassName);
             });
-            console.log(`🔄 Triggered bullet recalculation for ${nodeId}`);
+            console.log(`[🔄INDENT] Triggered bullet recalculation for ${nodeId}`);
           }
         }, 0);
         
@@ -1044,71 +1214,33 @@ export const createRenderUtilsContextValue = ({
       if (!docId) return { code: -1, message: 'No docId available', data: null };
       
       try {
-        // Capture cursor position/selection and segment ID before outdenting
-        let cursorPos: number | undefined = undefined;
-        let selectionStart: number | undefined = undefined;
-        let selectionEnd: number | undefined = undefined;
-        let focusedSegmentId: string | undefined = undefined;
-        const selection = window.getSelection();
-        if (selection && selection.rangeCount > 0) {
-          const range = selection.getRangeAt(0);
-          // Start from the container (could be text node or element)
-          // Use startContainer for both collapsed and non-collapsed selections
-          let node: Node | null = range.startContainer;
-          
-          // Find the segment element that contains the selection start
-          // Traverse up from the text node to find the element with data-segment-id
-          let segmentElement: HTMLElement | null = null;
-          while (node) {
-            // If it's a text node, get its parent
-            if (node.nodeType === Node.TEXT_NODE) {
-              node = node.parentNode;
-              continue;
-            }
-            
-            // Check if this element has the segment ID
-            if (node.nodeType === Node.ELEMENT_NODE) {
-              const element = node as HTMLElement;
-              const segmentId = element.getAttribute?.('data-segment-id');
-              if (segmentId) {
-                segmentElement = element;
-                focusedSegmentId = segmentId;
-                break;
-              }
-            }
-            node = node.parentNode;
+        if (isCrossSelection()) {
+          const rootNodeId = docsData.getAtomValue(docsData.getRootNodeId(docId));
+          const getNodeDataById = (id: string) => docsData.getAtomValue(docsData.getNodeData(docId, id));
+          const focusState = _captureSegmentSelection(docId, nodeId);
+          const result: any = multiNodeOutdent({
+            rootNodeId,
+            getNodeDataById,
+            nodes: {}
+          });
+
+          if (result.code !== 0) {
+            console.warn(`⚠️ Multi-node outdent rejected: ${result.message}`);
+            return { code: result.code, message: result.message, data: null };
           }
-          
-          // Check if the found segment belongs to the node being outdented
-          if (segmentElement && focusedSegmentId) {
-            const currentNode = docsData.getAtomValue(docsData.getNodeData(docId, nodeId)) as any;
-            if (currentNode?.segments?.includes(focusedSegmentId)) {
-              if (selection.isCollapsed) {
-                // For collapsed selection, get cursor position only
-                // Explicitly clear selection values to avoid reusing old data
-                cursorPos = getCursorPos(segmentElement);
-                selectionStart = undefined;
-                selectionEnd = undefined;
-              } else {
-                // For non-collapsed selection, capture both start and end positions
-                // Explicitly clear cursorPos to avoid reusing old data
-                const preStartRange = range.cloneRange();
-                preStartRange.selectNodeContents(segmentElement);
-                preStartRange.setEnd(range.startContainer, range.startOffset);
-                selectionStart = preStartRange.toString().length;
-                
-                const preEndRange = range.cloneRange();
-                preEndRange.selectNodeContents(segmentElement);
-                preEndRange.setEnd(range.endContainer, range.endOffset);
-                selectionEnd = preEndRange.toString().length;
-                cursorPos = undefined;
-              }
-            } else {
-              // Segment doesn't belong to this node, clear it
-              focusedSegmentId = undefined;
-            }
-          }
+
+          result.changes.forEach((change: any) => {
+            docsData.setAtom(docsData.getNodeData(docId, change.nodeId), (prev: any) => immer(prev, change.updates));
+          });
+
+          requestAnimationFrame(() => {
+            _restoreSegmentSelection(docId, nodeId, 'outdented', focusState);
+          });
+
+          return { code: 0, message: 'Multi-node outdent completed', data: null };
         }
+
+        const focusState = _captureSegmentSelection(docId, nodeId);
         
         // Extract relevant nodes from atoms
         const currentNode = docsData.getAtomValue(docsData.getNodeData(docId, nodeId)) as any;
@@ -1148,33 +1280,7 @@ export const createRenderUtilsContextValue = ({
         // Trigger focus on the specific segment that was focused, preserving cursor position/selection
         // Use requestAnimationFrame to ensure DOM has updated after outdent
         requestAnimationFrame(() => {
-          if (focusedSegmentId) {
-            if (selectionStart !== undefined && selectionEnd !== undefined) {
-              // Preserve selection range - explicitly clear cursorPos to avoid old values
-              docsState.triggerFocus(docId, focusedSegmentId, 'outdented', { 
-                selectionStart, 
-                selectionEnd,
-                cursorPos: undefined 
-              });
-            } else if (cursorPos !== undefined) {
-              // Preserve cursor position - explicitly clear selection to avoid old values
-              docsState.triggerFocus(docId, focusedSegmentId, 'outdented', { 
-                cursorPos,
-                selectionStart: undefined,
-                selectionEnd: undefined
-              });
-            } else {
-              // Fallback: focus without position - explicitly clear all to avoid old values
-              docsState.triggerFocus(docId, focusedSegmentId, 'outdented', {
-                cursorPos: undefined,
-                selectionStart: undefined,
-                selectionEnd: undefined
-              });
-            }
-          } else {
-            // Fallback: focus the node (will default to first segment)
-            docsState.triggerFocus(docId, nodeId, 'outdented');
-          }
+          _restoreSegmentSelection(docId, nodeId, 'outdented', focusState);
         });
         
         return { code: 0, message: result.message, data: { grandparentId: result.data?.grandparentId } };

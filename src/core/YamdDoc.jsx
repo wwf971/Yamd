@@ -9,7 +9,7 @@ import { handleRefClick, handleBibClick, handleBackToSource } from '@/core/YamdD
 import { useDocStore, generateDocId, docsData, docsState, nodeBulletState } from '@/core/DocStore.js';
 // Import RenderUtils context for direct usage
 import { RenderUtilsContext, createRenderUtilsContextValue } from '@/core/RenderUtils.ts';
-import { findSegFromSelection, getFirstSegInTree, getLastSegInTree } from '@/components/TextUtils.js';
+import { findSegFromSelection, getFirstSegInTree, getLastSegInTree, findSegIdFromNode } from '@/components/TextUtils.js';
 
 
 
@@ -51,7 +51,7 @@ const YamdDoc = ({
   const notifySegmentToUnfocus = useCallback((prevSegId, newSegId) => {
     if (!isEditable || !prevSegId || prevSegId === newSegId) return;
     
-    console.log(`🔔 Notifying segment ${prevSegId} to unfocus, new focus: ${newSegId}`);
+    // console.log(`[🔔UNFOCUS] Notifying segment ${prevSegId} to unfocus, new focus: ${newSegId}`);
     docsState.triggerUnfocus(docId, prevSegId, prevSegId, 'clickAway');
   }, [isEditable, docId]);
   
@@ -82,7 +82,7 @@ const YamdDoc = ({
     
     // Notify previous segment to unfocus before clearing
     if (isEditable && prevSegId) {
-      console.log(`🔔 Notifying segment ${prevSegId} to unfocus (cancel)`);
+      // console.log(`[🔔UNFOCUS] Notifying segment ${prevSegId} to unfocus (cancel)`);
       docsState.triggerUnfocus(docId, prevSegId, prevSegId, 'clickAway');
     }
     
@@ -100,6 +100,12 @@ const YamdDoc = ({
     // Only handle if editable and there's a focused segment
     if (!isEditable || !currentSegId) return;
     
+    // Ignore blur when the document loses focus (such as when switching to another browser tab)
+    // Keep logical focus so edits remain tracked when the tab becomes active again
+    if (document.visibilityState !== 'visible' || !document.hasFocus()) {
+      return;
+    }
+
     // Check if the blur is due to clicking outside the document
     // relatedTarget is the element that received focus (null if clicking outside)
     const clickedOutside = !e.relatedTarget || !e.currentTarget.contains(e.relatedTarget);
@@ -171,26 +177,15 @@ const YamdDoc = ({
       const range = selection.getRangeAt(0);
       
       // Find segments for start and end - search across component boundaries
-      const findSegment = (node) => {
-        let current = node.nodeType === Node.TEXT_NODE ? node.parentElement : node;
-        while (current) {
-          if (current.hasAttribute && current.hasAttribute('data-segment-id')) {
-            return current.getAttribute('data-segment-id');
-          }
-          current = current.parentElement;
-        }
-        return null;
-      };
-      
-      const startSegId = findSegment(range.startContainer);
-      const endSegId = findSegment(range.endContainer);
+      const segStartId = findSegIdFromNode(range.startContainer);
+      const segEndId = findSegIdFromNode(range.endContainer);
       
       // If selection spans multiple segments, focus on the end segment (preserves selection)
-      if (startSegId && endSegId && startSegId !== endSegId) {
+      if (segStartId && segEndId && segStartId !== segEndId) {
         e.preventDefault();
         e.stopPropagation();
         // Focus on the end segment - the focus handler will preserve the selection
-        docsState.triggerFocus(docId, endSegId, 'fromLeft');
+        docsState.triggerFocus(docId, segEndId, 'fromLeft');
         return;
       }
     }
@@ -212,23 +207,12 @@ const YamdDoc = ({
         // Double-check: if selection is not collapsed, verify it doesn't span multiple segments
         if (!selection.isCollapsed) {
           const range = selection.getRangeAt(0);
-          const findSegment = (node) => {
-            let current = node.nodeType === Node.TEXT_NODE ? node.parentElement : node;
-            while (current) {
-              if (current.hasAttribute && current.hasAttribute('data-segment-id')) {
-                return current.getAttribute('data-segment-id');
-              }
-              current = current.parentElement;
-            }
-            return null;
-          };
-          
-          const startSegId = findSegment(range.startContainer);
-          const endSegId = findSegment(range.endContainer);
+          const segStartId = findSegIdFromNode(range.startContainer);
+          const segEndId = findSegIdFromNode(range.endContainer);
           
           // If selection spans multiple segments, focus on the end segment (preserves selection)
-          if (startSegId && endSegId && startSegId !== endSegId) {
-            docsState.triggerFocus(docId, endSegId, 'fromLeft');
+          if (segStartId && segEndId && segStartId !== segEndId) {
+            docsState.triggerFocus(docId, segEndId, 'fromLeft');
             return;
           }
         }

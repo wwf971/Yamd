@@ -86,7 +86,8 @@ export function getSampleYaml(name) {
       - "Basic text: This is a basic text example"
       - "Rich text: This is a rich text example with \\\\ref{1a} and \\\\bib{1b}[child=ul]":
         - "Child 1 $x = \\\\frac{-b \\\\pm \\\\sqrt{b^2-4ac}}{2a}$"
-        - "Child 2"
+        - "Child 2[child=ul]":
+          - "Child 3"
     `
   }
 
