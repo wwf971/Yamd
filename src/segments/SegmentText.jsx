@@ -685,24 +685,9 @@ const SegmentText = forwardRef(({ segmentId, parentNodeId, className, globalInfo
   };
 
   
-  if (!finalIsEditable) {
-    // Non-editable mode: just render as span
-    return (
-      <span 
-        ref={textEl} 
-        className={`${className} yamd-text-segment`}
-        data-segment-id={segmentId}
-        style={{
-          whiteSpace: 'pre-wrap' /* make the space displayed as a space */
-        }}
-      >
-        {text}
-      </span>
-    );
-  }
-  
   // Set initial content on mount only
   useEffect(() => {
+    if (!finalIsEditable) return;
     if (textEl.current) {
       if (text === '') {
         // Show hint text for empty segments
@@ -719,7 +704,23 @@ const SegmentText = forwardRef(({ segmentId, parentNodeId, className, globalInfo
         isShowingHintText.current = false;
       }
     }
-  }, []);
+  }, [finalIsEditable]);
+  
+  if (!finalIsEditable) {
+    // Non-editable mode: just render as span
+    return (
+      <span 
+        ref={textEl} 
+        className={`${className} yamd-text-segment`}
+        data-segment-id={segmentId}
+        style={{
+          whiteSpace: 'pre-wrap' /* make the space displayed as a space */
+        }}
+      >
+        {text}
+      </span>
+    );
+  }
   
   // Editable mode: logical focus (allows cross-segment selection)
   // No nested contentEditable - part of parent YamdDoc's contentEditable context

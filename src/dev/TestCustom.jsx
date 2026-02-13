@@ -11,7 +11,8 @@ import {
   flattenJson,
   processAllTextSegments
 } from '@/parse/ParseYamd.js';
-import NodeCustomBox from '@/custom/NodeCustomBox.jsx';
+import { getCustomComp } from '@/custom/customCompStore.js';
+import { BoolSlider } from '@wwf971/react-comp-misc';
 import { DocDataDisplay } from './TestUtils.jsx';
 import './TestRender.css';
 import './TestEdit.css';
@@ -26,11 +27,9 @@ const TestCustom = () => {
   const [nodeIds, setNodeIds] = useState([]);
   const [parseError, setParseError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-
-  // Custom node renderer - maps customType to component
-  const customNodeRenderer = {
-    'box': NodeCustomBox,
-  };
+  const [isEditable, setIsEditable] = useState(true);
+  const [currentSegmentId, setCurrentSegId] = useState(null);
+  const [activeElement, setActiveElement] = useState(null);
 
   // initialize mathjax
   React.useEffect(() => {
@@ -38,6 +37,25 @@ const TestCustom = () => {
     loadMathJax().catch(err => {
       console.error('Failed to load MathJax in TestCustom:', err);
     });
+  }, []);
+
+  // Track active element for debugging
+  useEffect(() => {
+    const updateActiveElement = () => {
+      setActiveElement(document.activeElement);
+    };
+
+    // Update on focus/blur events
+    document.addEventListener('focusin', updateActiveElement);
+    document.addEventListener('focusout', updateActiveElement);
+    
+    // Initial update
+    updateActiveElement();
+
+    return () => {
+      document.removeEventListener('focusin', updateActiveElement);
+      document.removeEventListener('focusout', updateActiveElement);
+    };
   }, []);
 
   const handleParse = async () => {
@@ -106,14 +124,14 @@ const TestCustom = () => {
     // Auto-parse after 1 second
     setTimeout(() => {
       handleParse();
-    }, 1000);
+    }, 300);
   }, [yamlInput]);
 
   return (
     <div className="test-render-container">
       <div className="test-render-header">
-        <h2 className="test-render-title">Custom Node Test</h2>
-        <p className="test-render-description">Testing custom node types with NodeWrapper integration</p>
+        <div className="test-render-title">Custom Node Test</div>
+        <div className="test-render-description">Testing custom node types with NodeWrapper integration</div>
       </div>
       
       <div className="button-controls">
@@ -126,34 +144,89 @@ const TestCustom = () => {
         </button>
       </div>
 
-      {/* Sample Selection Radio Buttons */}
-      <div className="sample-selection">
-        <span className="sample-selection-label">Select Sample:</span>
-        {sampleNames.map(name => (
-          <label key={name} className="sample-radio-label">
-            <input
-              type="radio"
-              name="sample"
-              value={name}
-              checked={selectedSample === name}
-              onChange={(e) => handleSampleChange(e.target.value)}
-              className="sample-radio-input"
-            />
-            <span className="sample-radio-text">{name}</span>
-          </label>
-        ))}
+      <div className="panel" style={{ marginTop: '8px' }}>
+          <div className="yaml-display-title">YAML Input</div>
+          {/* Sample Selection Radio Buttons */}
+          <div className="sample-selection">
+            <span className="sample-selection-label">Select Sample:</span>
+            {sampleNames.map(name => (
+              <label key={name} className="sample-radio-label">
+                <input
+                  type="radio"
+                  name="sample"
+                  value={name}
+                  checked={selectedSample === name}
+                  onChange={(e) => handleSampleChange(e.target.value)}
+                  className="sample-radio-input"
+                />
+                <span className="sample-radio-text">{name}</span>
+              </label>
+            ))}
+          </div>
+          <textarea
+            value={yamlInput}
+            onChange={(e) => setYamlInput(e.target.value)}
+            placeholder="Enter your YAML here..."
+            className="panel-textarea panel-textarea-input panel-textarea-short"
+          />
       </div>
 
-      {/* YAML Input */}
-      <div className="panel">
-        <h3 className="panel-title">YAML Input</h3>
-        <textarea
-          value={yamlInput}
-          onChange={(e) => setYamlInput(e.target.value)}
-          placeholder="Enter your YAML here..."
-          className="panel-textarea panel-textarea-input"
-          style={{ height: '200px' }}
-        />
+      <div className="panels-grid" style={{ marginTop: '8px' }}>
+        {docId && docData && (
+          <div className="rendered-document-section">
+            <div className="rendered-doc-header">
+              <div className="rendered-document-title">Rendered Document with Custom Nodes</div>
+              <div className="edit-toggle">
+                <span className="edit-toggle-label">Editable</span>
+                <BoolSlider checked={isEditable} onChange={setIsEditable} />
+              </div>
+            </div>
+            <div className="rendered-document-container">
+              <YamdDoc 
+                docId={docId}
+                disableRefJump={false}
+                isEditable={isEditable}
+                getCustomComp={getCustomComp}
+                onCurrentSegmentChange={setCurrentSegId}
+              />
+            </div>
+          </div>
+        )}
+        <div className="panel" style={{ maxHeight: '600px' }}>
+          <div className="panel-title">Flattened Data</div>
+          <div className="flattened-panel-status">
+            <div className="flattened-panel-status-row">
+              <strong>Current Segment:</strong> {currentSegmentId || 'none'}
+            </div>
+            <div className="flattened-panel-status-row">
+              <strong>Active Element:</strong> {
+                activeElement
+                  ? `<${activeElement.tagName.toLowerCase()}${
+                      activeElement.id ? ` id="${activeElement.id}"` : ''
+                    }${
+                      activeElement.className ? ` class="${activeElement.className}"` : ''
+                    }${
+                      activeElement.dataset?.segmentId ? ` data-segment-id="${activeElement.dataset.segmentId}"` : ''
+                    }${
+                      activeElement.dataset?.docId ? ` data-doc-id="${activeElement.dataset.docId}"` : ''
+                    }${
+                      activeElement.contentEditable === 'true' ? ' contenteditable="true"' : ''
+                    }>`
+                  : 'none'
+              }
+            </div>
+          </div>
+          <div className="doc-data-shell">
+            {docId && docData && (
+              <DocDataDisplay 
+                key={docId}
+                docId={docId} 
+                nodeIds={nodeIds} 
+                isLoading={isLoading}
+              />
+            )}
+          </div>
+        </div>
       </div>
 
       {parseError && (
@@ -163,33 +236,7 @@ const TestCustom = () => {
         </div>
       )}
 
-      {/* Split View: Rendered Document and Flattened Data */}
-      {docId && docData && (
-        <div className="split-view-section">
-          {/* Left Panel: Rendered Document */}
-          <div className="panel-rendered">
-            <h3 className="panel-rendered-title">Rendered Document with Custom Nodes</h3>
-            <div className="panel-rendered-content">
-              <YamdDoc 
-                docId={docId}
-                disableRefJump={false}
-                customNodeRenderer={customNodeRenderer}
-              />
-            </div>
-          </div>
-          
-          {/* Right Panel: Flattened Data */}
-          <div className="flattened-panel">
-            <h3 className="flattened-panel-title">Flattened Data (Real-time Updates)</h3>
-            <DocDataDisplay 
-              key={docId}
-              docId={docId} 
-              nodeIds={nodeIds} 
-              isLoading={isLoading}
-            />
-          </div>
-        </div>
-      )}
+
     </div>
   );
 };

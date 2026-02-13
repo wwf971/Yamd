@@ -178,7 +178,7 @@ const TestEdit = () => {
 
       {/* Top Row: YAML Display */}
       <div className="yaml-display-section">
-        <h3 className="yaml-display-title">YAML Source</h3>
+        <div className="yaml-display-title">YAML Source</div>
         <textarea
           value={yamlInput}
           readOnly

@@ -21,7 +21,7 @@ const YamdDoc = ({
   docId,
   disableRefJump = false,
   disableBibsList = false,
-  customNodeRenderer = null,
+  getCustomComp = null,
   isEditable = false,
   onCurrentSegmentChange = null, // Callback for current segment ID changes
   onCreate = null, // Callback when a node/segment is created: (id, data) => void
@@ -296,8 +296,8 @@ const YamdDoc = ({
        * @returns {React.Element} Rendered custom node component
        */
       renderCustomNode: (nodeData, parentInfo, globalInfo) => {
-        if (!customNodeRenderer) {
-          return <div className="yamd-error">No custom node renderer provided</div>;
+        if (!getCustomComp) {
+          return <div className="yamd-error">No getCustomComp provided</div>;
         }
         
         const customType = nodeData.attr?.customType;
@@ -305,9 +305,9 @@ const YamdDoc = ({
           return <div className="yamd-error">Custom node missing customType attribute</div>;
         }
         
-        const CustomComponent = customNodeRenderer[customType];
+        const CustomComponent = getCustomComp(customType);
         if (!CustomComponent) {
-          return <div className="yamd-error">Unknown custom type: {customType}</div>;
+          return <div className="yamd-error">Custom component not found</div>;
         }
         
         // Wrap the custom component with NodeWrapper to handle bullet positioning
@@ -341,7 +341,7 @@ const YamdDoc = ({
     
     return globalInfo;
   }, [handleRefClickCallback, handleBibClickCallback,
-      registerNodeRef, getNodeRefById, docId, customNodeRenderer
+      registerNodeRef, getNodeRefById, docId, getCustomComp
     ]
   );
 

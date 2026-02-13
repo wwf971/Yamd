@@ -238,12 +238,14 @@ const Segments = forwardRef(({ nodeId, className, parentInfo, globalInfo = null 
         
         const upTargetId = getMoveUpTargetId(nodeId, renderUtils.getNodeDataById);
         if (upTargetId) {
-          // Check if target node has segments (is a focusable rich text node)
+          // Check if target node is focusable (has segments OR is a custom node)
           const upTargetNode = renderUtils.getNodeDataById(upTargetId);
           const hasSegments = upTargetNode?.segments && upTargetNode.segments.length > 0;
+          const isCustomNode = upTargetNode?.customType !== undefined;
+          const isFocusable = hasSegments || isCustomNode;
           
-          if (hasSegments) {
-            // Target node has segments, move to it
+          if (isFocusable) {
+            // Target node is focusable, move to it
             // Clear current segment before moving to previous node
             renderUtils.cancelCurrentSegId?.();
             
@@ -255,8 +257,8 @@ const Segments = forwardRef(({ nodeId, className, parentInfo, globalInfo = null 
             // console.log(`⬆️ Triggering focus on ${upTargetId} with cursorPageX=${cursorPageX}`);
             renderUtils.triggerFocus(upTargetId, focusType, { cursorPageX });
           } else {
-            // Target node has no segments - stay on current segment and move cursor to beginning
-            // console.log(`⬆️ Previous node ${upTargetId} has no segments, staying on segment: ${from}, moving cursor to beginning`);
+            // Target node is not focusable - stay on current segment and move cursor to beginning
+            // console.log(`⬆️ Previous node ${upTargetId} is not focusable, staying on segment: ${from}, moving cursor to beginning`);
             renderUtils.triggerFocus(from, 'fromLeft');
           }
         } else {
@@ -265,7 +267,6 @@ const Segments = forwardRef(({ nodeId, className, parentInfo, globalInfo = null 
           // Trigger focus with fromLeft to position cursor at beginning
           renderUtils.triggerFocus(from, 'fromLeft');
         }
-        
         break;
         
       case 'down':
@@ -274,19 +275,21 @@ const Segments = forwardRef(({ nodeId, className, parentInfo, globalInfo = null 
         
         const downTargetId = getMoveDownTargetId(nodeId, renderUtils.getNodeDataById);
         if (downTargetId) {
-          // Check if target node has segments (is a focusable rich text node)
+          // Check if target node is focusable (has segments OR is a custom node)
           const downTargetNode = renderUtils.getNodeDataById(downTargetId);
           const hasSegments = downTargetNode?.segments && downTargetNode.segments.length > 0;
+          const isCustomNode = downTargetNode?.customType !== undefined;
+          const isFocusable = hasSegments || isCustomNode;
           
-          if (hasSegments) {
-            // Target node has segments, move to it
+          if (isFocusable) {
+            // Target node is focusable, move to it
             // Clear current segment before moving to next node
             renderUtils.cancelCurrentSegId?.();
             // console.log(`⬇️ Triggering focus on ${downTargetId} with cursorPageX=${cursorPageX}`);
             renderUtils.triggerFocus(downTargetId, 'arrowDown', { cursorPageX });
           } else {
-            // Target node has no segments - stay on current segment and move cursor to end
-            // console.log(`⬇️ Next node ${downTargetId} has no segments, staying on segment: ${from}, moving cursor to end`);
+            // Target node is not focusable - stay on current segment and move cursor to end
+            // console.log(`⬇️ Next node ${downTargetId} is not focusable, staying on segment: ${from}, moving cursor to end`);
             renderUtils.triggerFocus(from, 'fromRight');
           }
         } else {
