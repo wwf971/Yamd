@@ -103,7 +103,10 @@ const YamdNode = React.memo(({ nodeId, parentInfo = null, globalInfo = null }) =
       );
     }
 
-    if (nodeData.type === 'custom') {
+    // Check if type is not a built-in type - if so, try to render as custom component
+    const builtInTypes = ['text', 'array', 'object', 'node', 'latex', 'image', 'video', 'image-list', 'video-list'];
+    if (nodeData.type && !builtInTypes.includes(nodeData.type)) {
+      // This is a custom component type (e.g., 'box', 'card', etc.)
       return (
         <AddListBulletBeforeNode>
           {globalInfo.renderCustomNode(nodeData, parentInfo, globalInfo)}

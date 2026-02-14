@@ -32,6 +32,7 @@ const NodeCustomBox = forwardRef(({ nodeId, nodeData, nodeState, parentInfo, glo
   const boxRef = useRef(null);
   const headerRef = useRef(null);
   const titleRef = useRef(null);
+  const contentRef = useRef(null);
   const [isFocused, setIsFocused] = useState(false);
   
   // Get render utils from context
@@ -184,6 +185,14 @@ const NodeCustomBox = forwardRef(({ nodeId, nodeData, nodeState, parentInfo, glo
   const handleMouseDown = (event) => {
     if (!renderUtils.isEditable) return;
     console.log('CustomBox handleMouseDown, target:', event.target.className || event.target.tagName);
+    
+    // If click is inside content area (children), let child segments handle it
+    const clickedOnContent = contentRef.current && contentRef.current.contains(event.target);
+    if (clickedOnContent) {
+      console.log('CustomBox: click on child content, letting it handle');
+      return;
+    }
+    
     event.stopPropagation();
     
     // Always set focused and current segment
@@ -274,7 +283,7 @@ const NodeCustomBox = forwardRef(({ nodeId, nodeData, nodeState, parentInfo, glo
       </div>
       
       {children.length > 0 && (
-        <div className="yamd-custom-box-content">
+        <div ref={contentRef} className="yamd-custom-box-content">
           {renderUtils.renderChildNodes({
             childIds: children,
             shouldAddIndent: true,

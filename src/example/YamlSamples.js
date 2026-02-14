@@ -95,18 +95,19 @@ export function getSampleYaml(name) {
     return `
       # Custom Node Examples
       - custom components[child=ul]:
-        - "My Custom Box[custom,customType=box]"
-        - "Another Box[custom,customType=box]"
+        - "My Custom Box[box]"
+        - "Another Box[box]"
     `
   }
   
   if(name === 'custom-mixed') {
     return `
       # Custom with Children
-      - "Box with children[custom,customType=box]":
-        - Child item 1
-        - Child item 2
-        - Child item 3
+      - Demonstration of custom box with children[child=ul]:
+        - "Box with children[box,childDisplay=ul]":
+          - Child item 1
+          - Child item 2
+          - Child item 3
     `
   }
   

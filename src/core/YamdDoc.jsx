@@ -290,7 +290,7 @@ const YamdDoc = ({
       
       /**
        * Render custom node - calls user-provided custom node renderer wrapped in NodeWrapper
-       * @param {object} nodeData - The node data with type='custom' and customType
+       * @param {object} nodeData - The node data with type (e.g., 'box', 'card')
        * @param {object} parentInfo - Parent context information
        * @param {object} globalInfo - Global info object
        * @returns {React.Element} Rendered custom node component
@@ -300,14 +300,14 @@ const YamdDoc = ({
           return <div className="yamd-error">No getCustomComp provided</div>;
         }
         
-        const customType = nodeData.attr?.customType;
+        const customType = nodeData.type;
         if (!customType) {
-          return <div className="yamd-error">Custom node missing customType attribute</div>;
+          return <div className="yamd-error">Custom node missing type</div>;
         }
         
         const CustomComponent = getCustomComp(customType);
         if (!CustomComponent) {
-          return <div className="yamd-error">Custom component not found</div>;
+          return <div className="yamd-error">Custom component '{customType}' not found</div>;
         }
         
         // Wrap the custom component with NodeWrapper to handle bullet positioning

@@ -25,8 +25,7 @@ const ATTR_WHITELIST = {
   'panelDefault': true,  // 'expand', 'collapse'
   
   // Node type and identification
-  'type': true,          // Node type: 'latex', 'image', 'video', 'custom', etc.
-  'customType': true,    // Custom node subtype
+  'type': true,          // Node type: 'latex', 'image', 'video', 'box', etc.
   'id': false,           // User-defined ID goes to htmlId, not attr
   
   // Content attributes
@@ -304,8 +303,6 @@ export function parseShorthandAttribute(shorthand) {
     return { type: 'image-list', selfDisplay: 'image-list' };
   } else if (trimmed === 'video-list' || trimmed === 'videolist') {
     return { type: 'video-list', selfDisplay: 'video-list' };
-  } else if (trimmed === 'custom') {
-    return { type: 'custom', selfDisplay: 'custom' };
   }
   
   // Determine if it's selfDisplay or childDisplay based on the value
@@ -314,6 +311,8 @@ export function parseShorthandAttribute(shorthand) {
   if (childDisplayValues.includes(trimmed)) {
     return { childDisplay: normalizeAttributeValue('childDisplay', trimmed) };
   } else {
-    return { selfDisplay: trimmed };
+    // For unknown shorthands, treat as a custom component type
+    // This allows [box] to be parsed as type='box'
+    return { type: trimmed, selfDisplay: trimmed };
   }
 }
