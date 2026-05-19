@@ -220,8 +220,8 @@ const Segments = forwardRef(({ nodeId, className, parentInfo, globalInfo = null 
 
     // Get fresh segments array and node data
     const currentNodeData = renderUtils.getNodeDataById?.(nodeId);
-    const currentSegments = currentNodeData?.segments || [];
-    const segmentIndex = currentSegments.indexOf(from);
+    const currentSegs = currentNodeData?.segments || [];
+    const segmentIndex = currentSegs.indexOf(from);
     
     if (segmentIndex === -1) {
       console.warn(`⚠️ Segment ${from} not found in segments array`);
@@ -236,7 +236,7 @@ const Segments = forwardRef(({ nodeId, className, parentInfo, globalInfo = null 
       cursorLoc,
       cursorPos,
       additionalData,
-      currentSegments,
+      currentSegs,
       currentNodeData,
       renderUtils
     };

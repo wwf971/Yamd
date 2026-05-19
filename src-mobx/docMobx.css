@@ -1,0 +1,49 @@
+.mobx-doc-root {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-family: sans-serif;
+  border: 1px solid #d3dae3;
+  border-radius: 2px;
+  background: #fdfefe;
+  padding: 6px;
+  box-sizing: border-box;
+}
+
+.mobx-doc-meta-row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.mobx-doc-meta-item {
+  border: 1px solid #d3dae3;
+  border-radius: 2px;
+  padding: 1px 6px;
+  font-size: 11px;
+  color: #334155;
+  background: #f8fbff;
+}
+
+.mobx-doc-footer-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mobx-doc-action-btn {
+  min-height: 24px;
+  padding: 0 7px;
+  border: 1px solid #c8d1dc;
+  border-radius: 2px;
+  background: #edf2f7;
+  cursor: pointer;
+  font-size: 12px;
+  font-family: sans-serif;
+}
+
+.mobx-doc-footer-text {
+  font-size: 12px;
+  color: #666;
+}

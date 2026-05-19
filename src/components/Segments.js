@@ -223,11 +223,11 @@ export const handleSplitChildEvent = ({
   cursorLoc,
   cursorPos,
   additionalData,
-  currentSegments,
+  currentSegs,
   currentNodeData,
   renderUtils
 }) => {
-  const isLastSegment = segmentIndex === currentSegments.length - 1;
+  const isLastSegment = segmentIndex === currentSegs.length - 1;
   
   // Case 1: Cursor at end
   if (cursorLoc === 'end') {
@@ -288,7 +288,7 @@ export const handleSplitChildEvent = ({
     }
     
     // Get all segments after the current segment
-    const segmentsAfter = currentSegments.slice(segmentIndex + 1);
+    const segmentsAfter = currentSegs.slice(segmentIndex + 1);
     
     // Create new node segments: [rightSegId, ...segmentsAfter]
     const newNodeSegments = [rightSegId, ...segmentsAfter];
@@ -390,7 +390,7 @@ export const handleDeleteChildEvent = ({
   segmentIndex,
   cursorLoc,
   additionalData,
-  currentSegments,
+  currentSegs,
   currentNodeData,
   renderUtils
 }) => {
@@ -430,7 +430,7 @@ export const handleDeleteChildEvent = ({
     
     // Check if we can merge text segments
     const lastPrevSegId = prevSegments[prevSegments.length - 1];
-    const firstCurrentSegId = currentSegments[0];
+    const firstCurrentSegId = currentSegs[0];
     const lastPrevSegData = lastPrevSegId ? renderUtils.getNodeDataById(lastPrevSegId) : null;
     const firstCurrentSegData = firstCurrentSegId ? renderUtils.getNodeDataById(firstCurrentSegId) : null;
     
@@ -460,7 +460,7 @@ export const handleDeleteChildEvent = ({
         }
         
         // Update remaining segments' parentId
-        const remainingSegments = currentSegments.slice(1); // Skip first (merged/deleted) segment
+        const remainingSegments = currentSegs.slice(1); // Skip first (merged/deleted) segment
         remainingSegments.forEach(segId => {
           renderUtils.updateNodeData(segId, (draft) => {
             draft.parentId = prevSiblingId;
@@ -509,7 +509,7 @@ export const handleDeleteChildEvent = ({
         }
         
         // Update remaining segments' parentId
-        const remainingSegments = currentSegments.slice(1); // Skip first (deleted) segment
+        const remainingSegments = currentSegs.slice(1); // Skip first (deleted) segment
         remainingSegments.forEach(segId => {
           renderUtils.updateNodeData(segId, (draft) => {
             draft.parentId = prevSiblingId;
@@ -552,7 +552,7 @@ export const handleDeleteChildEvent = ({
     }
     
     // Normal merge: append all segments without merging
-    currentSegments.forEach(segId => {
+    currentSegs.forEach(segId => {
       renderUtils.updateNodeData(segId, (draft) => {
         draft.parentId = prevSiblingId;
       });
@@ -561,7 +561,7 @@ export const handleDeleteChildEvent = ({
     // Update previous sibling's segments array (use push for Immer mutation)
     renderUtils.updateNodeData(prevSiblingId, (draft) => {
       if (draft.segments) {
-        currentSegments.forEach(segId => {
+        currentSegs.forEach(segId => {
           draft.segments.push(segId);
         });
       }
@@ -594,7 +594,7 @@ export const handleDeleteChildEvent = ({
   
   // Case 2: Regular segment deletion (not at beginning of first segment)
   // If this is the only segment, delete the entire node instead
-  if (currentSegments.length === 1) {
+  if (currentSegs.length === 1) {
     console.log(`🗑️ Only one segment, deleting entire node ${nodeId}`);
     const result = renderUtils.deleteNode?.(nodeId);
     console.log(`🗑️ Delete node result:`, result);
@@ -602,7 +602,7 @@ export const handleDeleteChildEvent = ({
   }
   
   // Multiple segments - delete this segment and focus appropriate one
-  console.log(`🗑️ Deleting segment ${from} (${segmentIndex + 1}/${currentSegments.length}), reason: ${reason}`);
+  console.log(`🗑️ Deleting segment ${from} (${segmentIndex + 1}/${currentSegs.length}), reason: ${reason}`);
   
   // Determine which segment to focus after deletion
   let targetSegmentId;
@@ -610,14 +610,14 @@ export const handleDeleteChildEvent = ({
   
   if (reason === 'pseudoAbandoned') {
     // Pseudo segment abandoned - focus the segment that created it (previous segment)
-    targetSegmentId = segmentIndex > 0 ? currentSegments[segmentIndex - 1] : currentSegments[segmentIndex + 1];
+    targetSegmentId = segmentIndex > 0 ? currentSegs[segmentIndex - 1] : currentSegs[segmentIndex + 1];
     focusType = 'fromRight'; // Position at end of creator segment
     console.log(`🎭 Pseudo segment abandoned, returning to creator: ${targetSegmentId}`);
   } else {
     // Regular deletion - focus previous segment (or next if first)
     targetSegmentId = segmentIndex > 0 
-      ? currentSegments[segmentIndex - 1]  // Focus previous segment
-      : currentSegments[segmentIndex + 1];  // Or next if deleting first
+      ? currentSegs[segmentIndex - 1]  // Focus previous segment
+      : currentSegs[segmentIndex + 1];  // Or next if deleting first
     focusType = 'fromRight'; // Position at end
     console.log(`🗑️ Regular deletion, will focus: ${targetSegmentId}`);
   }

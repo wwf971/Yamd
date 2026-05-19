@@ -1,0 +1,40 @@
+docName: test-row
+dataDocInitial: {}
+configDocInitial:
+  isEditable: true
+compIdRoot: doc-viewer-r1
+compById:
+  doc-viewer-r1:
+    compName: DocViewer
+    childIdList:
+      - event-tester-r1
+    data: {}
+    config:
+      maxHeight: 220
+  event-tester-r1:
+    compName: EventTester
+    childIdList:
+      - row-root-a1
+    data: {}
+    config: {}
+  row-root-a1:
+    compName: Row
+    childIdList:
+      - seg-root-1
+      - seg-root-2
+    data:
+      labelText: root row
+    config:
+      isRoot: true
+  seg-root-1:
+    compName: TextSeg
+    childIdList: []
+    data:
+      text: first segment in root.
+    config: {}
+  seg-root-2:
+    compName: TextSeg
+    childIdList: []
+    data:
+      text: second segment in root.
+    config: {}

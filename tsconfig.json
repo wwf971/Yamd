@@ -7,7 +7,10 @@
     "moduleResolution": "node",
     "esModuleInterop": true,
     "skipLibCheck": true,
-    "strict": true,
+    "strict": false,
+    "noImplicitAny": false,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
     "allowJs": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
@@ -19,7 +22,7 @@
       "@wwf971/react-comp-misc": ["../react-comp-misc/src/index.js"]
     }
   },
-  "include": ["src/**/*", "main.jsx"],
+  "include": ["src/**/*", "src-mobx/**/*", "main.jsx"],
   "exclude": ["node_modules", "build"]
 }
 

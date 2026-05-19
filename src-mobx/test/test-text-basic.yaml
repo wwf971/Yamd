@@ -1,0 +1,29 @@
+docName: test-text-basic
+dataDocInitial: {}
+configDocInitial:
+  isEditable: true
+compIdRoot: doc-viewer-a1
+compById:
+  doc-viewer-a1:
+    compName: DocViewer
+    childIdList:
+      - q8m0n5v2c1a7
+    data: {}
+    config:
+      maxHeight: 220
+  q8m0n5v2c1a7:
+    compName: EventTester
+    childIdList:
+      - z3r6t9y1u4i2
+    data: {}
+    config: {}
+  z3r6t9y1u4i2:
+    compName: TextBasic
+    childIdList: []
+    data:
+      text: |
+        TextBasic editable sample.
+        text updates store immediately.
+        this line is for wrapping test in narrow width.
+    config:
+      isEditable: true

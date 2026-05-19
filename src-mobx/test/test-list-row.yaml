@@ -1,0 +1,105 @@
+docName: test-list-row
+dataDocInitial: {}
+configDocInitial:
+  isEditable: true
+compIdRoot: doc-viewer-l1
+compById:
+  doc-viewer-l1:
+    compName: DocViewer
+    childIdList:
+      - event-tester-l1
+    data: {}
+    config:
+      maxHeight: 220
+  event-tester-l1:
+    compName: EventTester
+    childIdList:
+      - list-root-a1
+    data: {}
+    config: {}
+  list-root-a1:
+    compName: List
+    childIdList:
+      - row-root-a1
+      - row-child-b1
+      - list-child-c1
+    data:
+      labelText: root list
+      compIdMain: row-root-a1
+    config:
+      isRoot: true
+  row-root-a1:
+    compName: Row
+    childIdList:
+      - seg-root-1
+      - seg-root-2
+    data:
+      labelText: root row
+    config: {}
+  seg-root-1:
+    compName: TextSeg
+    childIdList: []
+    data:
+      text: first segment in root row.
+    config: {}
+  seg-root-2:
+    compName: TextSeg
+    childIdList: []
+    data:
+      text: second segment in root row.
+    config: {}
+  row-child-b1:
+    compName: Row
+    childIdList:
+      - seg-child-b1-1
+      - seg-child-b1-2
+    data:
+      labelText: sibling row under root list
+    config: {}
+  seg-child-b1-1:
+    compName: TextSeg
+    childIdList: []
+    data:
+      text: row child one.
+    config: {}
+  seg-child-b1-2:
+    compName: TextSeg
+    childIdList: []
+    data:
+      text: row child two.
+    config: {}
+  list-child-c1:
+    compName: List
+    childIdList:
+      - row-child-c1
+      - row-child-c2
+    data:
+      labelText: nested list
+      compIdMain: row-child-c1
+    config: {}
+  row-child-c1:
+    compName: Row
+    childIdList:
+      - seg-child-c1-1
+    data:
+      labelText: nested list main row
+    config: {}
+  seg-child-c1-1:
+    compName: TextSeg
+    childIdList: []
+    data:
+      text: nested main row segment.
+    config: {}
+  row-child-c2:
+    compName: Row
+    childIdList:
+      - seg-child-c2-1
+    data:
+      labelText: nested list extra row
+    config: {}
+  seg-child-c2-1:
+    compName: TextSeg
+    childIdList: []
+    data:
+      text: nested extra row segment.
+    config: {}
