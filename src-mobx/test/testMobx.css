@@ -336,6 +336,35 @@
   text-decoration: none;
 }
 
+.mobx-text-seg-caret {
+  display: inline-block;
+  width: 0;
+  height: 1em;
+  margin: 0;
+  padding: 0;
+  position: relative;
+  vertical-align: -0.12em;
+  pointer-events: none;
+  user-select: none;
+}
+
+.mobx-text-seg-caret::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 1px;
+  height: 1em;
+  background: #111827;
+  animation: mobx-text-seg-caret-blink 1s step-end infinite;
+}
+
+@keyframes mobx-text-seg-caret-blink {
+  50% {
+    opacity: 0;
+  }
+}
+
 .mobx-text-seg[contenteditable="true"] {
   background: rgba(248, 250, 252, 0.9);
 }

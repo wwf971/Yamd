@@ -1,5 +1,6 @@
 import type React from 'react';
 import type { CompEvent, DocStore } from '../docStore';
+import { getCaretOffsetByPoint, getClampedMousePoint } from '../util/caretUtils';
 
 type EventHandler = (event: CompEvent) => Promise<any> | any;
 
@@ -103,7 +104,7 @@ async function eventListRowNavigate({
   if (!rowIdNext) {
     return store.sendEventToParent(docId, compId, event);
   }
-  const segIdNext = pickSegIdForRow({
+  const segTarget = pickSegTargetForRow({
     store,
     docId,
     rowId: rowIdNext,
@@ -111,7 +112,7 @@ async function eventListRowNavigate({
     direction,
     x: Number(event?.data?.x),
   });
-  if (!segIdNext) {
+  if (!segTarget.segId) {
     return store.sendEventToComp(docId, rowIdNext, {
       type: 'focus',
       sourceId: compId,
@@ -119,12 +120,13 @@ async function eventListRowNavigate({
       data: { direction: direction === 'up' ? 'fromBelow' : 'fromAbove' },
     });
   }
-  return store.sendEventToComp(docId, segIdNext, {
+  return store.sendEventToComp(docId, segTarget.segId, {
     type: 'focus',
     sourceId: compId,
     targetId: docId,
     data: {
       direction: focusDirectionForMove(direction),
+      offset: Number.isFinite(segTarget.offset) ? segTarget.offset : undefined,
       mousePos: Number.isFinite(Number(event?.data?.x)) ? { clientX: Number(event?.data?.x) } : undefined,
     },
   });
@@ -150,7 +152,7 @@ function collectRowIdsInList(store: DocStore, docId: string, listId: string) {
   return rowIdList;
 }
 
-function pickSegIdForRow({
+function pickSegTargetForRow({
   store,
   docId,
   rowId,
@@ -166,20 +168,22 @@ function pickSegIdForRow({
   x: number;
 }) {
   const segIdList = getRowSegIdList(store, docId, rowId);
-  if (segIdList.length === 0) return '';
+  if (segIdList.length === 0) return { segId: '', offset: undefined };
   if ((direction === 'up' || direction === 'down') && Number.isFinite(x)) {
-    const segIdNearest = pickNearestSegIdByX(listEl, segIdList, x);
-    if (segIdNearest) return segIdNearest;
+    const segTarget = pickNearestSegTargetByX(listEl, segIdList, x, direction);
+    if (segTarget.segId) return segTarget;
   }
-  return direction === 'left' || direction === 'up' ? segIdList[segIdList.length - 1] : segIdList[0];
+  const segId = direction === 'left' || direction === 'up' ? segIdList[segIdList.length - 1] : segIdList[0];
+  return { segId, offset: undefined };
 }
 
-function pickNearestSegIdByX(listEl: HTMLElement | null, segIdList: string[], x: number) {
-  if (!listEl) return '';
+function pickNearestSegTargetByX(listEl: HTMLElement | null, segIdList: string[], x: number, direction: string) {
   let segIdBest = '';
+  let offsetBest: number | undefined;
   let distanceBest = Number.POSITIVE_INFINITY;
   for (const segId of segIdList) {
-    const segEl = listEl.querySelector<HTMLElement>(`[data-mobx-seg-id="${cssEscape(segId)}"]`);
+    const selector = `[data-mobx-seg-id="${cssEscape(segId)}"]`;
+    const segEl = listEl?.querySelector<HTMLElement>(selector) || document.querySelector<HTMLElement>(selector);
     if (!segEl) continue;
     const rect = segEl.getBoundingClientRect();
     const xClamped = Math.min(rect.right, Math.max(rect.left, x));
@@ -187,9 +191,11 @@ function pickNearestSegIdByX(listEl: HTMLElement | null, segIdList: string[], x:
     if (distance < distanceBest) {
       distanceBest = distance;
       segIdBest = segId;
+      const point = getClampedMousePoint(segEl, { clientX: x }, focusDirectionForMove(direction));
+      offsetBest = getCaretOffsetByPoint(segEl, point.x, point.y);
     }
   }
-  return segIdBest;
+  return { segId: segIdBest, offset: offsetBest };
 }
 
 function getRowSegIdList(store: DocStore, docId: string, rowId: string) {

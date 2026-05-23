@@ -28,6 +28,7 @@ const List = observer(React.forwardRef<any, ListProps>(({ data = {}, config = {}
   const runtimeState = contextDocStore && compId
     ? contextDocStore.store.getCompRuntimeState(contextDocStore.docId, compId)
     : null;
+  const listRootRef = React.useRef<HTMLDivElement | null>(null);
   const listRef = React.useRef<HTMLDivElement | null>(null);
   const childIdList = Array.isArray(compData?.childIdList) ? compData.childIdList : [];
   const mainCompId = String(compData?.mainCompId || '').trim();
@@ -68,13 +69,14 @@ const List = observer(React.forwardRef<any, ListProps>(({ data = {}, config = {}
         store: contextDocStore.store,
         docId: contextDocStore.docId,
         compId,
-        listEl: listRef.current,
+        listEl: listRootRef.current,
       });
     },
   }), [contextDocStore, compId]);
 
   return (
     <div
+      ref={listRootRef}
       className={className}
       data-mobx-comp-id={compId}
       data-mobx-comp-name="List"

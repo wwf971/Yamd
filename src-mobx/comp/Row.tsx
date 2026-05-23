@@ -86,7 +86,7 @@ const Row = observer(React.forwardRef<any, RowProps>(({ data = {}, config = {}, 
           });
         }}
       >
-        <div className="mobx-row-seg-list">{segIdList.map((segId) => renderCompById(segId))}</div>
+        <div className="mobx-row-seg-list">{childIdList.map((childId) => renderCompById(String(childId || '')))}</div>
       </div>
     </div>
   );

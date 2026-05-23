@@ -30,12 +30,12 @@ export function isCaretAtEnd(element: HTMLElement | null) {
 
 export function applyCaretByOffset(element: HTMLElement | null, offset: number) {
   if (!element) return false;
-  const textNode = getTextNode(element);
+  const textPoint = getTextPointAtOffset(element, offset);
   const selection = window.getSelection();
   if (!selection) return false;
   const range = document.createRange();
-  if (textNode) {
-    range.setStart(textNode, clampOffset(element, offset));
+  if (textPoint) {
+    range.setStart(textPoint.node, textPoint.offset);
   } else {
     range.setStart(element, 0);
   }
@@ -73,6 +73,27 @@ export function applyCaretByPoint(element: HTMLElement | null, x: number, y: num
     return true;
   }
   return false;
+}
+
+export function getCaretOffsetByPoint(element: HTMLElement | null, x: number, y: number) {
+  if (!element) return 0;
+  const documentWithCaret = document as Document & {
+    caretRangeFromPoint?: (x: number, y: number) => Range | null;
+    caretPositionFromPoint?: (x: number, y: number) => { offsetNode: Node; offset: number } | null;
+  };
+  if (documentWithCaret.caretRangeFromPoint) {
+    const range = documentWithCaret.caretRangeFromPoint(x, y);
+    if (range && element.contains(range.startContainer)) {
+      return getOffsetFromNodePoint(element, range.startContainer, range.startOffset);
+    }
+  }
+  if (documentWithCaret.caretPositionFromPoint) {
+    const position = documentWithCaret.caretPositionFromPoint(x, y);
+    if (position && element.contains(position.offsetNode)) {
+      return getOffsetFromNodePoint(element, position.offsetNode, position.offset);
+    }
+  }
+  return getClosestOffsetByPoint(element, x, y);
 }
 
 export function applyCaretByDirection(
@@ -161,6 +182,82 @@ function clampOffset(element: HTMLElement, offset: number) {
 function getTextNode(element: HTMLElement) {
   const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
   return walker.nextNode();
+}
+
+function getTextPointAtOffset(element: HTMLElement, offset: number) {
+  const offsetTarget = clampOffset(element, offset);
+  const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+  let offsetPassed = 0;
+  let nodeLast: Node | null = null;
+  while (true) {
+    const node = walker.nextNode();
+    if (!node) break;
+    nodeLast = node;
+    const textLength = String(node.textContent || '').length;
+    if (offsetTarget <= offsetPassed + textLength) {
+      return {
+        node,
+        offset: Math.max(0, offsetTarget - offsetPassed),
+      };
+    }
+    offsetPassed += textLength;
+  }
+  if (!nodeLast) return null;
+  return {
+    node: nodeLast,
+    offset: String(nodeLast.textContent || '').length,
+  };
+}
+
+function getOffsetFromNodePoint(element: HTMLElement, nodeTarget: Node, offset: number) {
+  const range = document.createRange();
+  try {
+    range.selectNodeContents(element);
+    range.setEnd(nodeTarget, Math.max(0, Number(offset || 0)));
+    return clampOffset(element, range.toString().length);
+  } catch {
+    return clampOffset(element, offset);
+  }
+}
+
+function getClosestOffsetByPoint(element: HTMLElement, x: number, y: number) {
+  const textLength = getTextLength(element);
+  let offsetBest = 0;
+  let distanceBest = Number.POSITIVE_INFINITY;
+  for (let offset = 0; offset <= textLength; offset += 1) {
+    const rect = getRectAtOffset(element, offset);
+    if (!rect) continue;
+    const xCurrent = offset > 0 ? rect.right : rect.left;
+    const yCurrent = rect.top + rect.height / 2;
+    const distance = Math.abs(xCurrent - x) + Math.abs(yCurrent - y) * 4;
+    if (distance < distanceBest) {
+      distanceBest = distance;
+      offsetBest = offset;
+    }
+  }
+  return offsetBest;
+}
+
+function getRectAtOffset(element: HTMLElement, offset: number) {
+  const textPoint = getTextPointAtOffset(element, offset);
+  if (!textPoint) return null;
+  const textLength = getTextLength(element);
+  const range = document.createRange();
+  if (offset > 0) {
+    const pointPrev = getTextPointAtOffset(element, offset - 1);
+    if (!pointPrev) return null;
+    range.setStart(pointPrev.node, pointPrev.offset);
+    range.setEnd(textPoint.node, textPoint.offset);
+  } else if (textLength > 0) {
+    const pointNext = getTextPointAtOffset(element, 1);
+    if (!pointNext) return null;
+    range.setStart(textPoint.node, textPoint.offset);
+    range.setEnd(pointNext.node, pointNext.offset);
+  } else {
+    return element.getBoundingClientRect();
+  }
+  const rect = range.getBoundingClientRect();
+  return rect.width || rect.height ? rect : null;
 }
 
 function getCaretRect(element: HTMLElement) {

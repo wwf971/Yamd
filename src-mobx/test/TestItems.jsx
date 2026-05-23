@@ -1,5 +1,6 @@
 import React from 'react';
 import yaml from 'js-yaml';
+import { observer } from 'mobx-react-lite';
 import { compByNameDefault, renderCompById } from '../docMobx';
 import { DocStoreProvider } from '../DocStoreContext';
 import { DocStore } from '../docStore';
@@ -24,7 +25,7 @@ const compByNameForTest = {
   TextSeg,
 };
 
-function TestItemDoc({ yamlRaw }) {
+const TestItemDoc = observer(function TestItemDoc({ yamlRaw }) {
   const docTemplate = React.useMemo(() => parseTestDocTemplate(yamlRaw), [yamlRaw]);
   const docIdRef = React.useRef('');
   const compRefById = React.useRef({});
@@ -40,6 +41,7 @@ function TestItemDoc({ yamlRaw }) {
   const storeDocTest = storeRef.current;
   const docId = docIdRef.current;
   const rootElRef = React.useRef(null);
+  const isCopyModifierDownRef = React.useRef(false);
   const parentIdByCompId = React.useMemo(() => buildParentMap(docTemplate.compDataById, docTemplate.compIdRoot), [docTemplate]);
 
   React.useEffect(() => {
@@ -93,6 +95,7 @@ function TestItemDoc({ yamlRaw }) {
 
   const dataDoc = storeDocTest.getDocData(docId);
   const configDoc = storeDocTest.getDocConfig(docId);
+  const compDataByIdCurrent = storeDocTest.getCompDataByIdMap(docId);
 
   React.useEffect(() => {
     const rootEl = rootElRef.current;
@@ -107,6 +110,14 @@ function TestItemDoc({ yamlRaw }) {
 
     const handleSelectionChange = () => {
       const selectionState = selectionStateReadFromDom(rootEl);
+      const selectionStateCurrent = storeDocTest.getInteractionState(docId).selectionState;
+      if (
+        isCopyModifierDownRef.current
+        && selectionStateCurrent.isSelectionActive === true
+        && (!selectionState || selectionState.isSelectionActive !== true)
+      ) {
+        return;
+      }
       if (!selectionState) {
         storeDocTest.clearSelectionState(docId);
         return;
@@ -122,11 +133,40 @@ function TestItemDoc({ yamlRaw }) {
       }
     };
 
+    const handleCopy = (event) => {
+      const textSelected = storeDocTest.getSelectionText(docId);
+      if (!textSelected) {
+        return;
+      }
+      event.preventDefault();
+      event.clipboardData?.setData('text/plain', textSelected);
+    };
+
+    const handleKeyDown = (event) => {
+      if (event.key === 'Control' || event.key === 'Meta' || event.ctrlKey || event.metaKey) {
+        isCopyModifierDownRef.current = true;
+      }
+    };
+
+    const handleKeyUp = (event) => {
+      if (event.key === 'Control' || event.key === 'Meta' || (!event.ctrlKey && !event.metaKey)) {
+        window.setTimeout(() => {
+          isCopyModifierDownRef.current = false;
+        }, 0);
+      }
+    };
+
     rootEl.addEventListener('focusin', handleFocusIn);
+    rootEl.addEventListener('copy', handleCopy);
+    document.addEventListener('keydown', handleKeyDown, true);
+    document.addEventListener('keyup', handleKeyUp, true);
     document.addEventListener('selectionchange', handleSelectionChange);
 
     return () => {
       rootEl.removeEventListener('focusin', handleFocusIn);
+      rootEl.removeEventListener('copy', handleCopy);
+      document.removeEventListener('keydown', handleKeyDown, true);
+      document.removeEventListener('keyup', handleKeyUp, true);
       document.removeEventListener('selectionchange', handleSelectionChange);
     };
   }, [docId, storeDocTest]);
@@ -134,14 +174,27 @@ function TestItemDoc({ yamlRaw }) {
   const renderCompByIdInDoc = React.useCallback((compId) => {
     return renderCompById({
       compId,
-      compDataById: docTemplate.compDataById,
+      compDataById: compDataByIdCurrent,
       compByName: compByNameForTest,
       setCompRef: (compIdNext, element) => {
         if (element) {
           compRefById.current[compIdNext] = element;
+          storeDocTest.registerComp(
+            docId,
+            compIdNext,
+            async (event) => {
+              const compRef = compRefById.current[compIdNext];
+              if (!compRef?.dispatchEvent) {
+                return { code: -1, message: `Component is not ready. compId=${compIdNext}` };
+              }
+              return compRef.dispatchEvent(event);
+            },
+            { parentId: storeDocTest.getParentCompId(docId, compIdNext) },
+          );
           return;
         }
         delete compRefById.current[compIdNext];
+        storeDocTest.unregisterComp(docId, compIdNext);
       },
       onEvent: (event, compData) => handleCompEvent(event, compData.compId),
       onDataChange: (dataPatch, compData) => {
@@ -155,7 +208,7 @@ function TestItemDoc({ yamlRaw }) {
         </div>
       ),
     });
-  }, [docTemplate.compDataById, handleCompEvent]);
+  }, [compDataByIdCurrent, docId, handleCompEvent, storeDocTest]);
 
   return (
     <div className="mobx-test-page" ref={rootElRef} data-mobx-doc-id={docId}>
@@ -169,12 +222,12 @@ function TestItemDoc({ yamlRaw }) {
           <DocCompRenderProvider
             value={{
               renderCompListByParentId: (parentId) => {
-                const compDataParent = docTemplate.compDataById[parentId];
+                const compDataParent = compDataByIdCurrent[parentId];
                 const childIdList = Array.isArray(compDataParent?.childIdList) ? compDataParent.childIdList : [];
                 return childIdList.map((childId) => renderCompByIdInDoc(childId));
               },
               renderCompById: (compId) => renderCompByIdInDoc(compId),
-              getCompDataById: (compId) => docTemplate.compDataById[String(compId || '')] || null,
+              getCompDataById: (compId) => compDataByIdCurrent[String(compId || '')] || null,
             }}
           >
             {renderCompByIdInDoc(docTemplate.compIdRoot)}
@@ -183,7 +236,7 @@ function TestItemDoc({ yamlRaw }) {
       </div>
     </div>
   );
-}
+});
 
 const TestTextBasicYaml = () => <TestItemDoc yamlRaw={TEST_TEXT_BASIC_YAML_RAW} />;
 const TestRowYaml = () => <TestItemDoc yamlRaw={TEST_ROW_YAML_RAW} />;

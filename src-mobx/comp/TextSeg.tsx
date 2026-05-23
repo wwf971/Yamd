@@ -8,8 +8,6 @@ import {
   applyCaretByPoint,
   getCaretClientX,
   getCaretOffset,
-  isCaretAtEnd,
-  isCaretAtStart,
   isCaretOnFirstLine,
   isCaretOnLastLine,
 } from '../util/caretUtils';
@@ -46,8 +44,24 @@ const TextSeg = observer(React.forwardRef<any, TextSegProps>(({ data = {}, confi
   const runtimeState = contextDocStore && compId
     ? contextDocStore.store.getCompRuntimeState(contextDocStore.docId, compId)
     : null;
+  const interactionState = contextDocStore
+    ? contextDocStore.store.getInteractionState(contextDocStore.docId)
+    : null;
   const rootRef = React.useRef<HTMLSpanElement | null>(null);
   const offsetPendingRestoreRef = React.useRef<number | null>(null);
+  const [isPointerDown, setIsPointerDown] = React.useState(false);
+  const isSelectionActive = interactionState?.selectionState.isSelectionActive === true;
+  const isDomCaretMode = isEditable
+    && runtimeState?.isFocusedLogical === true
+    && isPointerDown === false;
+  const isLogicalCaretMode = !isDomCaretMode;
+  const isLogicalCaretVisible = isLogicalCaretMode
+    && isPointerDown === false
+    && runtimeState?.isFocusedLogical === true
+    && !isSelectionActive;
+  const offsetLogicalCaret = isLogicalCaretVisible
+    ? Math.min(text.length, Math.max(0, Number(interactionState?.focusState.offsetFocused || 0)))
+    : -1;
   const className = [
     'mobx-text-seg',
     isActive ? 'is-active' : '',
@@ -97,12 +111,34 @@ const TextSeg = observer(React.forwardRef<any, TextSegProps>(({ data = {}, confi
     return offsetFocused;
   }, [updateFocusState]);
 
+  const syncTextFromDom = React.useCallback((rootEl: HTMLSpanElement | null) => {
+    if (!contextDocStore || !compId || !isEditable || !rootEl) return;
+    const textNext = String(rootEl.textContent || '');
+    if (text.length > 0 && textNext.length === 0) {
+      offsetPendingRestoreRef.current = null;
+      emitEvent('textDeleteEmpty', { direction: 'left' });
+      return;
+    }
+    if (textNext !== text) {
+      offsetPendingRestoreRef.current = getCaretOffset(rootEl);
+      contextDocStore.store.updateCompDataByPatch(contextDocStore.docId, compId, { text: textNext });
+    }
+  }, [contextDocStore, compId, emitEvent, isEditable, text]);
+
   const handleInput = React.useCallback((event: React.FormEvent<HTMLSpanElement>) => {
-    if (!contextDocStore || !compId || !isEditable) return;
-    offsetPendingRestoreRef.current = getCaretOffset(event.currentTarget);
-    const textNext = String(event.currentTarget.textContent || '');
-    contextDocStore.store.updateCompDataByPatch(contextDocStore.docId, compId, { text: textNext });
-  }, [contextDocStore, compId, isEditable]);
+    syncTextFromDom(event.currentTarget);
+  }, [syncTextFromDom]);
+
+  const getCaretClientXCurrent = React.useCallback(() => {
+    const rootEl = rootRef.current;
+    if (!rootEl) return 0;
+    if (isLogicalCaretVisible) {
+      const caretEl = rootEl.querySelector<HTMLElement>('.mobx-text-seg-caret');
+      const rect = caretEl?.getBoundingClientRect();
+      if (rect) return rect.left;
+    }
+    return getCaretClientX(rootEl);
+  }, [isLogicalCaretVisible]);
 
   React.useLayoutEffect(() => {
     const offsetPending = offsetPendingRestoreRef.current;
@@ -113,6 +149,127 @@ const TextSeg = observer(React.forwardRef<any, TextSegProps>(({ data = {}, confi
     applyCaretByOffset(rootEl, offsetPending);
     updateFocusState('textInput', getCaretOffset(rootEl));
   }, [text, updateFocusState]);
+
+  React.useLayoutEffect(() => {
+    const rootEl = rootRef.current;
+    if (!rootEl || !isDomCaretMode || isSelectionActive || document.activeElement !== rootEl) return;
+    const offsetFocused = Number(interactionState?.focusState.offsetFocused || 0);
+    applyCaretByOffset(rootEl, offsetFocused);
+  }, [isDomCaretMode, isSelectionActive, interactionState?.focusState.offsetFocused]);
+
+  const handleKeyDown = React.useCallback((event: React.KeyboardEvent<HTMLSpanElement>) => {
+    const rootEl = rootRef.current;
+    if (!rootEl) return;
+    if (
+      event.key === 'Control'
+      || event.key === 'Meta'
+      || event.key === 'Shift'
+      || event.key === 'Alt'
+      || event.ctrlKey
+      || event.metaKey
+    ) {
+      return;
+    }
+
+    const offsetCurrent = isLogicalCaretVisible ? offsetLogicalCaret : getCaretOffset(rootEl);
+    const textLength = text.length;
+    if (isLogicalCaretMode && !isSelectionActive) {
+      applyCaretByOffset(rootEl, offsetCurrent);
+    }
+
+    if (event.key === 'Tab') {
+      event.preventDefault();
+      emitEvent(event.shiftKey ? 'rowOutdent' : 'rowIndent', { offset: offsetCurrent });
+      return;
+    }
+
+    if (event.key === 'Enter' && isEditable) {
+      event.preventDefault();
+      emitEvent('textSplit', { offset: offsetCurrent });
+      return;
+    }
+
+    if ((event.key === 'Backspace' || event.key === 'Delete') && isEditable && offsetCurrent <= 0) {
+      event.preventDefault();
+      emitEvent('textMergePrev', { offset: 0, direction: 'left' });
+      return;
+    }
+
+    if (event.key === 'ArrowLeft' && offsetCurrent <= 0) {
+      event.preventDefault();
+      emitEvent('segNavigate', { direction: 'left', offset: 0 });
+      return;
+    }
+    if (event.key === 'ArrowLeft' && isLogicalCaretMode) {
+      event.preventDefault();
+      const offsetNext = Math.max(0, offsetCurrent - 1);
+      applyCaretByOffset(rootEl, offsetNext);
+      updateFocusState('keyNav', offsetNext);
+      return;
+    }
+
+    if (event.key === 'ArrowRight' && offsetCurrent >= textLength) {
+      event.preventDefault();
+      emitEvent('segNavigate', { direction: 'right', offset: offsetCurrent });
+      return;
+    }
+    if (event.key === 'ArrowRight' && isLogicalCaretMode) {
+      event.preventDefault();
+      const offsetNext = Math.min(textLength, offsetCurrent + 1);
+      applyCaretByOffset(rootEl, offsetNext);
+      updateFocusState('keyNav', offsetNext);
+      return;
+    }
+
+    if (event.key === 'ArrowUp' && isCaretOnFirstLine(rootEl)) {
+      event.preventDefault();
+      emitEvent('segNavigate', { direction: 'up', offset: offsetCurrent, x: getCaretClientXCurrent() });
+      return;
+    }
+    if (event.key === 'ArrowUp' && isLogicalCaretMode) {
+      event.preventDefault();
+      const selection = window.getSelection();
+      selection?.modify?.('move', 'backward', 'line');
+      const offsetNext = selection?.anchorNode && rootEl.contains(selection.anchorNode)
+        ? getCaretOffset(rootEl)
+        : offsetCurrent;
+      applyCaretByOffset(rootEl, offsetNext);
+      updateFocusState('keyNav', offsetNext);
+      return;
+    }
+
+    if (event.key === 'ArrowDown' && isCaretOnLastLine(rootEl)) {
+      event.preventDefault();
+      emitEvent('segNavigate', { direction: 'down', offset: offsetCurrent, x: getCaretClientXCurrent() });
+      return;
+    }
+    if (event.key === 'ArrowDown' && isLogicalCaretMode) {
+      event.preventDefault();
+      const selection = window.getSelection();
+      selection?.modify?.('move', 'forward', 'line');
+      const offsetNext = selection?.anchorNode && rootEl.contains(selection.anchorNode)
+        ? getCaretOffset(rootEl)
+        : offsetCurrent;
+      applyCaretByOffset(rootEl, offsetNext);
+      updateFocusState('keyNav', offsetNext);
+      return;
+    }
+
+    if (isEditable || (event.key !== 'Enter' && event.key !== ' ')) return;
+    event.preventDefault();
+    emitEvent('clickSingle', { offset: getCaretOffset(rootEl) });
+  }, [
+    emitEvent,
+    getCaretClientXCurrent,
+    isEditable,
+    isLogicalCaretMode,
+    isLogicalCaretVisible,
+    isSelectionActive,
+    offsetLogicalCaret,
+    text,
+    text.length,
+    updateFocusState,
+  ]);
 
   React.useImperativeHandle(ref, () => ({
     dispatchEvent: async (event: CompEvent) => {
@@ -135,7 +292,7 @@ const TextSeg = observer(React.forwardRef<any, TextSegProps>(({ data = {}, confi
     <span
       ref={rootRef}
       tabIndex={0}
-      contentEditable={isEditable}
+      contentEditable={isDomCaretMode}
       suppressContentEditableWarning
       className={className}
       data-mobx-comp-id={compId}
@@ -147,8 +304,24 @@ const TextSeg = observer(React.forwardRef<any, TextSegProps>(({ data = {}, confi
         updateFocusState('focus');
       }}
       onInput={handleInput}
+      onMouseDown={() => {
+        setIsPointerDown(true);
+      }}
+      onMouseUp={() => {
+        setIsPointerDown(false);
+      }}
+      onBlur={() => {
+        syncTextFromDom(rootRef.current);
+        setIsPointerDown(false);
+      }}
       onClick={(event) => {
+        setIsPointerDown(false);
         const rootEl = rootRef.current;
+        const selection = window.getSelection();
+        if (selection && !selection.isCollapsed) {
+          updateFocusState('rangeSelect', getCaretOffset(rootEl));
+          return;
+        }
         if (rootEl) {
           rootEl.focus();
           applyCaretByPoint(rootEl, event.clientX, event.clientY);
@@ -163,35 +336,15 @@ const TextSeg = observer(React.forwardRef<any, TextSegProps>(({ data = {}, confi
           },
         });
       }}
-      onKeyDown={(event) => {
-        const rootEl = rootRef.current;
-        if (!rootEl) return;
-        if (event.key === 'ArrowLeft' && isCaretAtStart(rootEl)) {
-          event.preventDefault();
-          emitEvent('segNavigate', { direction: 'left', offset: 0 });
-          return;
-        }
-        if (event.key === 'ArrowRight' && isCaretAtEnd(rootEl)) {
-          event.preventDefault();
-          emitEvent('segNavigate', { direction: 'right', offset: getCaretOffset(rootEl) });
-          return;
-        }
-        if (event.key === 'ArrowUp' && isCaretOnFirstLine(rootEl)) {
-          event.preventDefault();
-          emitEvent('segNavigate', { direction: 'up', offset: getCaretOffset(rootEl), x: getCaretClientX(rootEl) });
-          return;
-        }
-        if (event.key === 'ArrowDown' && isCaretOnLastLine(rootEl)) {
-          event.preventDefault();
-          emitEvent('segNavigate', { direction: 'down', offset: getCaretOffset(rootEl), x: getCaretClientX(rootEl) });
-          return;
-        }
-        if (isEditable || (event.key !== 'Enter' && event.key !== ' ')) return;
-        event.preventDefault();
-        emitEvent('clickSingle', { offset: getCaretOffset(rootEl) });
-      }}
+      onKeyDown={handleKeyDown}
     >
-      {text}
+      {isLogicalCaretVisible ? (
+        <>
+          {text.slice(0, offsetLogicalCaret)}
+          <span className="mobx-text-seg-caret" aria-hidden="true" />
+          {text.slice(offsetLogicalCaret)}
+        </>
+      ) : text}
     </span>
   );
 }));

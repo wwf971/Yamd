@@ -188,12 +188,26 @@ export function selectionStateReadFromDom(rootEl: HTMLElement): Partial<Selectio
     return null;
   }
   const isCollapsed = selection.isCollapsed === true;
+  if (!shouldSelectionStateTrackDomSelection(selection)) {
+    return null;
+  }
   return {
     isSelectionActive: !isCollapsed,
     mode: isCollapsed ? 'caret' : 'range',
     pointAnchor,
     pointFocus,
   };
+}
+
+function shouldSelectionStateTrackDomSelection(selection: Selection) {
+  if (!selection.isCollapsed) {
+    return true;
+  }
+  const focusElBase = selection.focusNode?.nodeType === Node.ELEMENT_NODE
+    ? selection.focusNode as Element
+    : selection.focusNode?.parentElement;
+  const focusSegEl = focusElBase?.closest?.('[data-mobx-seg-id]') as HTMLElement | null;
+  return focusSegEl?.getAttribute('contenteditable') === 'true';
 }
 
 function selectionPointRead(rootEl: HTMLElement, node: Node | null, offset: number) {
@@ -214,9 +228,14 @@ function selectionPointRead(rootEl: HTMLElement, node: Node | null, offset: numb
 }
 
 function selectionOffsetRead(segEl: HTMLElement, node: Node, offset: number) {
-  if (node.nodeType === Node.TEXT_NODE) {
-    return Math.max(0, Number(offset || 0));
-  }
   const text = String(segEl.textContent || '');
-  return Math.min(text.length, Math.max(0, Number(offset || 0)));
+  const offsetSafe = Math.max(0, Number(offset || 0));
+  const range = document.createRange();
+  try {
+    range.selectNodeContents(segEl);
+    range.setEnd(node, offsetSafe);
+    return Math.min(text.length, Math.max(0, range.toString().length));
+  } catch {
+    return Math.min(text.length, offsetSafe);
+  }
 }
