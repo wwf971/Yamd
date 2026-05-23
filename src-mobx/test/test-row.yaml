@@ -22,8 +22,7 @@ compById:
     childIdList:
       - seg-root-1
       - seg-root-2
-    data:
-      labelText: root row
+    data: {}
     config:
       isRoot: true
   seg-root-1:
@@ -31,10 +30,12 @@ compById:
     childIdList: []
     data:
       text: first segment in root.
-    config: {}
+    config:
+      isDebug: true
+      isEditable: true
   seg-root-2:
     compName: TextSeg
     childIdList: []
     data:
-      text: second segment in root.
+      text: second segment in root with a very long sentence to test wrapping behavior inside one segment when available width becomes narrow in the test panel and the text should continue on the next line without breaking layout.
     config: {}

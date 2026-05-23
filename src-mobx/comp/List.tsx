@@ -1,13 +1,13 @@
 import React from 'react';
+import { observer } from 'mobx-react-lite';
 import { useDocStoreContext } from '../DocStoreContext';
 import { CompEvent } from '../docStore';
+import { eventListClick, eventListDispatch } from '../event/eventLogicList';
 import { useDocCompRenderContext } from '../test/DocCompRenderContext';
 
 type ListProps = {
   data?: {
     compId?: string;
-    labelText?: string;
-    compIdMain?: string;
   };
   config?: {
     isRoot?: boolean;
@@ -15,35 +15,30 @@ type ListProps = {
   onEvent?: (event: CompEvent) => Promise<any> | any;
 };
 
-const List = React.forwardRef<any, ListProps>(({ data = {}, config = {}, onEvent }, ref) => {
+const List = observer(React.forwardRef<any, ListProps>(({ data = {}, config = {}, onEvent }, ref) => {
   const contextDocStore = useDocStoreContext();
   const { renderCompById, getCompDataById } = useDocCompRenderContext();
   const compId = String(data.compId || '');
   const compData = contextDocStore && compId
     ? contextDocStore.store.getCompDataById(contextDocStore.docId, compId)
     : null;
-  const dataComp = compData?.data || data || {};
   const configComp = compData?.config || config || {};
   const sourceId = String(compId || 'list');
-  const labelText = String(dataComp.labelText || '');
   const isRoot = configComp.isRoot === true;
+  const runtimeState = contextDocStore && compId
+    ? contextDocStore.store.getCompRuntimeState(contextDocStore.docId, compId)
+    : null;
   const listRef = React.useRef<HTMLDivElement | null>(null);
   const childIdList = Array.isArray(compData?.childIdList) ? compData.childIdList : [];
-  const compIdMainByData = String(dataComp.compIdMain || '').trim();
+  const mainCompId = String(compData?.mainCompId || '').trim();
 
   const compIdMain = React.useMemo(() => {
-    if (compIdMainByData) {
-      const compDataMain = getCompDataById(compIdMainByData);
-      if (String(compDataMain?.compName || '') === 'Row') {
-        return compIdMainByData;
-      }
+    if (!mainCompId) {
+      return '';
     }
-    return childIdList.find((childIdRaw) => {
-      const childId = String(childIdRaw || '');
-      const childCompData = getCompDataById(childId);
-      return String(childCompData?.compName || '') === 'Row';
-    }) || '';
-  }, [childIdList, compIdMainByData, getCompDataById]);
+    const compDataMain = getCompDataById(mainCompId);
+    return String(compDataMain?.compName || '') === 'Row' ? mainCompId : '';
+  }, [mainCompId, getCompDataById]);
 
   const childIdListNested = childIdList.filter((childIdRaw) => {
     const childId = String(childIdRaw || '');
@@ -54,49 +49,72 @@ const List = React.forwardRef<any, ListProps>(({ data = {}, config = {}, onEvent
     const compName = String(childCompData?.compName || '');
     return compName === 'List' || compName === 'Row';
   });
+  const className = [
+    'mobx-list',
+    isRoot ? 'is-root' : '',
+    runtimeState?.isFocusedLogical ? 'mobx-list-focused-logical' : '',
+    runtimeState?.isElActive ? 'mobx-list-el-active' : '',
+    runtimeState?.isFocusWithin ? 'mobx-list-focus-within' : '',
+    runtimeState?.isSelectionWithin ? 'mobx-list-selection-within' : '',
+  ].filter(Boolean).join(' ');
 
   React.useImperativeHandle(ref, () => ({
     dispatchEvent: async (event: CompEvent) => {
-      const type = String(event?.type || '');
-      if (type === 'focus') {
-        listRef.current?.focus();
-        return { code: 0, message: 'List focused.' };
+      if (!contextDocStore || !compId) {
+        return { code: -1, message: 'List context missing.' };
       }
-      if (type === 'clickSingle') {
-        listRef.current?.focus();
-        return { code: 0, message: 'List click received.' };
-      }
-      return { code: 0, message: `Ignored event: ${type}` };
+      return eventListDispatch({
+        event,
+        store: contextDocStore.store,
+        docId: contextDocStore.docId,
+        compId,
+        listEl: listRef.current,
+      });
     },
-  }), []);
+  }), [contextDocStore, compId]);
 
   return (
-    <div className={`mobx-list ${isRoot ? 'is-root' : ''}`}>
+    <div
+      className={className}
+      data-mobx-comp-id={compId}
+      data-mobx-comp-name="List"
+    >
       <div
         ref={listRef}
-        role="button"
         tabIndex={0}
         className="mobx-list-main"
-        onClick={() => {
-          if (!onEvent) return;
-          onEvent({
-            type: 'clickSingle',
+        onFocus={() => {
+          if (!contextDocStore || !compId) return;
+          contextDocStore.store.updateElActiveState(contextDocStore.docId, compId);
+        }}
+        onClick={(event) => {
+          if (!contextDocStore || !compId) return;
+          eventListClick({
+            event,
+            store: contextDocStore.store,
+            docId: contextDocStore.docId,
+            compId,
             sourceId,
-            targetId: String(contextDocStore?.docId || ''),
-            data: {},
+            onEvent,
           });
         }}
       >
-        {labelText ? <span className="mobx-list-label">{labelText}</span> : null}
         {compIdMain ? <div className="mobx-list-row-main">{renderCompById(compIdMain)}</div> : null}
       </div>
       {childIdListNested.length > 0 ? (
         <div className="mobx-list-children">
-          {childIdListNested.map((childId) => renderCompById(String(childId || '')))}
+          {childIdListNested.map((childId) => (
+            <div key={String(childId || '')} className="mobx-list-item">
+              <div className="mobx-list-bullet-box">
+                <div className="mobx-list-bullet-disc" />
+              </div>
+              <div className="mobx-list-item-content">{renderCompById(String(childId || ''))}</div>
+            </div>
+          ))}
         </div>
       ) : null}
     </div>
   );
-});
+}));
 
 export default List;

@@ -7,6 +7,7 @@ import DocViewer from '../comp/DocViewer';
 import List from '../comp/List';
 import Row from '../comp/Row';
 import TextSeg from '../comp/TextSeg';
+import { selectionStateReadFromDom } from '../event/eventLogicRow';
 import EventTester from './EventTester';
 import { DocCompRenderProvider } from './DocCompRenderContext';
 import TEST_TEXT_BASIC_YAML_RAW from './test-text-basic.yaml?raw';
@@ -38,6 +39,7 @@ function TestItemDoc({ yamlRaw }) {
 
   const storeDocTest = storeRef.current;
   const docId = docIdRef.current;
+  const rootElRef = React.useRef(null);
   const parentIdByCompId = React.useMemo(() => buildParentMap(docTemplate.compDataById, docTemplate.compIdRoot), [docTemplate]);
 
   React.useEffect(() => {
@@ -92,6 +94,43 @@ function TestItemDoc({ yamlRaw }) {
   const dataDoc = storeDocTest.getDocData(docId);
   const configDoc = storeDocTest.getDocConfig(docId);
 
+  React.useEffect(() => {
+    const rootEl = rootElRef.current;
+    if (!rootEl) return undefined;
+
+    const handleFocusIn = (event) => {
+      const targetEl = event.target instanceof Element ? event.target : null;
+      const compEl = targetEl?.closest('[data-mobx-comp-id]');
+      const compId = String(compEl?.dataset?.mobxCompId || '');
+      storeDocTest.updateElActiveState(docId, compId);
+    };
+
+    const handleSelectionChange = () => {
+      const selectionState = selectionStateReadFromDom(rootEl);
+      if (!selectionState) {
+        storeDocTest.clearSelectionState(docId);
+        return;
+      }
+      storeDocTest.updateSelectionState(docId, selectionState);
+      if (selectionState.pointFocus?.compId) {
+        storeDocTest.updateFocusState(docId, {
+          compIdFocused: selectionState.pointFocus.compId,
+          segIdFocused: selectionState.pointFocus.segId,
+          offsetFocused: selectionState.pointFocus.offset,
+          reasonLast: 'selectionChange',
+        });
+      }
+    };
+
+    rootEl.addEventListener('focusin', handleFocusIn);
+    document.addEventListener('selectionchange', handleSelectionChange);
+
+    return () => {
+      rootEl.removeEventListener('focusin', handleFocusIn);
+      document.removeEventListener('selectionchange', handleSelectionChange);
+    };
+  }, [docId, storeDocTest]);
+
   const renderCompByIdInDoc = React.useCallback((compId) => {
     return renderCompById({
       compId,
@@ -119,7 +158,7 @@ function TestItemDoc({ yamlRaw }) {
   }, [docTemplate.compDataById, handleCompEvent]);
 
   return (
-    <div className="mobx-test-page">
+    <div className="mobx-test-page" ref={rootElRef} data-mobx-doc-id={docId}>
       <div className="mobx-test-shell">
         <div className="mobx-doc-meta-row">
           <div className="mobx-doc-meta-item">Doc: {docId}</div>
@@ -186,6 +225,7 @@ function parseTestDocTemplate(textYaml) {
       compId: String(compId),
       compName: String(compDataRaw?.compName || ''),
       childIdList: Array.isArray(compDataRaw?.childIdList) ? compDataRaw.childIdList.map((id) => String(id)) : [],
+      mainCompId: compDataRaw?.mainCompId ? String(compDataRaw.mainCompId) : undefined,
       data: compDataRaw?.data ?? {},
       config: compDataRaw?.config ?? {},
     };
@@ -228,6 +268,10 @@ function buildParentMap(compDataById, compIdRoot) {
     for (const childId of childIdList) {
       stack.push({ compId: childId, parentId: next.compId });
     }
+    const mainCompId = String(compData?.mainCompId || '').trim();
+    if (mainCompId) {
+      stack.push({ compId: mainCompId, parentId: next.compId });
+    }
   }
   return parentByCompId;
 }
@@ -246,3 +290,4 @@ function createRandomId() {
   }
   return id;
 }
+

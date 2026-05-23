@@ -1,3 +1,11 @@
+/* Visual state legend:
+   blue underline = doc.ElActive;
+   blue dashed outline = logical focus;
+   orange background = tracked DOM selection;
+   light blue/orange container background = focus/selection exists inside Row/List;
+   gray dotted outline = config.isDebug.
+*/
+
 .mobx-test-page {
   width: 100%;
   display: flex;
@@ -104,7 +112,7 @@
 }
 
 .event-tester-title {
-  font-size: 12px;
+  font-size: 15px;
   font-weight: 600;
 }
 
@@ -222,36 +230,61 @@
 }
 
 .mobx-list {
-  margin-top: 4px;
+  margin-top: 2px;
 }
 
 .mobx-list-main {
-  display: flex;
-  align-items: flex-start;
-  gap: 4px;
-  border: 1px solid #d5dbe4;
-  border-radius: 2px;
-  padding: 2px 4px;
-  background: #f8fafc;
+  display: block;
+  padding: 0;
   outline: none;
 }
 
-.mobx-list-label {
-  min-width: 72px;
-  font-size: 11px;
-  color: #475569;
+.mobx-list-focus-within .mobx-list-main {
+  background: rgba(96, 165, 250, 0.04);
+}
+
+.mobx-list-selection-within .mobx-list-main {
+  background: rgba(251, 191, 36, 0.06);
 }
 
 .mobx-list-row-main {
-  flex: 1;
+  display: block;
 }
 
 .mobx-list-children {
-  margin-top: 3px;
-  margin-left: 10px;
+  margin: 0;
+  padding-left: 3px;
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  align-items: stretch;
+}
+
+.mobx-list-item {
+  margin: 0;
+  display: flex;
+  align-items: flex-start;
+  width: 100%;
+}
+
+.mobx-list-bullet-box {
+  width: 12px;
+  height: 1.2em;
+  flex-shrink: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.mobx-list-bullet-disc {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #333;
+}
+
+.mobx-list-item-content {
+  margin-left: -2px;
+  width: 100%;
 }
 
 .mobx-row {
@@ -264,39 +297,70 @@
 }
 
 .mobx-row-main {
-  display: flex;
-  align-items: flex-start;
-  gap: 4px;
-  border: 1px solid #d5dbe4;
-  border-radius: 2px;
-  padding: 2px 4px;
-  background: #f8fbff;
+  display: block;
+  padding: 0;
   outline: none;
 }
 
-.mobx-row-label {
-  min-width: 80px;
-  font-size: 11px;
-  color: #334155;
+.mobx-row-focus-within .mobx-row-main {
+  background: rgba(96, 165, 250, 0.06);
+}
+
+.mobx-row-selection-within .mobx-row-main {
+  background: rgba(251, 191, 36, 0.08);
 }
 
 .mobx-row-seg-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 3px;
+  display: block;
+  line-height: 1.25;
 }
 
 .mobx-text-seg {
-  min-height: 20px;
-  border: 1px solid #d5dbe4;
-  border-radius: 2px;
-  padding: 0 5px;
-  background: #ffffff;
-  font-size: 11px;
+  min-height: 18px;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  background: transparent;
+  font-size: 14px;
   font-family: sans-serif;
   color: #1f2937;
+  display: inline;
+  text-align: left;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  margin-right: 2px;
+  user-select: text;
+  cursor: text;
+  outline: none;
+  text-decoration: none;
+}
+
+.mobx-text-seg[contenteditable="true"] {
+  background: rgba(248, 250, 252, 0.9);
 }
 
 .mobx-text-seg.is-active {
   background: #eaf2ff;
+}
+
+.mobx-seg-focused-logical {
+  outline: 1px dashed #2563eb;
+  outline-offset: 1px;
+}
+
+.mobx-seg-el-active {
+  text-decoration-line: underline;
+  text-decoration-color: #1d4ed8;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 2px;
+}
+
+.mobx-seg-selection-within {
+  background: rgba(251, 191, 36, 0.18);
+}
+
+.mobx-seg-debug {
+  outline: 1px dotted #94a3b8;
+  outline-offset: 1px;
 }

@@ -19,13 +19,11 @@ compById:
     config: {}
   list-root-a1:
     compName: List
+    mainCompId: row-root-a1
     childIdList:
-      - row-root-a1
       - row-child-b1
       - list-child-c1
-    data:
-      labelText: root list
-      compIdMain: row-root-a1
+    data: {}
     config:
       isRoot: true
   row-root-a1:
@@ -33,15 +31,15 @@ compById:
     childIdList:
       - seg-root-1
       - seg-root-2
-    data:
-      labelText: root row
+    data: {}
     config: {}
   seg-root-1:
     compName: TextSeg
     childIdList: []
     data:
       text: first segment in root row.
-    config: {}
+    config:
+      isEditable: true
   seg-root-2:
     compName: TextSeg
     childIdList: []
@@ -53,8 +51,7 @@ compById:
     childIdList:
       - seg-child-b1-1
       - seg-child-b1-2
-    data:
-      labelText: sibling row under root list
+    data: {}
     config: {}
   seg-child-b1-1:
     compName: TextSeg
@@ -70,19 +67,16 @@ compById:
     config: {}
   list-child-c1:
     compName: List
+    mainCompId: row-child-c1
     childIdList:
-      - row-child-c1
       - row-child-c2
-    data:
-      labelText: nested list
-      compIdMain: row-child-c1
+    data: {}
     config: {}
   row-child-c1:
     compName: Row
     childIdList:
       - seg-child-c1-1
-    data:
-      labelText: nested list main row
+    data: {}
     config: {}
   seg-child-c1-1:
     compName: TextSeg
@@ -94,12 +88,13 @@ compById:
     compName: Row
     childIdList:
       - seg-child-c2-1
-    data:
-      labelText: nested list extra row
+    data: {}
     config: {}
   seg-child-c2-1:
     compName: TextSeg
     childIdList: []
     data:
-      text: nested extra row segment.
-    config: {}
+      text: nested extra row segment with long text that should automatically wrap to the next line in a narrow container so we can validate list and row cooperation with multiline content in deep nesting.
+    config:
+      isDebug: true
+      isEditable: true

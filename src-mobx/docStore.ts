@@ -30,8 +30,48 @@ export type CompData = {
   compId: string;
   compName: string;
   childIdList: string[];
+  mainCompId?: string; // only for List.tsx
   data: any;
   config: any;
+};
+
+export type FocusState = {
+  compIdFocused: string;
+  segIdFocused: string;
+  offsetFocused: number;
+  reasonLast: string;
+};
+
+export type ElActiveState = {
+  compIdElActive: string;
+  versionElActive: number;
+};
+
+export type SelectionTrackPoint = {
+  compId: string;
+  segId: string;
+  offset: number;
+};
+
+export type SelectionState = {
+  isSelectionActive: boolean;
+  mode: 'caret' | 'range';
+  pointAnchor: SelectionTrackPoint | null;
+  pointFocus: SelectionTrackPoint | null;
+};
+
+export type CompRuntimeState = {
+  isFocusedLogical: boolean;
+  isElActive: boolean;
+  isFocusWithin: boolean;
+  isSelectionWithin: boolean;
+};
+
+export type DocInteractionState = {
+  focusState: FocusState;
+  elActiveState: ElActiveState;
+  selectionState: SelectionState;
+  runtimeStateByCompId: Record<string, CompRuntimeState>;
 };
 
 type CompRegistryEntry = {
@@ -47,6 +87,7 @@ type DocRecord = {
   compIdRoot: string | null;
   compById: Record<string, CompRegistryEntry>;
   compOrder: string[];
+  interactionState: DocInteractionState;
 };
 
 const createEventId = (length = 12) => {
@@ -57,6 +98,33 @@ const createEventId = (length = 12) => {
   }
   return result;
 };
+
+const createCompRuntimeState = (): CompRuntimeState => ({
+  isFocusedLogical: false,
+  isElActive: false,
+  isFocusWithin: false,
+  isSelectionWithin: false,
+});
+
+const createInteractionState = (): DocInteractionState => ({
+  focusState: {
+    compIdFocused: '',
+    segIdFocused: '',
+    offsetFocused: 0,
+    reasonLast: '',
+  },
+  elActiveState: {
+    compIdElActive: '',
+    versionElActive: 0,
+  },
+  selectionState: {
+    isSelectionActive: false,
+    mode: 'caret',
+    pointAnchor: null,
+    pointFocus: null,
+  },
+  runtimeStateByCompId: {},
+});
 
 export class DocStore {
   docById: Record<string, DocRecord> = {};
@@ -90,6 +158,7 @@ export class DocStore {
       compIdRoot: null,
       compById: {},
       compOrder: [],
+      interactionState: createInteractionState(),
     };
 
     this.syncTextBasicCompData(docId);
@@ -102,6 +171,59 @@ export class DocStore {
 
   getDocConfig(docId: string) {
     return this.ensureDoc(docId).config;
+  }
+
+  getInteractionState(docId: string) {
+    return this.ensureDoc(docId).interactionState;
+  }
+
+  getCompRuntimeState(docId: string, compId: string) {
+    const docRecord = this.ensureDoc(docId);
+    return docRecord.interactionState.runtimeStateByCompId[compId] || createCompRuntimeState();
+  }
+
+  updateFocusState(
+    docId: string,
+    focusStatePatch: Partial<FocusState>,
+  ) {
+    const docRecord = this.ensureDoc(docId);
+    docRecord.interactionState.focusState = {
+      ...docRecord.interactionState.focusState,
+      ...focusStatePatch,
+    };
+    this.syncRuntimeState(docId);
+    return { code: 0 };
+  }
+
+  updateElActiveState(docId: string, compIdElActive: string) {
+    const docRecord = this.ensureDoc(docId);
+    const compIdNext = String(compIdElActive || '');
+    const elActiveState = docRecord.interactionState.elActiveState;
+    docRecord.interactionState.elActiveState = {
+      compIdElActive: compIdNext,
+      versionElActive: elActiveState.versionElActive + 1,
+    };
+    this.syncRuntimeState(docId);
+    return { code: 0 };
+  }
+
+  updateSelectionState(docId: string, selectionStateNext: Partial<SelectionState>) {
+    const docRecord = this.ensureDoc(docId);
+    docRecord.interactionState.selectionState = {
+      ...docRecord.interactionState.selectionState,
+      ...selectionStateNext,
+    };
+    this.syncRuntimeState(docId);
+    return { code: 0 };
+  }
+
+  clearSelectionState(docId: string) {
+    return this.updateSelectionState(docId, {
+      isSelectionActive: false,
+      mode: 'caret',
+      pointAnchor: null,
+      pointFocus: null,
+    });
   }
 
   getDocIds() {
@@ -166,6 +288,7 @@ export class DocStore {
     docRecord.compDataById = { ...compDataByIdInitial };
     docRecord.compIdRoot = compIdRoot;
     this.syncTextBasicCompData(docId);
+    this.syncRuntimeState(docId);
   }
 
   getCompData(docId: string, compId: string) {
@@ -194,12 +317,17 @@ export class DocStore {
         compId: compData.compId,
         compName: compData.compName,
         childIdList: Array.isArray(compData.childIdList) ? [...compData.childIdList] : [],
+        mainCompId: compData.mainCompId ? String(compData.mainCompId) : undefined,
         data: { ...(compData.data || {}) },
         config: { ...(compData.config || {}) },
       };
       const childIdList = Array.isArray(compData.childIdList) ? compData.childIdList : [];
       for (let i = childIdList.length - 1; i >= 0; i -= 1) {
         stack.push(String(childIdList[i]));
+      }
+      const mainCompId = String(compData.mainCompId || '').trim();
+      if (mainCompId) {
+        stack.push(mainCompId);
       }
     }
     const dataYaml = {
@@ -313,14 +441,30 @@ export class DocStore {
     }
 
     if (eventNormalized.type === 'focus') {
+      this.updateFocusState(docId, {
+        compIdFocused: eventNormalized.sourceId,
+        segIdFocused: String(eventNormalized?.data?.segId || ''),
+        offsetFocused: Number(eventNormalized?.data?.offset || 0),
+        reasonLast: String(eventNormalized?.data?.reason || eventNormalized.type),
+      });
       return { code: 0, message: 'Focus event received.' };
     }
 
     if (eventNormalized.type === 'unfocus') {
-      return { code: 0, message: 'Blur event received.' };
+      const resultParent = await this.sendEventToParent(docId, eventNormalized.sourceId, eventNormalized);
+      if (resultParent.code === 0) {
+        return resultParent;
+      }
+      return this.routeEventDefault(docId, eventNormalized.sourceId, eventNormalized);
     }
 
     if (eventNormalized.type === 'clickSingle') {
+      this.updateFocusState(docId, {
+        compIdFocused: eventNormalized.sourceId,
+        segIdFocused: String(eventNormalized?.data?.segId || ''),
+        offsetFocused: Number(eventNormalized?.data?.offset || 0),
+        reasonLast: String(eventNormalized?.data?.reason || eventNormalized.type),
+      });
       return { code: 0, message: 'Click event received.' };
     }
 
@@ -328,7 +472,11 @@ export class DocStore {
       return { code: 0, message: 'Key down event received.' };
     }
 
-    return { code: 0, message: `Ignored event: ${eventNormalized.type}` };
+    if (eventNormalized.type === 'segNavigate' || eventNormalized.type === 'rowNavigate') {
+      return this.sendEventToParent(docId, eventNormalized.sourceId, eventNormalized);
+    }
+
+    return { code: -1, message: `Unsupported event: ${eventNormalized.type}` };
   }
 
   async onEvent(docId: string, event: CompEvent): Promise<CompEventResult> {
@@ -382,6 +530,61 @@ export class DocStore {
       targetId: docId,
       data: event?.data ?? {},
     };
+  }
+
+  private syncRuntimeState(docId: string) {
+    const docRecord = this.ensureDoc(docId);
+    const compIdList = Object.keys(docRecord.compDataById || {});
+    const focusState = docRecord.interactionState.focusState;
+    const elActiveState = docRecord.interactionState.elActiveState;
+    const selectionState = docRecord.interactionState.selectionState;
+    const compIdSelectionList = [
+      selectionState.pointAnchor?.compId || '',
+      selectionState.pointFocus?.compId || '',
+    ].filter(Boolean);
+    const runtimeStateByCompId: Record<string, CompRuntimeState> = {};
+    for (const compId of compIdList) {
+      runtimeStateByCompId[compId] = {
+        isFocusedLogical: focusState.compIdFocused === compId || focusState.segIdFocused === compId,
+        isElActive: elActiveState.compIdElActive === compId,
+        isFocusWithin: this.isCompDescendantOrSelf(docRecord, compId, focusState.compIdFocused)
+          || this.isCompDescendantOrSelf(docRecord, compId, focusState.segIdFocused),
+        isSelectionWithin: compIdSelectionList.some((compIdSelection) => (
+          this.isCompDescendantOrSelf(docRecord, compId, compIdSelection)
+        )),
+      };
+    }
+    docRecord.interactionState.runtimeStateByCompId = runtimeStateByCompId;
+  }
+
+  private isCompDescendantOrSelf(docRecord: DocRecord, compIdAncestor: string, compIdTarget: string) {
+    const ancestorId = String(compIdAncestor || '');
+    const targetId = String(compIdTarget || '');
+    if (!ancestorId || !targetId) return false;
+    if (ancestorId === targetId) return true;
+    const compDataAncestor = docRecord.compDataById[ancestorId];
+    if (!compDataAncestor) return false;
+    const stack = [
+      ...(Array.isArray(compDataAncestor.childIdList) ? compDataAncestor.childIdList : []),
+      String(compDataAncestor.mainCompId || ''),
+    ].filter(Boolean);
+    const visited = new Set<string>();
+    while (stack.length > 0) {
+      const compIdNext = String(stack.pop() || '');
+      if (!compIdNext || visited.has(compIdNext)) continue;
+      if (compIdNext === targetId) return true;
+      visited.add(compIdNext);
+      const compDataNext = docRecord.compDataById[compIdNext];
+      if (!compDataNext) continue;
+      const childIdList = Array.isArray(compDataNext.childIdList) ? compDataNext.childIdList : [];
+      for (const childId of childIdList) {
+        stack.push(String(childId || ''));
+      }
+      if (compDataNext.mainCompId) {
+        stack.push(String(compDataNext.mainCompId));
+      }
+    }
+    return false;
   }
 
   private syncTextBasicCompData(docId: string) {
