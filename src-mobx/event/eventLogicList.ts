@@ -4,13 +4,34 @@ import { getCaretOffsetByPoint, getClampedMousePoint } from '../util/caretUtils'
 
 type EventHandler = (event: CompEvent) => Promise<any> | any;
 
-export function eventListFocus(store: DocStore, docId: string, compId: string, reason: string) {
-  return store.updateFocusState(docId, {
+export async function eventListFocus(
+  store: DocStore,
+  docId: string,
+  compId: string,
+  reason: string,
+  event?: CompEvent,
+  listEl?: HTMLElement | null,
+) {
+  const segTarget = pickSegTargetForListFocus(store, docId, compId, event, listEl);
+  if (segTarget.segId) {
+    return store.sendEventToComp(docId, segTarget.segId, {
+      type: 'focus',
+      sourceId: compId,
+      targetId: docId,
+      data: {
+        ...(event?.data || {}),
+        direction: segTarget.direction,
+        offset: segTarget.offset,
+      },
+    });
+  }
+  store.updateFocusState(docId, {
     compIdFocused: compId,
     segIdFocused: '',
     offsetFocused: 0,
     reasonLast: reason,
   });
+  return { code: 0, message: 'List focused.' };
 }
 
 export async function eventListDispatch({
@@ -28,14 +49,18 @@ export async function eventListDispatch({
 }) {
   const type = String(event?.type || '');
   if (type === 'focus') {
-    eventListFocus(store, docId, compId, 'focus');
-    listEl?.focus();
-    return { code: 0, message: 'List focused.' };
+    const result = await eventListFocus(store, docId, compId, 'focus', event, listEl);
+    if (result.code !== 0) {
+      listEl?.focus();
+    }
+    return result;
   }
   if (type === 'clickSingle') {
-    eventListFocus(store, docId, compId, 'clickSingle');
-    listEl?.focus();
-    return { code: 0, message: 'List click received.' };
+    const result = await eventListFocus(store, docId, compId, 'clickSingle', event, listEl);
+    if (result.code !== 0) {
+      listEl?.focus();
+    }
+    return result.code === 0 ? { ...result, message: 'List click received.' } : result;
   }
   if (type === 'rowNavigate') {
     return eventListRowNavigate({
@@ -69,7 +94,7 @@ export function eventListClick({
   if (targetEl?.closest('[data-mobx-comp-id]') !== compElCurrent) {
     return;
   }
-  eventListFocus(store, docId, compId, 'clickGap');
+  void eventListFocus(store, docId, compId, 'clickGap', undefined, event.currentTarget);
   if (!onEvent) return;
   onEvent({
     type: 'clickSingle',
@@ -177,6 +202,47 @@ function pickSegTargetForRow({
   return { segId, offset: undefined };
 }
 
+function pickSegTargetForListFocus(
+  store: DocStore,
+  docId: string,
+  listId: string,
+  event?: CompEvent,
+  listEl?: HTMLElement | null,
+) {
+  const rowIdList = collectRowIdsInList(store, docId, listId);
+  if (rowIdList.length === 0) {
+    return { segId: '', offset: 0, direction: 'fromLeft' };
+  }
+  const direction = String(event?.data?.direction || '');
+  const mouseClientX = getMouseClientX(listEl, event);
+  const isFromAboveOrBelow = direction === 'fromAbove' || direction === 'fromBelow' || direction === 'fromUp' || direction === 'fromDown';
+  const shouldUseMouseX = isFromAboveOrBelow || String(event?.type || '') === 'clickSingle' || direction === 'click';
+  const isFromEnd = direction === 'fromRight' || direction === 'fromBelow' || direction === 'fromDown';
+  const rowId = isFromEnd ? rowIdList[rowIdList.length - 1] : rowIdList[0];
+  const segIdList = getRowSegIdList(store, docId, rowId);
+  if (segIdList.length === 0) {
+    return { segId: '', offset: 0, direction: isFromEnd ? 'fromRight' : 'fromLeft' };
+  }
+  if (shouldUseMouseX && Number.isFinite(mouseClientX)) {
+    const directionTarget = direction || 'click';
+    const segTarget = pickNearestSegTargetByX(listEl || null, segIdList, Number(mouseClientX), directionTarget);
+    if (segTarget.segId) {
+      return {
+        segId: segTarget.segId,
+        offset: segTarget.offset,
+        direction: directionTarget,
+      };
+    }
+  }
+  const segId = isFromEnd ? segIdList[segIdList.length - 1] : segIdList[0];
+  const text = String(store.getCompDataById(docId, segId)?.data?.text || '');
+  return {
+    segId,
+    offset: isFromEnd ? text.length : 0,
+    direction: isFromEnd ? 'fromRight' : 'fromLeft',
+  };
+}
+
 function pickNearestSegTargetByX(listEl: HTMLElement | null, segIdList: string[], x: number, direction: string) {
   let segIdBest = '';
   let offsetBest: number | undefined;
@@ -191,7 +257,7 @@ function pickNearestSegTargetByX(listEl: HTMLElement | null, segIdList: string[]
     if (distance < distanceBest) {
       distanceBest = distance;
       segIdBest = segId;
-      const point = getClampedMousePoint(segEl, { clientX: x }, focusDirectionForMove(direction));
+      const point = getClampedMousePoint(segEl, { clientX: x }, focusDirectionForTarget(direction));
       offsetBest = getCaretOffsetByPoint(segEl, point.x, point.y);
     }
   }
@@ -216,6 +282,25 @@ function focusDirectionForMove(direction: string) {
   if (direction === 'right') return 'fromLeft';
   if (direction === 'up') return 'fromBelow';
   return 'fromAbove';
+}
+
+function focusDirectionForTarget(direction: string) {
+  if (direction === 'click') return 'click';
+  if (direction === 'fromAbove' || direction === 'fromBelow' || direction === 'fromLeft' || direction === 'fromRight') {
+    return direction;
+  }
+  if (direction === 'fromUp') return 'fromAbove';
+  if (direction === 'fromDown') return 'fromBelow';
+  return focusDirectionForMove(direction);
+}
+
+function getMouseClientX(listEl: HTMLElement | null | undefined, event?: CompEvent) {
+  const mousePos = event?.data?.mousePos;
+  if (Number.isFinite(mousePos?.clientX)) return Number(mousePos.clientX);
+  if (Number.isFinite(mousePos?.x)) return Number(mousePos.x);
+  if (!listEl || !Number.isFinite(mousePos?.xRatio)) return undefined;
+  const rect = listEl.getBoundingClientRect();
+  return rect.left + rect.width * Number(mousePos.xRatio);
 }
 
 function cssEscape(value: string) {

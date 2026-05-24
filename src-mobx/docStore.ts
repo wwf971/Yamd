@@ -838,6 +838,24 @@ export class DocStore {
     return this.sendEventToComp(docId, parentId, event);
   }
 
+  async sendEventToDoc(docId: string, event: CompEvent): Promise<CompEventResult> {
+    const docRecord = this.ensureDoc(docId);
+    const dataDoc = docRecord.data;
+    const eventNormalized = this.normalizeEvent(docId, event);
+    dataDoc.lastEventType = eventNormalized.type;
+
+    const compIdTarget = this.pickDocEventTarget(docRecord, eventNormalized);
+    if (!compIdTarget) {
+      return { code: -1, message: `No document event target. type=${eventNormalized.type}` };
+    }
+
+    const eventForwarded = this.rewriteDocEventForTarget(docRecord, eventNormalized, compIdTarget);
+    if (this.isStoreOwnedEvent(eventForwarded.type)) {
+      return this.receiveEvent(docId, eventForwarded);
+    }
+    return this.sendEventToComp(docId, compIdTarget, eventForwarded);
+  }
+
   async receiveEvent(docId: string, event: CompEvent): Promise<CompEventResult> {
     const docRecord = this.ensureDoc(docId);
     const dataDoc = docRecord.data;
@@ -851,6 +869,14 @@ export class DocStore {
         return { code: -1, message: 'sendEventToTarget requires compIdTarget and event.' };
       }
       return this.sendEventToCompDirect(docId, compIdTarget, eventTarget);
+    }
+
+    if (eventNormalized.type === 'sendEventToDoc') {
+      const eventTarget = eventNormalized?.data?.event;
+      if (!eventTarget) {
+        return { code: -1, message: 'sendEventToDoc requires event.' };
+      }
+      return this.sendEventToDoc(docId, eventTarget);
     }
 
     if (eventNormalized.type === 'focus') {
@@ -891,6 +917,11 @@ export class DocStore {
     }
 
     if (eventNormalized.type === 'textDeleteEmpty') {
+      const segId = String(eventNormalized?.data?.segId || eventNormalized.sourceId || '');
+      return this.deleteEmptyTextSeg(docId, segId);
+    }
+
+    if (eventNormalized.type === 'segDelete') {
       const segId = String(eventNormalized?.data?.segId || eventNormalized.sourceId || '');
       return this.deleteEmptyTextSeg(docId, segId);
     }
@@ -968,6 +999,109 @@ export class DocStore {
       targetId: docId,
       data: event?.data ?? {},
     };
+  }
+
+  private pickDocEventTarget(docRecord: DocRecord, event: CompEvent) {
+    const compIdExplicit = String(event?.data?.compIdTarget || '').trim();
+    if (compIdExplicit && docRecord.compDataById[compIdExplicit]) {
+      return compIdExplicit;
+    }
+
+    const focusState = docRecord.interactionState.focusState;
+    if (this.shouldDocEventPreferFocusedSeg(event.type)) {
+      const segIdFocused = String(focusState.segIdFocused || '');
+      if (this.isCompName(docRecord, segIdFocused, 'TextSeg')) {
+        return segIdFocused;
+      }
+      const compIdFocused = String(focusState.compIdFocused || '');
+      if (this.isCompName(docRecord, compIdFocused, 'TextSeg')) {
+        return compIdFocused;
+      }
+    }
+
+    const compIdRoot = String(docRecord.compIdRoot || '');
+    const compIdMain = this.findFirstDocEventTargetFromComp(docRecord, compIdRoot);
+    if (compIdMain) {
+      return compIdMain;
+    }
+
+    return this.collectTextSegIdsInDocOrder(docRecord)[0] || String(focusState.compIdFocused || '');
+  }
+
+  private rewriteDocEventForTarget(docRecord: DocRecord, event: CompEvent, compIdTarget: string): CompEvent {
+    const compIdSource = this.getSourceCompIdForDocEvent(docRecord, event, compIdTarget);
+    return {
+      ...event,
+      sourceId: compIdSource,
+      data: {
+        ...(event.data || {}),
+        ...(this.isCompName(docRecord, compIdSource, 'TextSeg') ? { segId: compIdSource } : {}),
+      },
+    };
+  }
+
+  private getSourceCompIdForDocEvent(docRecord: DocRecord, event: CompEvent, compIdTarget: string) {
+    if (!this.isStoreOwnedEvent(event.type)) {
+      return compIdTarget;
+    }
+    const focusState = docRecord.interactionState.focusState;
+    const segIdFocused = String(focusState.segIdFocused || '');
+    if (this.isCompName(docRecord, segIdFocused, 'TextSeg')) {
+      return segIdFocused;
+    }
+    if (this.isCompName(docRecord, compIdTarget, 'TextSeg')) {
+      return compIdTarget;
+    }
+    return this.collectTextSegIdsInDocOrder(docRecord)[0] || compIdTarget;
+  }
+
+  private shouldDocEventPreferFocusedSeg(type: string) {
+    return [
+      'textSplit',
+      'textDeleteEmpty',
+      'segDelete',
+      'textMergePrev',
+      'rowIndent',
+      'rowOutdent',
+      'segNavigate',
+      'rowNavigate',
+    ].includes(type);
+  }
+
+  private isStoreOwnedEvent(type: string) {
+    return [
+      'textSplit',
+      'textDeleteEmpty',
+      'segDelete',
+      'textMergePrev',
+      'rowIndent',
+      'rowOutdent',
+    ].includes(type);
+  }
+
+  private findFirstDocEventTargetFromComp(docRecord: DocRecord, compId: string): string {
+    const compData = docRecord.compDataById[compId];
+    if (!compData) return '';
+    const compName = String(compData.compName || '');
+    if (['TextBasic', 'List', 'Row', 'TextSeg'].includes(compName)) {
+      return compId;
+    }
+    const childIdList = [
+      String(compData.mainCompId || ''),
+      ...(Array.isArray(compData.childIdList) ? compData.childIdList.map((id) => String(id || '')) : []),
+    ].filter(Boolean);
+    for (const childId of childIdList) {
+      const compIdFound = this.findFirstDocEventTargetFromComp(docRecord, childId);
+      if (compIdFound) {
+        return compIdFound;
+      }
+    }
+    return '';
+  }
+
+  private isCompName(docRecord: DocRecord, compId: string, compName: string) {
+    if (!compId) return false;
+    return String(docRecord.compDataById[compId]?.compName || '') === compName;
   }
 
   private createCompId(docRecord: DocRecord, prefix: string) {

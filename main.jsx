@@ -47,7 +47,7 @@ const testItems = [
   { key: 'group-mobx-tests', label: 'MobX Tests', description: '' },
   ...mobxYamlTestItems.map((itemData) => ({
     ...itemData,
-    parentKey: 'group-mobx-tests',
+    parentKey: itemData.parentKey || 'group-mobx-tests',
   })),
 ];
 

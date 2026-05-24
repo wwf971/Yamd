@@ -49,11 +49,13 @@ const TextSeg = observer(React.forwardRef<any, TextSegProps>(({ data = {}, confi
     : null;
   const rootRef = React.useRef<HTMLSpanElement | null>(null);
   const offsetPendingRestoreRef = React.useRef<number | null>(null);
+  const isComposingRef = React.useRef(false);
   const [isPointerDown, setIsPointerDown] = React.useState(false);
   const isSelectionActive = interactionState?.selectionState.isSelectionActive === true;
   const isDomCaretMode = isEditable
     && runtimeState?.isFocusedLogical === true
-    && isPointerDown === false;
+    && isPointerDown === false
+    && !isSelectionActive;
   const isLogicalCaretMode = !isDomCaretMode;
   const isLogicalCaretVisible = isLogicalCaretMode
     && isPointerDown === false
@@ -126,6 +128,7 @@ const TextSeg = observer(React.forwardRef<any, TextSegProps>(({ data = {}, confi
   }, [contextDocStore, compId, emitEvent, isEditable, text]);
 
   const handleInput = React.useCallback((event: React.FormEvent<HTMLSpanElement>) => {
+    if (isComposingRef.current) return;
     syncTextFromDom(event.currentTarget);
   }, [syncTextFromDom]);
 
@@ -143,6 +146,7 @@ const TextSeg = observer(React.forwardRef<any, TextSegProps>(({ data = {}, confi
   React.useLayoutEffect(() => {
     const offsetPending = offsetPendingRestoreRef.current;
     if (offsetPending === null) return;
+    if (isComposingRef.current) return;
     offsetPendingRestoreRef.current = null;
     const rootEl = rootRef.current;
     if (!rootEl || document.activeElement !== rootEl) return;
@@ -160,6 +164,7 @@ const TextSeg = observer(React.forwardRef<any, TextSegProps>(({ data = {}, confi
   const handleKeyDown = React.useCallback((event: React.KeyboardEvent<HTMLSpanElement>) => {
     const rootEl = rootRef.current;
     if (!rootEl) return;
+    if (event.nativeEvent.isComposing || event.key === 'Process') return;
     if (
       event.key === 'Control'
       || event.key === 'Meta'
@@ -304,24 +309,32 @@ const TextSeg = observer(React.forwardRef<any, TextSegProps>(({ data = {}, confi
         updateFocusState('focus');
       }}
       onInput={handleInput}
+      onCompositionStart={() => {
+        isComposingRef.current = true;
+      }}
+      onCompositionEnd={(event) => {
+        isComposingRef.current = false;
+        syncTextFromDom(event.currentTarget);
+      }}
       onMouseDown={() => {
         setIsPointerDown(true);
       }}
       onMouseUp={() => {
-        setIsPointerDown(false);
+        window.setTimeout(() => {
+          setIsPointerDown(false);
+        }, 0);
       }}
       onBlur={() => {
         syncTextFromDom(rootRef.current);
         setIsPointerDown(false);
       }}
       onClick={(event) => {
-        setIsPointerDown(false);
         const rootEl = rootRef.current;
         const selection = window.getSelection();
         if (selection && !selection.isCollapsed) {
-          updateFocusState('rangeSelect', getCaretOffset(rootEl));
           return;
         }
+        setIsPointerDown(false);
         if (rootEl) {
           rootEl.focus();
           applyCaretByPoint(rootEl, event.clientX, event.clientY);

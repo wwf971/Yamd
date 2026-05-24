@@ -1,0 +1,69 @@
+docName: test-list-row-editable
+dataDocInitial: {}
+configDocInitial:
+  isEditable: true
+compIdRoot: doc-viewer-list-editable
+compById:
+  doc-viewer-list-editable:
+    compName: DocViewer
+    childIdList:
+      - event-tester-list-editable
+    data: {}
+    config:
+      maxHeight: 220
+  event-tester-list-editable:
+    compName: EventTester
+    childIdList:
+      - list-editable-root
+    data: {}
+    config: {}
+  list-editable-root:
+    compName: List
+    mainCompId: row-editable-main
+    childIdList:
+      - row-editable-child
+    data: {}
+    config:
+      isRoot: true
+  row-editable-main:
+    compName: Row
+    childIdList:
+      - seg-editable-main-1
+      - seg-editable-main-2
+    data: {}
+    config: {}
+  seg-editable-main-1:
+    compName: TextSeg
+    childIdList: []
+    data:
+      text: editable root segment one.
+    config:
+      isEditable: true
+  seg-editable-main-2:
+    compName: TextSeg
+    childIdList: []
+    data:
+      text: editable root segment two with longer text for wrapping and caret navigation inside a list row.
+    config:
+      isEditable: true
+  row-editable-child:
+    compName: Row
+    childIdList:
+      - seg-editable-child-1
+      - seg-editable-child-2
+    data: {}
+    config: {}
+  seg-editable-child-1:
+    compName: TextSeg
+    childIdList: []
+    data:
+      text: editable child segment one.
+    config:
+      isEditable: true
+  seg-editable-child-2:
+    compName: TextSeg
+    childIdList: []
+    data:
+      text: editable child segment two.
+    config:
+      isEditable: true

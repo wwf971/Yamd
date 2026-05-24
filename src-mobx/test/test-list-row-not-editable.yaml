@@ -1,0 +1,69 @@
+docName: test-list-row-not-editable
+dataDocInitial: {}
+configDocInitial:
+  isEditable: true
+compIdRoot: doc-viewer-list-not-editable
+compById:
+  doc-viewer-list-not-editable:
+    compName: DocViewer
+    childIdList:
+      - event-tester-list-not-editable
+    data: {}
+    config:
+      maxHeight: 220
+  event-tester-list-not-editable:
+    compName: EventTester
+    childIdList:
+      - list-not-editable-root
+    data: {}
+    config: {}
+  list-not-editable-root:
+    compName: List
+    mainCompId: row-not-editable-main
+    childIdList:
+      - row-not-editable-child
+    data: {}
+    config:
+      isRoot: true
+  row-not-editable-main:
+    compName: Row
+    childIdList:
+      - seg-not-editable-main-1
+      - seg-not-editable-main-2
+    data: {}
+    config: {}
+  seg-not-editable-main-1:
+    compName: TextSeg
+    childIdList: []
+    data:
+      text: not editable root segment one.
+    config:
+      isEditable: false
+  seg-not-editable-main-2:
+    compName: TextSeg
+    childIdList: []
+    data:
+      text: not editable root segment two with longer text for readonly logical caret and selection behavior.
+    config:
+      isEditable: false
+  row-not-editable-child:
+    compName: Row
+    childIdList:
+      - seg-not-editable-child-1
+      - seg-not-editable-child-2
+    data: {}
+    config: {}
+  seg-not-editable-child-1:
+    compName: TextSeg
+    childIdList: []
+    data:
+      text: not editable child segment one.
+    config:
+      isEditable: false
+  seg-not-editable-child-2:
+    compName: TextSeg
+    childIdList: []
+    data:
+      text: not editable child segment two.
+    config:
+      isEditable: false

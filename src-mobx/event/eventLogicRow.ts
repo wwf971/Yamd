@@ -1,9 +1,31 @@
 import type React from 'react';
 import type { CompEvent, DocStore, SelectionState } from '../docStore';
+import { getCaretOffsetByPoint, getClampedMousePoint } from '../util/caretUtils';
 
 type EventHandler = (event: CompEvent) => Promise<any> | any;
 
-export function eventRowFocus(store: DocStore, docId: string, compId: string, reason: string) {
+export async function eventRowFocus(
+  store: DocStore,
+  docId: string,
+  compId: string,
+  reason: string,
+  event?: CompEvent,
+  rowEl?: HTMLElement | null,
+  segIdList: string[] = [],
+) {
+  const segTarget = pickSegTargetForRowFocus(store, docId, rowEl, segIdList, event);
+  if (segTarget.segId) {
+    return store.sendEventToComp(docId, segTarget.segId, {
+      type: 'focus',
+      sourceId: compId,
+      targetId: docId,
+      data: {
+        ...(event?.data || {}),
+        direction: segTarget.direction,
+        offset: segTarget.offset,
+      },
+    });
+  }
   return store.updateFocusState(docId, {
     compIdFocused: compId,
     segIdFocused: '',
@@ -29,14 +51,18 @@ export async function eventRowDispatch({
 }) {
   const type = String(event?.type || '');
   if (type === 'focus') {
-    eventRowFocus(store, docId, compId, 'focus');
-    rowEl?.focus();
-    return { code: 0, message: 'Row focused.' };
+    const result = await eventRowFocus(store, docId, compId, 'focus', event, rowEl, segIdList);
+    if (result.code !== 0) {
+      rowEl?.focus();
+    }
+    return result.code === 0 ? { ...result, message: 'Row focused.' } : result;
   }
   if (type === 'clickSingle') {
-    eventRowFocus(store, docId, compId, 'clickSingle');
-    rowEl?.focus();
-    return { code: 0, message: 'Row click received.' };
+    const result = await eventRowFocus(store, docId, compId, 'clickSingle', event, rowEl, segIdList);
+    if (result.code !== 0) {
+      rowEl?.focus();
+    }
+    return result.code === 0 ? { ...result, message: 'Row click received.' } : result;
   }
   if (type === 'segNavigate') {
     return eventRowSegNavigate({
@@ -65,6 +91,18 @@ export function eventRowClick({
   sourceId: string;
   onEvent?: EventHandler;
 }) {
+  const selection = window.getSelection?.();
+  if (
+    selection
+    && selection.rangeCount > 0
+    && selection.isCollapsed !== true
+    && selection.anchorNode
+    && selection.focusNode
+    && event.currentTarget.contains(selection.anchorNode)
+    && event.currentTarget.contains(selection.focusNode)
+  ) {
+    return;
+  }
   const targetEl = event.target instanceof Element ? event.target : null;
   if (targetEl?.closest('[data-mobx-seg-id]')) {
     return;
@@ -87,7 +125,7 @@ export function eventRowClick({
     });
     return;
   }
-  eventRowFocus(store, docId, compId, 'clickGap');
+  void eventRowFocus(store, docId, compId, 'clickGap', undefined, event.currentTarget, []);
   if (!onEvent) return;
   onEvent({
     type: 'clickSingle',
@@ -175,6 +213,89 @@ function pickNearestSegEl(segElList: HTMLElement[], clientX: number) {
     }
   }
   return segElBest;
+}
+
+function pickSegTargetForRowFocus(
+  store: DocStore,
+  docId: string,
+  rowEl: HTMLElement | null | undefined,
+  segIdList: string[],
+  event?: CompEvent,
+) {
+  if (segIdList.length === 0) {
+    return { segId: '', offset: 0, direction: 'fromLeft' };
+  }
+  const direction = String(event?.data?.direction || '');
+  const mouseClientX = getMouseClientX(rowEl, event);
+  const isFromAboveOrBelow = direction === 'fromAbove' || direction === 'fromBelow' || direction === 'fromUp' || direction === 'fromDown';
+  const shouldUseMouseX = isFromAboveOrBelow || String(event?.type || '') === 'clickSingle' || direction === 'click';
+  const isFromEnd = direction === 'fromRight' || direction === 'fromBelow' || direction === 'fromDown';
+  if (shouldUseMouseX && Number.isFinite(mouseClientX)) {
+    const directionTarget = direction || 'click';
+    const segTarget = pickNearestSegTargetByX(rowEl || null, segIdList, Number(mouseClientX), directionTarget);
+    if (segTarget.segId) {
+      return {
+        segId: segTarget.segId,
+        offset: segTarget.offset,
+        direction: directionTarget,
+      };
+    }
+  }
+  const segId = isFromEnd ? segIdList[segIdList.length - 1] : segIdList[0];
+  const text = String(store.getCompDataById(docId, segId)?.data?.text || '');
+  return {
+    segId,
+    offset: isFromEnd ? text.length : 0,
+    direction: isFromEnd ? 'fromRight' : 'fromLeft',
+  };
+}
+
+function pickNearestSegTargetByX(rowEl: HTMLElement | null, segIdList: string[], x: number, direction: string) {
+  let segIdBest = '';
+  let offsetBest: number | undefined;
+  let distanceBest = Number.POSITIVE_INFINITY;
+  for (const segId of segIdList) {
+    const selector = `[data-mobx-seg-id="${cssEscape(segId)}"]`;
+    const segEl = rowEl?.querySelector<HTMLElement>(selector) || document.querySelector<HTMLElement>(selector);
+    if (!segEl) continue;
+    const rect = segEl.getBoundingClientRect();
+    const xClamped = Math.min(rect.right, Math.max(rect.left, x));
+    const distance = Math.abs(xClamped - x);
+    if (distance < distanceBest) {
+      distanceBest = distance;
+      segIdBest = segId;
+      const point = getClampedMousePoint(segEl, { clientX: x }, focusDirectionForTarget(direction));
+      offsetBest = getCaretOffsetByPoint(segEl, point.x, point.y);
+    }
+  }
+  return { segId: segIdBest, offset: offsetBest };
+}
+
+function focusDirectionForTarget(direction: string) {
+  if (direction === 'click') return 'click';
+  if (direction === 'fromAbove' || direction === 'fromBelow' || direction === 'fromLeft' || direction === 'fromRight') {
+    return direction;
+  }
+  if (direction === 'fromUp') return 'fromAbove';
+  if (direction === 'fromDown') return 'fromBelow';
+  if (direction === 'up') return 'fromBelow';
+  if (direction === 'down') return 'fromAbove';
+  if (direction === 'right') return 'fromLeft';
+  return 'fromRight';
+}
+
+function getMouseClientX(rowEl: HTMLElement | null | undefined, event?: CompEvent) {
+  const mousePos = event?.data?.mousePos;
+  if (Number.isFinite(mousePos?.clientX)) return Number(mousePos.clientX);
+  if (Number.isFinite(mousePos?.x)) return Number(mousePos.x);
+  if (!rowEl || !Number.isFinite(mousePos?.xRatio)) return undefined;
+  const rect = rowEl.getBoundingClientRect();
+  return rect.left + rect.width * Number(mousePos.xRatio);
+}
+
+function cssEscape(value: string) {
+  const cssWithEscape = window.CSS as { escape?: (value: string) => string } | undefined;
+  return cssWithEscape?.escape ? cssWithEscape.escape(value) : value.replace(/"/g, '\\"');
 }
 
 export function selectionStateReadFromDom(rootEl: HTMLElement): Partial<SelectionState> | null {

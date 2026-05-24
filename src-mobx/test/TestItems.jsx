@@ -13,6 +13,8 @@ import EventTester from './EventTester';
 import { DocCompRenderProvider } from './DocCompRenderContext';
 import TEST_TEXT_BASIC_YAML_RAW from './test-text-basic.yaml?raw';
 import TEST_ROW_YAML_RAW from './test-row.yaml?raw';
+import TEST_LIST_ROW_EDITABLE_YAML_RAW from './test-list-row-editable.yaml?raw';
+import TEST_LIST_ROW_NOT_EDITABLE_YAML_RAW from './test-list-row-not-editable.yaml?raw';
 import TEST_LIST_ROW_YAML_RAW from './test-list-row.yaml?raw';
 import './testMobx.css';
 
@@ -123,7 +125,7 @@ const TestItemDoc = observer(function TestItemDoc({ yamlRaw }) {
         return;
       }
       storeDocTest.updateSelectionState(docId, selectionState);
-      if (selectionState.pointFocus?.compId) {
+      if (selectionState.isSelectionActive !== true && selectionState.pointFocus?.compId) {
         storeDocTest.updateFocusState(docId, {
           compIdFocused: selectionState.pointFocus.compId,
           segIdFocused: selectionState.pointFocus.segId,
@@ -240,25 +242,47 @@ const TestItemDoc = observer(function TestItemDoc({ yamlRaw }) {
 
 const TestTextBasicYaml = () => <TestItemDoc yamlRaw={TEST_TEXT_BASIC_YAML_RAW} />;
 const TestRowYaml = () => <TestItemDoc yamlRaw={TEST_ROW_YAML_RAW} />;
+const TestListRowEditableYaml = () => <TestItemDoc yamlRaw={TEST_LIST_ROW_EDITABLE_YAML_RAW} />;
+const TestListRowNotEditableYaml = () => <TestItemDoc yamlRaw={TEST_LIST_ROW_NOT_EDITABLE_YAML_RAW} />;
 const TestListRowYaml = () => <TestItemDoc yamlRaw={TEST_LIST_ROW_YAML_RAW} />;
 
 export const mobxYamlTestItems = [
   {
     key: 'mobx-text-basic',
-    label: 'MobX TextBasic Live',
+    label: 'TextBasic Live',
     description: 'YAML viewer + EventTester + TextBasic.',
     Comp: TestTextBasicYaml,
   },
   {
     key: 'mobx-row-basic',
-    label: 'MobX Row Only Segments',
+    label: 'Row.tsx',
     description: 'YAML viewer + EventTester + Row with TextSeg children only.',
     Comp: TestRowYaml,
   },
   {
-    key: 'mobx-list-row-nested',
-    label: 'MobX List + Row Nested',
+    key: 'mobx-list',
+    label: 'List.tsx',
+    description: 'List tests for TextSeg editability modes.',
+  },
+  {
+    key: 'mobx-list-text-seg-editable',
+    label: 'TextSeg.tsx editable',
+    description: 'List with editable TextSeg children only.',
+    parentKey: 'mobx-list',
+    Comp: TestListRowEditableYaml,
+  },
+  {
+    key: 'mobx-list-text-seg-not-editable',
+    label: 'TextSeg.tsx notEditable',
+    description: 'List with not-editable TextSeg children only.',
+    parentKey: 'mobx-list',
+    Comp: TestListRowNotEditableYaml,
+  },
+  {
+    key: 'mobx-list-text-seg-mixed',
+    label: 'TextSeg.tsx editable/notEditable',
     description: 'YAML viewer + EventTester + nested List and Row.',
+    parentKey: 'mobx-list',
     Comp: TestListRowYaml,
   },
 ];

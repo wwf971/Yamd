@@ -1,4 +1,4 @@
-docName: test-list-row
+docName: test-list-row-editable-not-editable
 dataDocInitial: {}
 configDocInitial:
   isEditable: true
@@ -45,7 +45,8 @@ compById:
     childIdList: []
     data:
       text: second segment in root row.
-    config: {}
+    config:
+      isEditable: false
   row-child-b1:
     compName: Row
     childIdList:
@@ -58,13 +59,15 @@ compById:
     childIdList: []
     data:
       text: row child one.
-    config: {}
+    config:
+      isEditable: false
   seg-child-b1-2:
     compName: TextSeg
     childIdList: []
     data:
       text: row child two.
-    config: {}
+    config:
+      isEditable: false
   list-child-c1:
     compName: List
     mainCompId: row-child-c1
@@ -83,7 +86,8 @@ compById:
     childIdList: []
     data:
       text: nested main row segment.
-    config: {}
+    config:
+      isEditable: false
   row-child-c2:
     compName: Row
     childIdList:

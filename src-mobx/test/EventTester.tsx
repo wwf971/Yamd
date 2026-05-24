@@ -63,18 +63,17 @@ const EventTester = ({ data = {}, config = {}, onEvent, onDataChange }: EventTes
 
   const sendWrappedEvent = React.useCallback(async (eventTarget: CompEvent) => {
     const eventTester: CompEvent = {
-      type: 'sendEventToTarget',
+      type: 'sendEventToDoc',
       sourceId,
       targetId,
       data: {
-        compIdTarget,
         event: eventTarget,
       },
     };
     pushLog('in', eventTarget.type, eventTarget);
     const result = onEvent ? await onEvent(eventTester) : { code: -1, message: 'No target connected.' };
     pushLog('in-result', eventTarget.type, result || { code: -1, message: 'No result' });
-  }, [pushLog, onEvent, sourceId, targetId, compIdTarget]);
+  }, [pushLog, onEvent, sourceId, targetId]);
 
   const sendEvent = React.useCallback(async (type: string, dataEvent: any = {}) => {
     await sendWrappedEvent({
@@ -105,7 +104,7 @@ const EventTester = ({ data = {}, config = {}, onEvent, onDataChange }: EventTes
           <input value={targetId} onChange={(event) => setTargetId(event.target.value)} className="event-input-short" />
         </label>
         <label className="event-inline-field">
-          <div className="event-label">target comp</div>
+          <div className="event-label">data target</div>
           <input value={compIdTarget} readOnly className="event-input-short" />
         </label>
       </div>
