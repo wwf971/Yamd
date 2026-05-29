@@ -44,6 +44,7 @@ const TestItemDoc = observer(function TestItemDoc({ yamlRaw }) {
   const docId = docIdRef.current;
   const rootElRef = React.useRef(null);
   const isCopyModifierDownRef = React.useRef(false);
+  const isApplyingSelectionFromStoreRef = React.useRef(false);
   const parentIdByCompId = React.useMemo(() => buildParentMap(docTemplate.compDataById, docTemplate.compIdRoot), [docTemplate]);
 
   React.useEffect(() => {
@@ -97,6 +98,8 @@ const TestItemDoc = observer(function TestItemDoc({ yamlRaw }) {
 
   const dataDoc = storeDocTest.getDocData(docId);
   const configDoc = storeDocTest.getDocConfig(docId);
+  const interactionStateCurrent = storeDocTest.getInteractionState(docId);
+  const selectionStateCurrent = interactionStateCurrent.selectionState;
   const compDataByIdCurrent = storeDocTest.getCompDataByIdMap(docId);
 
   React.useEffect(() => {
@@ -111,6 +114,10 @@ const TestItemDoc = observer(function TestItemDoc({ yamlRaw }) {
     };
 
     const handleSelectionChange = () => {
+      if (isApplyingSelectionFromStoreRef.current) {
+        isApplyingSelectionFromStoreRef.current = false;
+        return;
+      }
       const selectionState = selectionStateReadFromDom(rootEl);
       const selectionStateCurrent = storeDocTest.getInteractionState(docId).selectionState;
       if (
@@ -172,6 +179,32 @@ const TestItemDoc = observer(function TestItemDoc({ yamlRaw }) {
       document.removeEventListener('selectionchange', handleSelectionChange);
     };
   }, [docId, storeDocTest]);
+
+  React.useEffect(() => {
+    const rootEl = rootElRef.current;
+    if (!rootEl) return;
+    if (selectionStateCurrent.isSelectionActive !== true) return;
+    const pointAnchor = selectionStateCurrent.pointAnchor;
+    const pointFocus = selectionStateCurrent.pointFocus;
+    if (!pointAnchor || !pointFocus) return;
+    const selectionFromDom = selectionStateReadFromDom(rootEl);
+    if (isRangeSelectionEqual(selectionFromDom, selectionStateCurrent)) {
+      return;
+    }
+    const isApplied = applyRangeSelectionToDom(rootEl, pointAnchor, pointFocus);
+    if (isApplied) {
+      isApplyingSelectionFromStoreRef.current = true;
+    }
+  }, [
+    selectionStateCurrent.isSelectionActive,
+    selectionStateCurrent.mode,
+    selectionStateCurrent.pointAnchor?.compId,
+    selectionStateCurrent.pointAnchor?.segId,
+    selectionStateCurrent.pointAnchor?.offset,
+    selectionStateCurrent.pointFocus?.compId,
+    selectionStateCurrent.pointFocus?.segId,
+    selectionStateCurrent.pointFocus?.offset,
+  ]);
 
   const renderCompByIdInDoc = React.useCallback((compId) => {
     return renderCompById({
@@ -366,5 +399,111 @@ function createRandomId() {
     id += chars[Math.floor(Math.random() * chars.length)];
   }
   return id;
+}
+
+function applyRangeSelectionToDom(rootEl, pointAnchor, pointFocus) {
+  if (!pointAnchor?.segId || !pointFocus?.segId) return false;
+  const segAnchor = rootEl.querySelector(`[data-mobx-seg-id="${cssEscape(pointAnchor.segId)}"]`);
+  const segFocus = rootEl.querySelector(`[data-mobx-seg-id="${cssEscape(pointFocus.segId)}"]`);
+  if (!segAnchor || !segFocus) return false;
+  const pointDomAnchor = getDomPointByOffset(segAnchor, Number(pointAnchor.offset || 0));
+  const pointDomFocus = getDomPointByOffset(segFocus, Number(pointFocus.offset || 0));
+  if (!pointDomAnchor || !pointDomFocus) return false;
+  const selection = window.getSelection?.();
+  if (!selection) return false;
+  if (typeof selection.setBaseAndExtent === 'function') {
+    selection.setBaseAndExtent(
+      pointDomAnchor.node,
+      pointDomAnchor.offset,
+      pointDomFocus.node,
+      pointDomFocus.offset,
+    );
+    return true;
+  }
+  const range = document.createRange();
+  const order = compareDomPoint(pointDomAnchor, pointDomFocus);
+  const pointStart = order <= 0 ? pointDomAnchor : pointDomFocus;
+  const pointEnd = order <= 0 ? pointDomFocus : pointDomAnchor;
+  range.setStart(pointStart.node, pointStart.offset);
+  range.setEnd(pointEnd.node, pointEnd.offset);
+  selection.removeAllRanges();
+  selection.addRange(range);
+  return true;
+}
+
+function getDomPointByOffset(segEl, offsetRaw) {
+  const offsetTarget = clampOffsetByText(segEl, offsetRaw);
+  const walker = document.createTreeWalker(segEl, NodeFilter.SHOW_TEXT);
+  let offsetPassed = 0;
+  let textNodeLast = null;
+  while (true) {
+    const nodeCurrent = walker.nextNode();
+    if (!nodeCurrent) break;
+    textNodeLast = nodeCurrent;
+    const textLength = String(nodeCurrent.textContent || '').length;
+    if (offsetTarget <= offsetPassed + textLength) {
+      return {
+        node: nodeCurrent,
+        offset: Math.max(0, offsetTarget - offsetPassed),
+      };
+    }
+    offsetPassed += textLength;
+  }
+  if (textNodeLast) {
+    return {
+      node: textNodeLast,
+      offset: String(textNodeLast.textContent || '').length,
+    };
+  }
+  return {
+    node: segEl,
+    offset: 0,
+  };
+}
+
+function clampOffsetByText(segEl, offsetRaw) {
+  const textLength = String(segEl?.textContent || '').length;
+  return Math.min(textLength, Math.max(0, Number(offsetRaw || 0)));
+}
+
+function compareDomPoint(pointA, pointB) {
+  if (pointA.node === pointB.node) {
+    return pointA.offset - pointB.offset;
+  }
+  const position = pointA.node.compareDocumentPosition(pointB.node);
+  if (position & Node.DOCUMENT_POSITION_FOLLOWING) {
+    return -1;
+  }
+  if (position & Node.DOCUMENT_POSITION_PRECEDING) {
+    return 1;
+  }
+  return 0;
+}
+
+function isRangeSelectionEqual(selectionStateDom, selectionStateStore) {
+  if (!selectionStateDom || !selectionStateStore) return false;
+  if (selectionStateDom.isSelectionActive !== true || selectionStateStore.isSelectionActive !== true) {
+    return false;
+  }
+  const pointAnchorDom = selectionStateDom.pointAnchor;
+  const pointFocusDom = selectionStateDom.pointFocus;
+  const pointAnchorStore = selectionStateStore.pointAnchor;
+  const pointFocusStore = selectionStateStore.pointFocus;
+  if (!pointAnchorDom || !pointFocusDom || !pointAnchorStore || !pointFocusStore) {
+    return false;
+  }
+  return (
+    String(pointAnchorDom.compId || '') === String(pointAnchorStore.compId || '')
+    && String(pointAnchorDom.segId || '') === String(pointAnchorStore.segId || '')
+    && Number(pointAnchorDom.offset || 0) === Number(pointAnchorStore.offset || 0)
+    && String(pointFocusDom.compId || '') === String(pointFocusStore.compId || '')
+    && String(pointFocusDom.segId || '') === String(pointFocusStore.segId || '')
+    && Number(pointFocusDom.offset || 0) === Number(pointFocusStore.offset || 0)
+  );
+}
+
+function cssEscape(value) {
+  const cssWithEscape = window.CSS;
+  return cssWithEscape?.escape ? cssWithEscape.escape(String(value || '')) : String(value || '').replace(/"/g, '\\"');
 }
 

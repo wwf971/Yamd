@@ -1,7 +1,7 @@
 import React from 'react';
 import { observer } from 'mobx-react-lite';
 import { useDocStoreContext } from '../DocStoreContext';
-import { CompEvent } from '../docStore';
+import { CompEvent, SelectionTrackPoint } from '../docStore';
 import {
   applyCaretByDirection,
   applyCaretByOffset,
@@ -83,6 +83,49 @@ const TextSeg = observer(React.forwardRef<any, TextSegProps>(({ data = {}, confi
       reasonLast: reason,
     });
   }, [contextDocStore, compId]);
+
+  const getPointCurrent = React.useCallback((offset: number): SelectionTrackPoint => ({
+    compId,
+    segId: compId,
+    offset: Math.min(text.length, Math.max(0, Number(offset || 0))),
+  }), [compId, text.length]);
+
+  const updateKeyboardSelectionState = React.useCallback((reason: string, pointAnchor: SelectionTrackPoint, offsetFocus: number) => {
+    if (!contextDocStore) return;
+    const pointFocus = getPointCurrent(offsetFocus);
+    const isCollapsed = pointAnchor.segId === pointFocus.segId && pointAnchor.offset === pointFocus.offset;
+    if (isCollapsed) {
+      contextDocStore.store.clearSelectionState(contextDocStore.docId);
+      updateFocusState(reason, pointFocus.offset);
+      return;
+    }
+    contextDocStore.store.updateSelectionState(contextDocStore.docId, {
+      isSelectionActive: true,
+      mode: 'range',
+      pointAnchor,
+      pointFocus,
+    });
+    updateFocusState(reason, pointFocus.offset);
+  }, [contextDocStore, getPointCurrent, updateFocusState]);
+
+  const resolveSelectionAnchorForExtend = React.useCallback((offsetCurrent: number): SelectionTrackPoint => {
+    const pointAnchorSelection = interactionState?.selectionState.pointAnchor;
+    const pointFocusSelection = interactionState?.selectionState.pointFocus;
+    const isSelectionCurrent = interactionState?.selectionState.isSelectionActive === true;
+    if (
+      isSelectionCurrent
+      && pointAnchorSelection
+      && pointFocusSelection
+      && pointFocusSelection.segId === compId
+    ) {
+      return {
+        compId: String(pointAnchorSelection.compId || compId),
+        segId: String(pointAnchorSelection.segId || compId),
+        offset: Math.max(0, Number(pointAnchorSelection.offset || 0)),
+      };
+    }
+    return getPointCurrent(offsetCurrent);
+  }, [compId, getPointCurrent, interactionState?.selectionState.isSelectionActive, interactionState?.selectionState.pointAnchor, interactionState?.selectionState.pointFocus]);
 
   const emitEvent = React.useCallback((type: string, dataEvent: any = {}) => {
     if (!onEvent) return undefined;
@@ -176,8 +219,98 @@ const TextSeg = observer(React.forwardRef<any, TextSegProps>(({ data = {}, confi
       return;
     }
 
-    const offsetCurrent = isLogicalCaretVisible ? offsetLogicalCaret : getCaretOffset(rootEl);
+    const pointFocusSelection = interactionState?.selectionState.pointFocus;
+    const offsetFocusFromSelection = (
+      isSelectionActive
+      && pointFocusSelection
+      && pointFocusSelection.segId === compId
+    )
+      ? Number(pointFocusSelection.offset || 0)
+      : undefined;
+    const offsetCurrentRaw = Number.isFinite(offsetFocusFromSelection)
+      ? Number(offsetFocusFromSelection)
+      : (isLogicalCaretVisible ? offsetLogicalCaret : getCaretOffset(rootEl));
+    const offsetCurrent = Math.min(text.length, Math.max(0, Number(offsetCurrentRaw || 0)));
     const textLength = text.length;
+    const isArrowKey = event.key === 'ArrowLeft'
+      || event.key === 'ArrowRight'
+      || event.key === 'ArrowUp'
+      || event.key === 'ArrowDown';
+    if (event.shiftKey && isArrowKey) {
+      event.preventDefault();
+      applyCaretByOffset(rootEl, offsetCurrent);
+      const pointAnchor = resolveSelectionAnchorForExtend(offsetCurrent);
+      if (event.key === 'ArrowLeft' && offsetCurrent <= 0) {
+        emitEvent('segNavigate', {
+          direction: 'left',
+          offset: 0,
+          isSelectionExtend: true,
+          selectionAnchor: pointAnchor,
+        });
+        return;
+      }
+      if (event.key === 'ArrowLeft') {
+        const offsetNext = Math.max(0, offsetCurrent - 1);
+        applyCaretByOffset(rootEl, offsetNext);
+        updateKeyboardSelectionState('keySelect', pointAnchor, offsetNext);
+        return;
+      }
+      if (event.key === 'ArrowRight' && offsetCurrent >= textLength) {
+        emitEvent('segNavigate', {
+          direction: 'right',
+          offset: offsetCurrent,
+          isSelectionExtend: true,
+          selectionAnchor: pointAnchor,
+        });
+        return;
+      }
+      if (event.key === 'ArrowRight') {
+        const offsetNext = Math.min(textLength, offsetCurrent + 1);
+        applyCaretByOffset(rootEl, offsetNext);
+        updateKeyboardSelectionState('keySelect', pointAnchor, offsetNext);
+        return;
+      }
+      if (event.key === 'ArrowUp' && isCaretOnFirstLine(rootEl)) {
+        emitEvent('segNavigate', {
+          direction: 'up',
+          offset: offsetCurrent,
+          x: getCaretClientXCurrent(),
+          isSelectionExtend: true,
+          selectionAnchor: pointAnchor,
+        });
+        return;
+      }
+      if (event.key === 'ArrowUp') {
+        const selection = window.getSelection();
+        selection?.modify?.('move', 'backward', 'line');
+        const offsetNext = selection?.anchorNode && rootEl.contains(selection.anchorNode)
+          ? getCaretOffset(rootEl)
+          : offsetCurrent;
+        applyCaretByOffset(rootEl, offsetNext);
+        updateKeyboardSelectionState('keySelect', pointAnchor, offsetNext);
+        return;
+      }
+      if (event.key === 'ArrowDown' && isCaretOnLastLine(rootEl)) {
+        emitEvent('segNavigate', {
+          direction: 'down',
+          offset: offsetCurrent,
+          x: getCaretClientXCurrent(),
+          isSelectionExtend: true,
+          selectionAnchor: pointAnchor,
+        });
+        return;
+      }
+      if (event.key === 'ArrowDown') {
+        const selection = window.getSelection();
+        selection?.modify?.('move', 'forward', 'line');
+        const offsetNext = selection?.anchorNode && rootEl.contains(selection.anchorNode)
+          ? getCaretOffset(rootEl)
+          : offsetCurrent;
+        applyCaretByOffset(rootEl, offsetNext);
+        updateKeyboardSelectionState('keySelect', pointAnchor, offsetNext);
+        return;
+      }
+    }
     if (isLogicalCaretMode && !isSelectionActive) {
       applyCaretByOffset(rootEl, offsetCurrent);
     }
@@ -281,6 +414,15 @@ const TextSeg = observer(React.forwardRef<any, TextSegProps>(({ data = {}, confi
       const type = String(event?.type || '');
       if (type === 'focus') {
         const offset = applyFocusToDom('focus', event?.data || {});
+        if (contextDocStore && event?.data?.isSelectionExtend === true && event?.data?.selectionAnchor) {
+          const selectionAnchorRaw = event.data.selectionAnchor;
+          const pointAnchor: SelectionTrackPoint = {
+            compId: String(selectionAnchorRaw.compId || compId),
+            segId: String(selectionAnchorRaw.segId || compId),
+            offset: Math.max(0, Number(selectionAnchorRaw.offset || 0)),
+          };
+          updateKeyboardSelectionState('keySelect', pointAnchor, offset);
+        }
         emitEvent('focus', { ...(event?.data || {}), offset });
         return { code: 0, message: 'TextSeg focused.' };
       }
@@ -291,7 +433,7 @@ const TextSeg = observer(React.forwardRef<any, TextSegProps>(({ data = {}, confi
       }
       return { code: -1, message: `Unsupported event: ${type}` };
     },
-  }), [applyFocusToDom, emitEvent]);
+  }), [applyFocusToDom, compId, contextDocStore, emitEvent, updateKeyboardSelectionState]);
 
   return (
     <span

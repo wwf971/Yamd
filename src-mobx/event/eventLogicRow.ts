@@ -160,7 +160,11 @@ async function eventRowSegNavigate({
       type: 'focus',
       sourceId: compId,
       targetId: docId,
-      data: { direction: 'fromRight' },
+      data: {
+        direction: 'fromRight',
+        isSelectionExtend: event?.data?.isSelectionExtend === true,
+        selectionAnchor: event?.data?.selectionAnchor,
+      },
     });
   }
 
@@ -169,7 +173,11 @@ async function eventRowSegNavigate({
       type: 'focus',
       sourceId: compId,
       targetId: docId,
-      data: { direction: 'fromLeft' },
+      data: {
+        direction: 'fromLeft',
+        isSelectionExtend: event?.data?.isSelectionExtend === true,
+        selectionAnchor: event?.data?.selectionAnchor,
+      },
     });
   }
 
@@ -182,6 +190,8 @@ async function eventRowSegNavigate({
       rowId: compId,
       segId,
       x: event?.data?.x,
+      isSelectionExtend: event?.data?.isSelectionExtend === true,
+      selectionAnchor: event?.data?.selectionAnchor,
     },
   });
   if (result.code === 0) {
@@ -195,6 +205,8 @@ async function eventRowSegNavigate({
     data: {
       direction: direction === 'left' || direction === 'up' ? 'fromLeft' : 'fromRight',
       offset: direction === 'left' || direction === 'up' ? 0 : undefined,
+      isSelectionExtend: event?.data?.isSelectionExtend === true,
+      selectionAnchor: event?.data?.selectionAnchor,
     },
   });
 }

@@ -142,7 +142,11 @@ async function eventListRowNavigate({
       type: 'focus',
       sourceId: compId,
       targetId: docId,
-      data: { direction: direction === 'up' ? 'fromBelow' : 'fromAbove' },
+      data: {
+        direction: direction === 'up' ? 'fromBelow' : 'fromAbove',
+        isSelectionExtend: event?.data?.isSelectionExtend === true,
+        selectionAnchor: event?.data?.selectionAnchor,
+      },
     });
   }
   return store.sendEventToComp(docId, segTarget.segId, {
@@ -153,6 +157,8 @@ async function eventListRowNavigate({
       direction: focusDirectionForMove(direction),
       offset: Number.isFinite(segTarget.offset) ? segTarget.offset : undefined,
       mousePos: Number.isFinite(Number(event?.data?.x)) ? { clientX: Number(event?.data?.x) } : undefined,
+      isSelectionExtend: event?.data?.isSelectionExtend === true,
+      selectionAnchor: event?.data?.selectionAnchor,
     },
   });
 }
