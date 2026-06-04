@@ -67,11 +67,23 @@ export type CompRuntimeState = {
   isSelectionWithin: boolean;
 };
 
+export type CompBulletPositionState = {
+  isBulletMeasureEnabled?: boolean;
+  counterBulletMeasureReq: number;
+  counterBulletMeasureDone: number;
+  compIdRequester: string;
+  compIdBasis: string;
+  compIdProvider: string;
+  posYBulletPreferred: number | null;
+  messageBulletMeasure: string;
+};
+
 export type DocInteractionState = {
   focusState: FocusState;
   elActiveState: ElActiveState;
   selectionState: SelectionState;
   runtimeStateByCompId: Record<string, CompRuntimeState>;
+  bulletPositionStateByCompId: Record<string, CompBulletPositionState>;
 };
 
 type CompRegistryEntry = {
@@ -106,6 +118,17 @@ const createCompRuntimeState = (): CompRuntimeState => ({
   isSelectionWithin: false,
 });
 
+const createCompBulletPositionState = (): CompBulletPositionState => ({
+  isBulletMeasureEnabled: true,
+  counterBulletMeasureReq: 0,
+  counterBulletMeasureDone: 0,
+  compIdRequester: '',
+  compIdBasis: '',
+  compIdProvider: '',
+  posYBulletPreferred: null,
+  messageBulletMeasure: '',
+});
+
 const createInteractionState = (): DocInteractionState => ({
   focusState: {
     compIdFocused: '',
@@ -124,13 +147,18 @@ const createInteractionState = (): DocInteractionState => ({
     pointFocus: null,
   },
   runtimeStateByCompId: {},
+  bulletPositionStateByCompId: {},
 });
 
 export class DocStore {
   docById: Record<string, DocRecord> = {};
 
+  compElementByDocId: Record<string, Record<string, HTMLElement>> = {};
+
   constructor() {
-    makeAutoObservable(this, {}, { autoBind: true });
+    makeAutoObservable(this, {
+      compElementByDocId: false,
+    }, { autoBind: true });
   }
 
   ensureDoc(
@@ -180,6 +208,96 @@ export class DocStore {
   getCompRuntimeState(docId: string, compId: string) {
     const docRecord = this.ensureDoc(docId);
     return docRecord.interactionState.runtimeStateByCompId[compId] || createCompRuntimeState();
+  }
+
+  getCompBulletPositionState(docId: string, compId: string) {
+    const docRecord = this.ensureDoc(docId);
+    const compIdSafe = String(compId || '');
+    if (!compIdSafe) {
+      return createCompBulletPositionState();
+    }
+    if (!docRecord.interactionState.bulletPositionStateByCompId[compIdSafe]) {
+      docRecord.interactionState.bulletPositionStateByCompId[compIdSafe] = createCompBulletPositionState();
+    }
+    return docRecord.interactionState.bulletPositionStateByCompId[compIdSafe];
+  }
+
+  registerCompElement(docId: string, compId: string, element: HTMLElement | null) {
+    const docIdSafe = String(docId || '');
+    const compIdSafe = String(compId || '');
+    if (!docIdSafe || !compIdSafe || !element) return;
+    if (!this.compElementByDocId[docIdSafe]) {
+      this.compElementByDocId[docIdSafe] = {};
+    }
+    this.compElementByDocId[docIdSafe][compIdSafe] = element;
+  }
+
+  unregisterCompElement(docId: string, compId: string, element?: HTMLElement | null) {
+    const docIdSafe = String(docId || '');
+    const compIdSafe = String(compId || '');
+    const elementCurrent = this.compElementByDocId[docIdSafe]?.[compIdSafe];
+    if (!elementCurrent) return;
+    if (element && elementCurrent !== element) return;
+    delete this.compElementByDocId[docIdSafe][compIdSafe];
+  }
+
+  getCompElement(docId: string, compId: string) {
+    return this.compElementByDocId[String(docId || '')]?.[String(compId || '')] || null;
+  }
+
+  requestCompBulletPosition(
+    docId: string,
+    compIdTarget: string,
+    request: Partial<CompBulletPositionState> = {},
+  ) {
+    const state = this.getCompBulletPositionState(docId, compIdTarget);
+    state.isBulletMeasureEnabled = request.isBulletMeasureEnabled !== false;
+    state.counterBulletMeasureReq += 1;
+    state.compIdRequester = String(request.compIdRequester || '');
+    state.compIdBasis = String(request.compIdBasis || compIdTarget || '');
+    state.compIdProvider = String(request.compIdProvider || '');
+    state.messageBulletMeasure = 'requested';
+    return { code: 0, message: 'Bullet position requested.' };
+  }
+
+  updateCompBulletPositionResult(
+    docId: string,
+    compIdTarget: string,
+    result: Partial<CompBulletPositionState> = {},
+  ) {
+    const state = this.getCompBulletPositionState(docId, compIdTarget);
+    state.counterBulletMeasureDone += 1;
+    state.posYBulletPreferred = Number.isFinite(result.posYBulletPreferred)
+      ? Number(result.posYBulletPreferred)
+      : null;
+    state.messageBulletMeasure = String(result.messageBulletMeasure || '');
+    if (result.compIdProvider !== undefined) {
+      state.compIdProvider = String(result.compIdProvider || '');
+    }
+    if (result.compIdBasis !== undefined) {
+      state.compIdBasis = String(result.compIdBasis || '');
+    }
+    return { code: 0, message: 'Bullet position updated.' };
+  }
+
+  pickCompBulletProviderId(docId: string, compId: string) {
+    const docRecord = this.ensureDoc(docId);
+    const compData = docRecord.compDataById[String(compId || '')];
+    const compName = String(compData?.compName || '');
+    if (compName === 'TextSeg') {
+      return compData.compId;
+    }
+    if (compName === 'List') {
+      const compIdMain = String(compData.mainCompId || '').trim();
+      return this.isCompName(docRecord, compIdMain, 'Row') ? compIdMain : '';
+    }
+    if (compName === 'Row') {
+      const childIdList = Array.isArray(compData.childIdList) ? compData.childIdList : [];
+      return childIdList.map((childId) => String(childId || '')).find((childId) => (
+        this.isCompBulletPositionProvider(docRecord, childId)
+      )) || '';
+    }
+    return '';
   }
 
   updateFocusState(
@@ -1102,6 +1220,11 @@ export class DocStore {
   private isCompName(docRecord: DocRecord, compId: string, compName: string) {
     if (!compId) return false;
     return String(docRecord.compDataById[compId]?.compName || '') === compName;
+  }
+
+  private isCompBulletPositionProvider(docRecord: DocRecord, compId: string) {
+    const compName = String(docRecord.compDataById[compId]?.compName || '');
+    return compName === 'TextSeg';
   }
 
   private createCompId(docRecord: DocRecord, prefix: string) {

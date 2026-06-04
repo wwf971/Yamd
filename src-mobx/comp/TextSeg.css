@@ -1,0 +1,78 @@
+.mobx-text-seg {
+  min-height: 18px;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  background: transparent;
+  font-size: 14px;
+  font-family: sans-serif;
+  color: #1f2937;
+  display: inline;
+  text-align: left;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  margin-right: 2px;
+  user-select: text;
+  cursor: text;
+  outline: none;
+  text-decoration: none;
+}
+
+.mobx-text-seg-caret {
+  display: inline-block;
+  width: 0;
+  height: 1em;
+  margin: 0;
+  padding: 0;
+  position: relative;
+  vertical-align: -0.12em;
+  pointer-events: none;
+  user-select: none;
+}
+
+.mobx-text-seg-caret::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 1px;
+  height: 1em;
+  background: #111827;
+  animation: mobx-text-seg-caret-blink 1s step-end infinite;
+}
+
+@keyframes mobx-text-seg-caret-blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+.mobx-text-seg[contenteditable="true"] {
+  background: rgba(248, 250, 252, 0.9);
+}
+
+.mobx-text-seg.is-active {
+  background: #eaf2ff;
+}
+
+.mobx-seg-focused-logical {
+  outline: 1px dashed #2563eb;
+  outline-offset: 1px;
+}
+
+.mobx-seg-el-active {
+  text-decoration-line: underline;
+  text-decoration-color: #1d4ed8;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 2px;
+}
+
+.mobx-seg-selection-within {
+  background: rgba(251, 191, 36, 0.18);
+}
+
+.mobx-seg-debug {
+  outline: 1px dotted #94a3b8;
+  outline-offset: 1px;
+}

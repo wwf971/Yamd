@@ -4,6 +4,7 @@ import { useDocStoreContext } from '../DocStoreContext';
 import { CompEvent } from '../docStore';
 import { eventRowClick, eventRowDispatch } from '../event/eventLogicRow';
 import { useDocCompRenderContext } from '../test/DocCompRenderContext';
+import './Row.css';
 
 type RowProps = {
   data?: {
@@ -28,8 +29,24 @@ const Row = observer(React.forwardRef<any, RowProps>(({ data = {}, config = {}, 
   const runtimeState = contextDocStore && compId
     ? contextDocStore.store.getCompRuntimeState(contextDocStore.docId, compId)
     : null;
+  const bulletPositionState = contextDocStore && compId
+    ? contextDocStore.store.getCompBulletPositionState(contextDocStore.docId, compId)
+    : null;
+  const compIdProviderBullet = contextDocStore && compId
+    ? contextDocStore.store.pickCompBulletProviderId(contextDocStore.docId, compId)
+    : '';
+  const bulletProviderState = contextDocStore && compIdProviderBullet
+    ? contextDocStore.store.getCompBulletPositionState(contextDocStore.docId, compIdProviderBullet)
+    : null;
+  const rowRootRef = React.useRef<HTMLDivElement | null>(null);
   const rowRef = React.useRef<HTMLDivElement | null>(null);
   const childIdList = Array.isArray(compData?.childIdList) ? compData.childIdList : [];
+  const counterBulletMeasureReq = Number(bulletPositionState?.counterBulletMeasureReq || 0);
+  const compIdBasisBullet = String(bulletPositionState?.compIdBasis || compId);
+  const isBulletMeasureEnabled = bulletPositionState?.isBulletMeasureEnabled !== false;
+  const counterBulletMeasureDoneProvider = Number(bulletProviderState?.counterBulletMeasureDone || 0);
+  const posYBulletPreferredProvider = bulletProviderState?.posYBulletPreferred ?? null;
+  const messageBulletMeasureProvider = String(bulletProviderState?.messageBulletMeasure || '');
   const segIdList = childIdList.filter((childIdRaw) => {
     const childId = String(childIdRaw || '');
     const childCompData = getCompDataById(childId);
@@ -60,8 +77,64 @@ const Row = observer(React.forwardRef<any, RowProps>(({ data = {}, config = {}, 
     },
   }), [contextDocStore, compId, segIdList]);
 
+  React.useLayoutEffect(() => {
+    if (!contextDocStore || !compId) return undefined;
+    const rootEl = rowRootRef.current;
+    if (!rootEl) return undefined;
+    contextDocStore.store.registerCompElement(contextDocStore.docId, compId, rootEl);
+    return () => {
+      contextDocStore.store.unregisterCompElement(contextDocStore.docId, compId, rootEl);
+    };
+  }, [contextDocStore, compId]);
+
+  React.useLayoutEffect(() => {
+    if (!contextDocStore || !compId || counterBulletMeasureReq <= 0 || !isBulletMeasureEnabled) return;
+    if (!compIdProviderBullet) {
+      contextDocStore.store.updateCompBulletPositionResult(contextDocStore.docId, compId, {
+        compIdBasis: compIdBasisBullet,
+        compIdProvider: '',
+        posYBulletPreferred: null,
+        messageBulletMeasure: 'Provider missing.',
+      });
+      return;
+    }
+    contextDocStore.store.requestCompBulletPosition(contextDocStore.docId, compIdProviderBullet, {
+      compIdRequester: compId,
+      compIdBasis: compIdBasisBullet,
+      compIdProvider: compIdProviderBullet,
+      isBulletMeasureEnabled: true,
+    });
+  }, [
+    contextDocStore,
+    compId,
+    compIdBasisBullet,
+    compIdProviderBullet,
+    counterBulletMeasureReq,
+    isBulletMeasureEnabled,
+  ]);
+
+  React.useLayoutEffect(() => {
+    if (!contextDocStore || !compId || counterBulletMeasureReq <= 0 || !compIdProviderBullet) return;
+    contextDocStore.store.updateCompBulletPositionResult(contextDocStore.docId, compId, {
+      compIdBasis: compIdBasisBullet,
+      compIdProvider: compIdProviderBullet,
+      posYBulletPreferred: posYBulletPreferredProvider,
+      messageBulletMeasure: messageBulletMeasureProvider,
+    });
+  }, [
+    contextDocStore,
+    compId,
+    compIdBasisBullet,
+    compIdProviderBullet,
+    counterBulletMeasureDoneProvider,
+    counterBulletMeasureReq,
+    messageBulletMeasureProvider,
+    posYBulletPreferredProvider,
+  ]);
+
   return (
     <div
+      ref={rowRootRef}
       className={className}
       data-mobx-comp-id={compId}
       data-mobx-comp-name="Row"

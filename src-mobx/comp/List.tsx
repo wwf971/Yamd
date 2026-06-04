@@ -4,6 +4,7 @@ import { useDocStoreContext } from '../DocStoreContext';
 import { CompEvent } from '../docStore';
 import { eventListClick, eventListDispatch } from '../event/eventLogicList';
 import { useDocCompRenderContext } from '../test/DocCompRenderContext';
+import './List.css';
 
 type ListProps = {
   data?: {
@@ -28,10 +29,16 @@ const List = observer(React.forwardRef<any, ListProps>(({ data = {}, config = {}
   const runtimeState = contextDocStore && compId
     ? contextDocStore.store.getCompRuntimeState(contextDocStore.docId, compId)
     : null;
+  const bulletPositionState = contextDocStore && compId
+    ? contextDocStore.store.getCompBulletPositionState(contextDocStore.docId, compId)
+    : null;
   const listRootRef = React.useRef<HTMLDivElement | null>(null);
   const listRef = React.useRef<HTMLDivElement | null>(null);
   const childIdList = Array.isArray(compData?.childIdList) ? compData.childIdList : [];
   const mainCompId = String(compData?.mainCompId || '').trim();
+  const counterBulletMeasureReq = Number(bulletPositionState?.counterBulletMeasureReq || 0);
+  const compIdBasisBullet = String(bulletPositionState?.compIdBasis || compId);
+  const isBulletMeasureEnabled = bulletPositionState?.isBulletMeasureEnabled !== false;
 
   const compIdMain = React.useMemo(() => {
     if (!mainCompId) {
@@ -40,6 +47,12 @@ const List = observer(React.forwardRef<any, ListProps>(({ data = {}, config = {}
     const compDataMain = getCompDataById(mainCompId);
     return String(compDataMain?.compName || '') === 'Row' ? mainCompId : '';
   }, [mainCompId, getCompDataById]);
+  const bulletProviderState = contextDocStore && compIdMain
+    ? contextDocStore.store.getCompBulletPositionState(contextDocStore.docId, compIdMain)
+    : null;
+  const counterBulletMeasureDoneProvider = Number(bulletProviderState?.counterBulletMeasureDone || 0);
+  const posYBulletPreferredProvider = bulletProviderState?.posYBulletPreferred ?? null;
+  const messageBulletMeasureProvider = String(bulletProviderState?.messageBulletMeasure || '');
 
   const childIdListNested = childIdList.filter((childIdRaw) => {
     const childId = String(childIdRaw || '');
@@ -74,6 +87,75 @@ const List = observer(React.forwardRef<any, ListProps>(({ data = {}, config = {}
     },
   }), [contextDocStore, compId]);
 
+  React.useLayoutEffect(() => {
+    if (!contextDocStore || !compId) return undefined;
+    const rootEl = listRootRef.current;
+    if (!rootEl) return undefined;
+    contextDocStore.store.registerCompElement(contextDocStore.docId, compId, rootEl);
+    return () => {
+      contextDocStore.store.unregisterCompElement(contextDocStore.docId, compId, rootEl);
+    };
+  }, [contextDocStore, compId]);
+
+  React.useLayoutEffect(() => {
+    if (!contextDocStore || !compId || counterBulletMeasureReq <= 0 || !isBulletMeasureEnabled) return;
+    if (!compIdMain) {
+      contextDocStore.store.updateCompBulletPositionResult(contextDocStore.docId, compId, {
+        compIdBasis: compIdBasisBullet,
+        compIdProvider: '',
+        posYBulletPreferred: null,
+        messageBulletMeasure: 'Main row missing.',
+      });
+      return;
+    }
+    contextDocStore.store.requestCompBulletPosition(contextDocStore.docId, compIdMain, {
+      compIdRequester: compId,
+      compIdBasis: compIdBasisBullet,
+      compIdProvider: compIdMain,
+      isBulletMeasureEnabled: true,
+    });
+  }, [
+    contextDocStore,
+    compId,
+    compIdBasisBullet,
+    compIdMain,
+    counterBulletMeasureReq,
+    isBulletMeasureEnabled,
+  ]);
+
+  React.useLayoutEffect(() => {
+    if (!contextDocStore || !compId || counterBulletMeasureReq <= 0 || !compIdMain) return;
+    contextDocStore.store.updateCompBulletPositionResult(contextDocStore.docId, compId, {
+      compIdBasis: compIdBasisBullet,
+      compIdProvider: compIdMain,
+      posYBulletPreferred: posYBulletPreferredProvider,
+      messageBulletMeasure: messageBulletMeasureProvider,
+    });
+  }, [
+    contextDocStore,
+    compId,
+    compIdBasisBullet,
+    compIdMain,
+    counterBulletMeasureDoneProvider,
+    counterBulletMeasureReq,
+    messageBulletMeasureProvider,
+    posYBulletPreferredProvider,
+  ]);
+
+  React.useLayoutEffect(() => {
+    if (!contextDocStore || !compId) return;
+    childIdListNested.forEach((childIdRaw) => {
+      const childId = String(childIdRaw || '');
+      if (!childId) return;
+      contextDocStore.store.requestCompBulletPosition(contextDocStore.docId, childId, {
+        compIdRequester: compId,
+        compIdBasis: childId,
+        compIdProvider: childId,
+        isBulletMeasureEnabled: true,
+      });
+    });
+  }, [contextDocStore, compId, childIdListNested.join('|')]);
+
   return (
     <div
       ref={listRootRef}
@@ -105,14 +187,26 @@ const List = observer(React.forwardRef<any, ListProps>(({ data = {}, config = {}
       </div>
       {childIdListNested.length > 0 ? (
         <div className="mobx-list-children">
-          {childIdListNested.map((childId) => (
-            <div key={String(childId || '')} className="mobx-list-item">
-              <div className="mobx-list-bullet-box">
-                <div className="mobx-list-bullet-disc" />
+          {childIdListNested.map((childId) => {
+            const childIdSafe = String(childId || '');
+            const bulletPositionStateChild = contextDocStore && childIdSafe
+              ? contextDocStore.store.getCompBulletPositionState(contextDocStore.docId, childIdSafe)
+              : null;
+            const posYBulletPreferred = Number.isFinite(bulletPositionStateChild?.posYBulletPreferred)
+              ? Number(bulletPositionStateChild?.posYBulletPreferred)
+              : null;
+            const styleItem = posYBulletPreferred === null
+              ? undefined
+              : { '--mobx-list-bullet-y': `${posYBulletPreferred}px` } as React.CSSProperties;
+            return (
+              <div key={childIdSafe} className="mobx-list-item" style={styleItem}>
+                <div className="mobx-list-bullet-box">
+                  <div className="mobx-list-bullet-disc" />
+                </div>
+                <div className="mobx-list-item-content">{renderCompById(childIdSafe)}</div>
               </div>
-              <div className="mobx-list-item-content">{renderCompById(String(childId || ''))}</div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       ) : null}
     </div>

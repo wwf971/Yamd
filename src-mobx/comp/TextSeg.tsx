@@ -11,6 +11,7 @@ import {
   isCaretOnFirstLine,
   isCaretOnLastLine,
 } from '../util/caretUtils';
+import './TextSeg.css';
 
 type TextSegProps = {
   data?: {
@@ -47,10 +48,16 @@ const TextSeg = observer(React.forwardRef<any, TextSegProps>(({ data = {}, confi
   const interactionState = contextDocStore
     ? contextDocStore.store.getInteractionState(contextDocStore.docId)
     : null;
+  const bulletPositionState = contextDocStore && compId
+    ? contextDocStore.store.getCompBulletPositionState(contextDocStore.docId, compId)
+    : null;
   const rootRef = React.useRef<HTMLSpanElement | null>(null);
   const offsetPendingRestoreRef = React.useRef<number | null>(null);
   const isComposingRef = React.useRef(false);
   const [isPointerDown, setIsPointerDown] = React.useState(false);
+  const counterBulletMeasureReq = Number(bulletPositionState?.counterBulletMeasureReq || 0);
+  const compIdBasisBullet = String(bulletPositionState?.compIdBasis || '');
+  const isBulletMeasureEnabled = bulletPositionState?.isBulletMeasureEnabled !== false;
   const isSelectionActive = interactionState?.selectionState.isSelectionActive === true;
   const isDomCaretMode = isEditable
     && runtimeState?.isFocusedLogical === true
@@ -185,6 +192,56 @@ const TextSeg = observer(React.forwardRef<any, TextSegProps>(({ data = {}, confi
     }
     return getCaretClientX(rootEl);
   }, [isLogicalCaretVisible]);
+
+  const measureBulletPosition = React.useCallback(() => {
+    if (!contextDocStore || !compId || !isBulletMeasureEnabled) return;
+    const rootEl = rootRef.current;
+    const basisEl = contextDocStore.store.getCompElement(contextDocStore.docId, compIdBasisBullet || compId);
+    const result = calcTextSegBulletPosition(rootEl, basisEl);
+    contextDocStore.store.updateCompBulletPositionResult(contextDocStore.docId, compId, {
+      compIdBasis: compIdBasisBullet || compId,
+      compIdProvider: compId,
+      posYBulletPreferred: result.posYBulletPreferred,
+      messageBulletMeasure: result.messageBulletMeasure,
+    });
+  }, [contextDocStore, compId, compIdBasisBullet, isBulletMeasureEnabled]);
+
+  React.useLayoutEffect(() => {
+    if (!contextDocStore || !compId) return undefined;
+    const rootEl = rootRef.current;
+    if (!rootEl) return undefined;
+    contextDocStore.store.registerCompElement(contextDocStore.docId, compId, rootEl);
+    return () => {
+      contextDocStore.store.unregisterCompElement(contextDocStore.docId, compId, rootEl);
+    };
+  }, [contextDocStore, compId]);
+
+  React.useLayoutEffect(() => {
+    if (counterBulletMeasureReq <= 0) return;
+    measureBulletPosition();
+  }, [counterBulletMeasureReq, text, measureBulletPosition]);
+
+  React.useEffect(() => {
+    const rootEl = rootRef.current;
+    if (!rootEl || !isBulletMeasureEnabled || counterBulletMeasureReq <= 0) return undefined;
+    let frameId = 0;
+    const resizeObserver = new ResizeObserver(() => {
+      if (frameId) {
+        cancelAnimationFrame(frameId);
+      }
+      frameId = requestAnimationFrame(() => {
+        frameId = 0;
+        measureBulletPosition();
+      });
+    });
+    resizeObserver.observe(rootEl);
+    return () => {
+      if (frameId) {
+        cancelAnimationFrame(frameId);
+      }
+      resizeObserver.disconnect();
+    };
+  }, [counterBulletMeasureReq, isBulletMeasureEnabled, measureBulletPosition]);
 
   React.useLayoutEffect(() => {
     const offsetPending = offsetPendingRestoreRef.current;
@@ -505,3 +562,67 @@ const TextSeg = observer(React.forwardRef<any, TextSegProps>(({ data = {}, confi
 }));
 
 export default TextSeg;
+
+function calcTextSegBulletPosition(textEl: HTMLElement | null, basisEl: HTMLElement | null) {
+  if (!textEl) {
+    return { posYBulletPreferred: null, messageBulletMeasure: 'TextSeg element missing.' };
+  }
+  if (!basisEl) {
+    return { posYBulletPreferred: null, messageBulletMeasure: 'Basis element missing.' };
+  }
+  const basisRect = basisEl.getBoundingClientRect();
+  const lineRect = getFirstTextLineRect(textEl) || getFallbackLineRect(textEl);
+  if (!lineRect) {
+    return { posYBulletPreferred: null, messageBulletMeasure: 'Text line missing.' };
+  }
+  return {
+    posYBulletPreferred: lineRect.top - basisRect.top + lineRect.height * ratioBulletYInLine,
+    messageBulletMeasure: 'measured',
+  };
+}
+
+const ratioBulletYInLine = 0.55;
+
+function getFirstTextLineRect(textEl: HTMLElement) {
+  const walker = document.createTreeWalker(textEl, NodeFilter.SHOW_TEXT);
+  const lineHeight = getLineHeight(textEl);
+  while (true) {
+    const nodeCurrent = walker.nextNode();
+    if (!nodeCurrent) break;
+    const textCurrent = String(nodeCurrent.textContent || '');
+    if (!textCurrent) continue;
+    const range = document.createRange();
+    range.setStart(nodeCurrent, 0);
+    range.setEnd(nodeCurrent, Math.min(1, textCurrent.length));
+    const rect = Array.from(range.getClientRects())[0] || null;
+    range.detach?.();
+    if (rect && rect.height > 0) {
+      return {
+        top: rect.top + (rect.height - lineHeight) / 2,
+        height: lineHeight,
+      };
+    }
+  }
+  return null;
+}
+
+function getFallbackLineRect(textEl: HTMLElement) {
+  const rect = textEl.getBoundingClientRect();
+  const lineHeight = getLineHeight(textEl);
+  if (rect.height > 0) {
+    return {
+      top: rect.top,
+      height: lineHeight,
+    };
+  }
+  return {
+    top: rect.top,
+    height: lineHeight,
+  };
+}
+
+function getLineHeight(textEl: HTMLElement) {
+  const style = window.getComputedStyle(textEl);
+  const fontSize = Number.parseFloat(style.fontSize) || 14;
+  return Number.parseFloat(style.lineHeight) || fontSize * 1.25;
+}
