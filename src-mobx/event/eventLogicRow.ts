@@ -1,5 +1,6 @@
 import type React from 'react';
-import type { CompEvent, DocStore, SelectionState } from '../docStore';
+import type { DocStore } from '../docStore';
+import type { CompEvent, SelectionState } from '../docStoreTypes';
 import { getCaretOffsetByPoint, getClampedMousePoint } from '../util/caretUtils';
 
 type EventHandler = (event: CompEvent) => Promise<any> | any;

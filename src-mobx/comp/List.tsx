@@ -1,7 +1,7 @@
 import React from 'react';
 import { observer } from 'mobx-react-lite';
 import { useDocStoreContext } from '../DocStoreContext';
-import { CompEvent } from '../docStore';
+import type { CompEvent } from '../docStoreTypes';
 import { eventListClick, eventListDispatch } from '../event/eventLogicList';
 import { useDocCompRenderContext } from '../test/DocCompRenderContext';
 import './List.css';
@@ -30,7 +30,7 @@ const List = observer(React.forwardRef<any, ListProps>(({ data = {}, config = {}
     ? contextDocStore.store.getCompRuntimeState(contextDocStore.docId, compId)
     : null;
   const bulletPositionState = contextDocStore && compId
-    ? contextDocStore.store.getCompBulletPositionState(contextDocStore.docId, compId)
+    ? contextDocStore.store.getCompBulletPosState(contextDocStore.docId, compId)
     : null;
   const listRootRef = React.useRef<HTMLDivElement | null>(null);
   const listRef = React.useRef<HTMLDivElement | null>(null);
@@ -48,7 +48,7 @@ const List = observer(React.forwardRef<any, ListProps>(({ data = {}, config = {}
     return String(compDataMain?.compName || '') === 'Row' ? mainCompId : '';
   }, [mainCompId, getCompDataById]);
   const bulletProviderState = contextDocStore && compIdMain
-    ? contextDocStore.store.getCompBulletPositionState(contextDocStore.docId, compIdMain)
+    ? contextDocStore.store.getCompBulletPosState(contextDocStore.docId, compIdMain)
     : null;
   const counterBulletMeasureDoneProvider = Number(bulletProviderState?.counterBulletMeasureDone || 0);
   const posYBulletPreferredProvider = bulletProviderState?.posYBulletPreferred ?? null;
@@ -100,7 +100,7 @@ const List = observer(React.forwardRef<any, ListProps>(({ data = {}, config = {}
   React.useLayoutEffect(() => {
     if (!contextDocStore || !compId || counterBulletMeasureReq <= 0 || !isBulletMeasureEnabled) return;
     if (!compIdMain) {
-      contextDocStore.store.updateCompBulletPositionResult(contextDocStore.docId, compId, {
+      contextDocStore.store.updateCompBulletPosResult(contextDocStore.docId, compId, {
         compIdBasis: compIdBasisBullet,
         compIdProvider: '',
         posYBulletPreferred: null,
@@ -108,7 +108,7 @@ const List = observer(React.forwardRef<any, ListProps>(({ data = {}, config = {}
       });
       return;
     }
-    contextDocStore.store.requestCompBulletPosition(contextDocStore.docId, compIdMain, {
+    contextDocStore.store.requestCompBulletPos(contextDocStore.docId, compIdMain, {
       compIdRequester: compId,
       compIdBasis: compIdBasisBullet,
       compIdProvider: compIdMain,
@@ -125,7 +125,7 @@ const List = observer(React.forwardRef<any, ListProps>(({ data = {}, config = {}
 
   React.useLayoutEffect(() => {
     if (!contextDocStore || !compId || counterBulletMeasureReq <= 0 || !compIdMain) return;
-    contextDocStore.store.updateCompBulletPositionResult(contextDocStore.docId, compId, {
+    contextDocStore.store.updateCompBulletPosResult(contextDocStore.docId, compId, {
       compIdBasis: compIdBasisBullet,
       compIdProvider: compIdMain,
       posYBulletPreferred: posYBulletPreferredProvider,
@@ -147,7 +147,7 @@ const List = observer(React.forwardRef<any, ListProps>(({ data = {}, config = {}
     childIdListNested.forEach((childIdRaw) => {
       const childId = String(childIdRaw || '');
       if (!childId) return;
-      contextDocStore.store.requestCompBulletPosition(contextDocStore.docId, childId, {
+      contextDocStore.store.requestCompBulletPos(contextDocStore.docId, childId, {
         compIdRequester: compId,
         compIdBasis: childId,
         compIdProvider: childId,
@@ -190,7 +190,7 @@ const List = observer(React.forwardRef<any, ListProps>(({ data = {}, config = {}
           {childIdListNested.map((childId) => {
             const childIdSafe = String(childId || '');
             const bulletPositionStateChild = contextDocStore && childIdSafe
-              ? contextDocStore.store.getCompBulletPositionState(contextDocStore.docId, childIdSafe)
+              ? contextDocStore.store.getCompBulletPosState(contextDocStore.docId, childIdSafe)
               : null;
             const posYBulletPreferred = Number.isFinite(bulletPositionStateChild?.posYBulletPreferred)
               ? Number(bulletPositionStateChild?.posYBulletPreferred)

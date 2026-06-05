@@ -1,6 +1,6 @@
 import React from 'react';
 import { useDocStoreContext } from '../DocStoreContext';
-import { CompEvent } from '../docStore';
+import type { CompEvent } from '../docStoreTypes';
 import './TextBasic.css';
 
 type TextBasicData = {

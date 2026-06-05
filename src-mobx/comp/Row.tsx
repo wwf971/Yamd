@@ -1,7 +1,7 @@
 import React from 'react';
 import { observer } from 'mobx-react-lite';
 import { useDocStoreContext } from '../DocStoreContext';
-import { CompEvent } from '../docStore';
+import type { CompEvent } from '../docStoreTypes';
 import { eventRowClick, eventRowDispatch } from '../event/eventLogicRow';
 import { useDocCompRenderContext } from '../test/DocCompRenderContext';
 import './Row.css';
@@ -30,13 +30,13 @@ const Row = observer(React.forwardRef<any, RowProps>(({ data = {}, config = {}, 
     ? contextDocStore.store.getCompRuntimeState(contextDocStore.docId, compId)
     : null;
   const bulletPositionState = contextDocStore && compId
-    ? contextDocStore.store.getCompBulletPositionState(contextDocStore.docId, compId)
+    ? contextDocStore.store.getCompBulletPosState(contextDocStore.docId, compId)
     : null;
   const compIdProviderBullet = contextDocStore && compId
     ? contextDocStore.store.pickCompBulletProviderId(contextDocStore.docId, compId)
     : '';
   const bulletProviderState = contextDocStore && compIdProviderBullet
-    ? contextDocStore.store.getCompBulletPositionState(contextDocStore.docId, compIdProviderBullet)
+    ? contextDocStore.store.getCompBulletPosState(contextDocStore.docId, compIdProviderBullet)
     : null;
   const rowRootRef = React.useRef<HTMLDivElement | null>(null);
   const rowRef = React.useRef<HTMLDivElement | null>(null);
@@ -90,7 +90,7 @@ const Row = observer(React.forwardRef<any, RowProps>(({ data = {}, config = {}, 
   React.useLayoutEffect(() => {
     if (!contextDocStore || !compId || counterBulletMeasureReq <= 0 || !isBulletMeasureEnabled) return;
     if (!compIdProviderBullet) {
-      contextDocStore.store.updateCompBulletPositionResult(contextDocStore.docId, compId, {
+      contextDocStore.store.updateCompBulletPosResult(contextDocStore.docId, compId, {
         compIdBasis: compIdBasisBullet,
         compIdProvider: '',
         posYBulletPreferred: null,
@@ -98,7 +98,7 @@ const Row = observer(React.forwardRef<any, RowProps>(({ data = {}, config = {}, 
       });
       return;
     }
-    contextDocStore.store.requestCompBulletPosition(contextDocStore.docId, compIdProviderBullet, {
+    contextDocStore.store.requestCompBulletPos(contextDocStore.docId, compIdProviderBullet, {
       compIdRequester: compId,
       compIdBasis: compIdBasisBullet,
       compIdProvider: compIdProviderBullet,
@@ -115,7 +115,7 @@ const Row = observer(React.forwardRef<any, RowProps>(({ data = {}, config = {}, 
 
   React.useLayoutEffect(() => {
     if (!contextDocStore || !compId || counterBulletMeasureReq <= 0 || !compIdProviderBullet) return;
-    contextDocStore.store.updateCompBulletPositionResult(contextDocStore.docId, compId, {
+    contextDocStore.store.updateCompBulletPosResult(contextDocStore.docId, compId, {
       compIdBasis: compIdBasisBullet,
       compIdProvider: compIdProviderBullet,
       posYBulletPreferred: posYBulletPreferredProvider,

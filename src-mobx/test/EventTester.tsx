@@ -1,7 +1,7 @@
 import React from 'react';
 import { LeftIcon, RightIcon, UpIcon, DownIcon } from '@wwf971/react-comp-misc';
 import { useDocStoreContext } from '../DocStoreContext';
-import { CompEvent } from '../docStore';
+import type { CompEvent } from '../docStoreTypes';
 import { useDocCompRenderContext } from './DocCompRenderContext';
 import './testMobx.css';
 

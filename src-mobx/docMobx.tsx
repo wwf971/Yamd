@@ -2,7 +2,8 @@ import React from 'react';
 import { observer } from 'mobx-react-lite';
 import TextBasic from './comp/TextBasic';
 import { DocStoreProvider } from './DocStoreContext';
-import { CompEvent, DocStore, createDocStore } from './docStore';
+import { DocStore, createDocStore } from './docStore';
+import type { CompEvent } from './docStoreTypes';
 import './docMobx.css';
 
 export const compIdDocRoot = 'comp-doc-root';
@@ -215,7 +216,7 @@ const DocMobxInner = (
         </div>
         <TextBasic
           ref={textBasicRef}
-          data={{ compId: compIdTextBasicMain }}
+          data={{ compId: compIdTextBasicMain, text: dataDoc.text }}
           config={{}}
           onEvent={handleEventFromComp}
           onDataChange={(dataPatch: any) => {

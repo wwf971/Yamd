@@ -180,7 +180,7 @@ const TestItemDoc = observer(function TestItemDoc({ yamlRaw }) {
     };
   }, [docId, storeDocTest]);
 
-  React.useEffect(() => {
+  React.useLayoutEffect(() => {
     const rootEl = rootElRef.current;
     if (!rootEl) return;
     if (selectionStateCurrent.isSelectionActive !== true) return;

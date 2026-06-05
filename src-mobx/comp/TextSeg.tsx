@@ -1,7 +1,7 @@
 import React from 'react';
 import { observer } from 'mobx-react-lite';
 import { useDocStoreContext } from '../DocStoreContext';
-import { CompEvent, SelectionTrackPoint } from '../docStore';
+import type { CompEvent, SelectionTrackPoint } from '../docStoreTypes';
 import {
   applyCaretByDirection,
   applyCaretByOffset,
@@ -49,7 +49,7 @@ const TextSeg = observer(React.forwardRef<any, TextSegProps>(({ data = {}, confi
     ? contextDocStore.store.getInteractionState(contextDocStore.docId)
     : null;
   const bulletPositionState = contextDocStore && compId
-    ? contextDocStore.store.getCompBulletPositionState(contextDocStore.docId, compId)
+    ? contextDocStore.store.getCompBulletPosState(contextDocStore.docId, compId)
     : null;
   const rootRef = React.useRef<HTMLSpanElement | null>(null);
   const offsetPendingRestoreRef = React.useRef<number | null>(null);
@@ -198,7 +198,7 @@ const TextSeg = observer(React.forwardRef<any, TextSegProps>(({ data = {}, confi
     const rootEl = rootRef.current;
     const basisEl = contextDocStore.store.getCompElement(contextDocStore.docId, compIdBasisBullet || compId);
     const result = calcTextSegBulletPosition(rootEl, basisEl);
-    contextDocStore.store.updateCompBulletPositionResult(contextDocStore.docId, compId, {
+    contextDocStore.store.updateCompBulletPosResult(contextDocStore.docId, compId, {
       compIdBasis: compIdBasisBullet || compId,
       compIdProvider: compId,
       posYBulletPreferred: result.posYBulletPreferred,
