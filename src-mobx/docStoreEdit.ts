@@ -250,6 +250,52 @@ export function docStoreGetSelectionText(store: DocStore, docId: string) {
   return textPartList.join('');
 }
 
+export function docStoreMergeTextSegWithPreviousBySegId(store: DocStore, docId: string, segId: string) {
+  const docRecord = store.ensureDoc(docId);
+  const segData = docRecord.compDataById[segId];
+  if (!segData || String(segData.compName || '') !== 'TextSeg') {
+    return { code: -1, message: `Text segment not found. segId=${segId}` };
+  }
+  const rowId = getOwningRowId(docRecord, segId);
+  const rowData = rowId ? docRecord.compDataById[rowId] : null;
+  if (!rowData || String(rowData.compName || '') !== 'Row') {
+    return { code: -1, message: `Owning row not found. segId=${segId}` };
+  }
+  const childIdList = Array.isArray(rowData.childIdList) ? rowData.childIdList.map((id) => String(id || '')) : [];
+  const segIndex = childIdList.indexOf(segId);
+  if (segIndex === -1) {
+    return { code: -1, message: `Segment is not in row. segId=${segId}, rowId=${rowId}` };
+  }
+  if (segIndex <= 0) {
+    return docStoreMergeRowWithPreviousBySegId(store, docId, segId);
+  }
+
+  const segIdPrev = childIdList[segIndex - 1] || '';
+  const segDataPrev = docRecord.compDataById[segIdPrev];
+  if (!segDataPrev || String(segDataPrev.compName || '') !== 'TextSeg') {
+    return { code: -1, message: `Previous text segment not found. segId=${segId}` };
+  }
+  const textPrev = String(segDataPrev.data?.text || '');
+  const textCurrent = String(segData.data?.text || '');
+  const offsetFocused = textPrev.length;
+  segDataPrev.data = {
+    ...(segDataPrev.data || {}),
+    text: textPrev + textCurrent,
+  };
+  rowData.childIdList = childIdList.filter((id) => id !== segId);
+  delete docRecord.compDataById[segId];
+  docRecord.compOrder = docRecord.compOrder.filter((id) => id !== segId);
+  store.clearSelectionState(docId);
+  store.updateFocusState(docId, {
+    compIdFocused: segIdPrev,
+    segIdFocused: segIdPrev,
+    offsetFocused,
+    reasonLast: 'textMergePrev',
+  });
+  focusCompAfterRender(store, docId, segIdPrev, offsetFocused);
+  return { code: 0, message: 'Text segment merged with previous segment.', data: { segIdFocused: segIdPrev } };
+}
+
 export function docStoreMergeRowWithPreviousBySegId(store: DocStore, docId: string, segId: string) {
   const docRecord = store.ensureDoc(docId);
   const rowId = getOwningRowId(docRecord, segId);

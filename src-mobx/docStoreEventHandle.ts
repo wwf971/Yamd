@@ -174,7 +174,7 @@ export async function docStoreReceiveEvent(
 
   if (eventNormalized.type === 'textMergePrev') {
     const segId = String(eventNormalized?.data?.segId || eventNormalized.sourceId || '');
-    return store.mergeRowWithPreviousBySegId(docId, segId);
+    return store.mergeTextSegWithPreviousBySegId(docId, segId);
   }
 
   if (eventNormalized.type === 'rowIndent') {

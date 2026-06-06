@@ -19,6 +19,7 @@ import {
   docStoreDeleteRowWithOnlySeg,
   docStoreGetSelectionText,
   docStoreIndentEntryBySegId,
+  docStoreMergeTextSegWithPreviousBySegId,
   docStoreMergeRowWithPreviousBySegId,
   docStoreOutdentEntryBySegId,
   docStoreSplitTextSegAtOffset,
@@ -350,6 +351,10 @@ export class DocStore {
 
   mergeRowWithPreviousBySegId(docId: string, segId: string) {
     return docStoreMergeRowWithPreviousBySegId(this, docId, segId);
+  }
+
+  mergeTextSegWithPreviousBySegId(docId: string, segId: string) {
+    return docStoreMergeTextSegWithPreviousBySegId(this, docId, segId);
   }
 
   indentEntryBySegId(docId: string, segId: string) {
