@@ -72,10 +72,11 @@ const Row = observer(React.forwardRef<any, RowProps>(({ data = {}, config = {}, 
         docId: contextDocStore.docId,
         compId,
         rowEl: rowRef.current,
+        childIdList,
         segIdList,
       });
     },
-  }), [contextDocStore, compId, segIdList]);
+  }), [contextDocStore, compId, childIdList, segIdList]);
 
   React.useLayoutEffect(() => {
     if (!contextDocStore || !compId) return undefined;

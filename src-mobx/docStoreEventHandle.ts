@@ -157,34 +157,17 @@ export async function docStoreReceiveEvent(
     return { code: 0, message: 'Key down event received.' };
   }
 
-  if (eventNormalized.type === 'textSplit') {
-    const segId = String(eventNormalized?.data?.segId || eventNormalized.sourceId || '');
-    return store.splitTextSegAtOffset(docId, segId, Number(eventNormalized?.data?.offset || 0));
-  }
-
-  if (eventNormalized.type === 'textDeleteEmpty') {
-    const segId = String(eventNormalized?.data?.segId || eventNormalized.sourceId || '');
-    return store.deleteEmptyTextSeg(docId, segId);
-  }
-
-  if (eventNormalized.type === 'segDelete') {
-    const segId = String(eventNormalized?.data?.segId || eventNormalized.sourceId || '');
-    return store.deleteEmptyTextSeg(docId, segId);
-  }
-
-  if (eventNormalized.type === 'textMergePrev') {
-    const segId = String(eventNormalized?.data?.segId || eventNormalized.sourceId || '');
-    return store.mergeTextSegWithPreviousBySegId(docId, segId);
-  }
-
-  if (eventNormalized.type === 'rowIndent') {
-    const segId = String(eventNormalized?.data?.segId || eventNormalized.sourceId || '');
-    return store.indentEntryBySegId(docId, segId);
-  }
-
-  if (eventNormalized.type === 'rowOutdent') {
-    const segId = String(eventNormalized?.data?.segId || eventNormalized.sourceId || '');
-    return store.outdentEntryBySegId(docId, segId);
+  if (
+    eventNormalized.type === 'childSplitAttempt'
+    || eventNormalized.type === 'childMergePrevAttempt'
+    || eventNormalized.type === 'childDeleteAttempt'
+    || eventNormalized.type === 'rowSplitAttempt'
+    || eventNormalized.type === 'rowIndentAttempt'
+    || eventNormalized.type === 'rowOutdentAttempt'
+    || eventNormalized.type === 'rowMergePrevAttempt'
+    || eventNormalized.type === 'rowDeleteAttempt'
+  ) {
+    return docStoreSendEventToParent(store, docId, eventNormalized.sourceId, eventNormalized);
   }
 
   if (eventNormalized.type === 'segNavigate' || eventNormalized.type === 'rowNavigate') {
@@ -264,13 +247,13 @@ function pickDocEventTarget(docRecord: DocRecord, event: CompEvent) {
 
   const focusState = docRecord.interactionState.focusState;
   if (shouldDocEventPreferFocusedSeg(event.type)) {
-    const segIdFocused = String(focusState.segIdFocused || '');
-    if (isCompName(docRecord, segIdFocused, 'TextSeg')) {
-      return segIdFocused;
-    }
     const compIdFocused = String(focusState.compIdFocused || '');
-    if (isCompName(docRecord, compIdFocused, 'TextSeg')) {
+    if (compIdFocused && docRecord.compDataById[compIdFocused]) {
       return compIdFocused;
+    }
+    const segIdFocused = String(focusState.segIdFocused || '');
+    if (segIdFocused && docRecord.compDataById[segIdFocused]) {
+      return segIdFocused;
     }
   }
 
@@ -280,7 +263,7 @@ function pickDocEventTarget(docRecord: DocRecord, event: CompEvent) {
     return compIdMain;
   }
 
-  return collectTextSegIdsInDocOrder(docRecord)[0] || String(focusState.compIdFocused || '');
+  return docRecord.compOrder[0] || String(focusState.compIdFocused || '');
 }
 
 function rewriteDocEventForTarget(docRecord: DocRecord, event: CompEvent, compIdTarget: string): CompEvent {
@@ -288,10 +271,7 @@ function rewriteDocEventForTarget(docRecord: DocRecord, event: CompEvent, compId
   return {
     ...event,
     sourceId: compIdSource,
-    data: {
-      ...(event.data || {}),
-      ...(isCompName(docRecord, compIdSource, 'TextSeg') ? { segId: compIdSource } : {}),
-    },
+    data: event.data || {},
   };
 }
 
@@ -300,45 +280,37 @@ function getSourceCompIdForDocEvent(docRecord: DocRecord, event: CompEvent, comp
     return compIdTarget;
   }
   const focusState = docRecord.interactionState.focusState;
-  const segIdFocused = String(focusState.segIdFocused || '');
-  if (isCompName(docRecord, segIdFocused, 'TextSeg')) {
-    return segIdFocused;
+  const compIdFocused = String(focusState.compIdFocused || '');
+  if (compIdFocused && docRecord.compDataById[compIdFocused]) {
+    return compIdFocused;
   }
-  if (isCompName(docRecord, compIdTarget, 'TextSeg')) {
-    return compIdTarget;
-  }
-  return collectTextSegIdsInDocOrder(docRecord)[0] || compIdTarget;
+  return compIdTarget;
 }
 
 function shouldDocEventPreferFocusedSeg(type: string) {
   return [
-    'textSplit',
-    'textDeleteEmpty',
-    'segDelete',
-    'textMergePrev',
-    'rowIndent',
-    'rowOutdent',
+    'childSplitAttempt',
+    'childMergePrevAttempt',
+    'childDeleteAttempt',
+    'rowSplitAttempt',
+    'rowIndentAttempt',
+    'rowOutdentAttempt',
+    'rowMergePrevAttempt',
+    'rowDeleteAttempt',
     'segNavigate',
     'rowNavigate',
   ].includes(type);
 }
 
 function isStoreOwnedEvent(type: string) {
-  return [
-    'textSplit',
-    'textDeleteEmpty',
-    'segDelete',
-    'textMergePrev',
-    'rowIndent',
-    'rowOutdent',
-  ].includes(type);
+  return [].includes(type);
 }
 
 function findFirstDocEventTargetFromComp(docRecord: DocRecord, compId: string): string {
   const compData = docRecord.compDataById[compId];
   if (!compData) return '';
   const compName = String(compData.compName || '');
-  if (['TextBasic', 'List', 'Row', 'TextSeg'].includes(compName)) {
+  if (['TextBasic', 'List', 'Row'].includes(compName)) {
     return compId;
   }
   const childIdList = [
@@ -352,30 +324,6 @@ function findFirstDocEventTargetFromComp(docRecord: DocRecord, compId: string): 
     }
   }
   return '';
-}
-
-function collectTextSegIdsInDocOrder(docRecord: DocRecord) {
-  const compIdRoot = String(docRecord.compIdRoot || '');
-  const segIdList: string[] = [];
-  collectTextSegIdsFromComp(docRecord, compIdRoot, segIdList);
-  return segIdList;
-}
-
-function collectTextSegIdsFromComp(docRecord: DocRecord, compId: string, segIdList: string[]) {
-  const compData = docRecord.compDataById[compId];
-  if (!compData) return;
-  if (String(compData.compName || '') === 'TextSeg') {
-    segIdList.push(compId);
-    return;
-  }
-  const mainCompId = String(compData.mainCompId || '');
-  if (mainCompId) {
-    collectTextSegIdsFromComp(docRecord, mainCompId, segIdList);
-  }
-  const childIdList = Array.isArray(compData.childIdList) ? compData.childIdList.map((id) => String(id || '')) : [];
-  for (const childId of childIdList) {
-    collectTextSegIdsFromComp(docRecord, childId, segIdList);
-  }
 }
 
 function isCompName(docRecord: DocRecord, compId: string, compName: string) {

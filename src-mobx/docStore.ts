@@ -15,20 +15,25 @@ import {
   docStoreUpdateCompBulletPosResult,
 } from './docStoreBulletPos';
 import {
-  docStoreDeleteEmptyTextSeg,
-  docStoreDeleteRowWithOnlySeg,
+  docStoreApplyCompEditResult,
+  docStoreApplyFocusAfterEdit,
   docStoreGetSelectionText,
+  docStoreIndentEntryByRowId,
   docStoreIndentEntryBySegId,
-  docStoreMergeTextSegWithPreviousBySegId,
-  docStoreMergeRowWithPreviousBySegId,
+  docStoreInsertChildAfter,
   docStoreOutdentEntryBySegId,
-  docStoreSplitTextSegAtOffset,
+  docStoreOutdentEntryByRowId,
+  docStoreRemoveCompSubtree,
+  docStoreReplaceChildRange,
+  docStoreReplaceCompData,
 } from './docStoreEdit';
 import type {
   CompBulletPosState,
   CompData,
+  CompEditResult,
   CompEvent,
   CompEventResult,
+  CompFocusTarget,
   CompRuntimeState,
   DocInteractionState,
   DocRecord,
@@ -40,8 +45,10 @@ import type {
 export type {
   CompBulletPosState,
   CompData,
+  CompEditResult,
   CompEvent,
   CompEventResult,
+  CompFocusTarget,
   CompRegistryEntry,
   CompRuntimeState,
   DocInteractionState,
@@ -333,36 +340,60 @@ export class DocStore {
     return null;
   }
 
-  splitTextSegAtOffset(docId: string, segId: string, offsetRaw: number) {
-    return docStoreSplitTextSegAtOffset(this, docId, segId, offsetRaw);
-  }
-
-  deleteEmptyTextSeg(docId: string, segId: string) {
-    return docStoreDeleteEmptyTextSeg(this, docId, segId);
-  }
-
-  deleteRowWithOnlySeg(docId: string, rowId: string, segId: string) {
-    return docStoreDeleteRowWithOnlySeg(this, docId, rowId, segId);
-  }
-
   getSelectionText(docId: string) {
     return docStoreGetSelectionText(this, docId);
   }
 
-  mergeRowWithPreviousBySegId(docId: string, segId: string) {
-    return docStoreMergeRowWithPreviousBySegId(this, docId, segId);
+  applyCompEditResult(docId: string, parentId: string, editResult: CompEditResult, reason: string) {
+    return docStoreApplyCompEditResult(this, docId, parentId, editResult, reason);
   }
 
-  mergeTextSegWithPreviousBySegId(docId: string, segId: string) {
-    return docStoreMergeTextSegWithPreviousBySegId(this, docId, segId);
+  replaceChildRange(
+    docId: string,
+    parentId: string,
+    childIdListOld: string[],
+    compDataListNext: CompData[],
+    options: { focus?: CompFocusTarget; reason?: string } = {},
+  ) {
+    return docStoreReplaceChildRange(this, docId, parentId, childIdListOld, compDataListNext, options);
+  }
+
+  insertChildAfter(
+    docId: string,
+    parentId: string,
+    childIdRef: string,
+    compDataNext: CompData,
+    options: { focus?: CompFocusTarget; reason?: string } = {},
+  ) {
+    return docStoreInsertChildAfter(this, docId, parentId, childIdRef, compDataNext, options);
+  }
+
+  removeCompSubtree(docId: string, compId: string) {
+    return docStoreRemoveCompSubtree(this, docId, compId);
+  }
+
+  replaceCompData(docId: string, compDataNext: CompData) {
+    return docStoreReplaceCompData(this, docId, compDataNext);
+  }
+
+  applyFocusAfterEdit(docId: string, focusNext: CompFocusTarget, reason: string) {
+    return docStoreApplyFocusAfterEdit(this, docId, focusNext, reason);
   }
 
   indentEntryBySegId(docId: string, segId: string) {
     return docStoreIndentEntryBySegId(this, docId, segId);
   }
 
+  indentEntryByRowId(docId: string, rowId: string, compIdFocus = '') {
+    return docStoreIndentEntryByRowId(this, docId, rowId, compIdFocus);
+  }
+
   outdentEntryBySegId(docId: string, segId: string) {
     return docStoreOutdentEntryBySegId(this, docId, segId);
+  }
+
+  outdentEntryByRowId(docId: string, rowId: string, compIdFocus = '') {
+    return docStoreOutdentEntryByRowId(this, docId, rowId, compIdFocus);
   }
 
   getDocYamlRaw(docId: string) {

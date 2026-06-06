@@ -1,5 +1,12 @@
 import type { DocStore } from './docStore';
-import type { CompData, DocRecord, SelectionState, SelectionTrackPoint } from './docStoreTypes';
+import type {
+  CompData,
+  CompEditResult,
+  CompFocusTarget,
+  DocRecord,
+  SelectionState,
+  SelectionTrackPoint,
+} from './docStoreTypes';
 
 type OutlineEntryInfo = {
   entryId: string;
@@ -22,197 +29,155 @@ const createEventId = (length = 12) => {
   return result;
 };
 
-export function docStoreSplitTextSegAtOffset(store: DocStore, docId: string, segId: string, offsetRaw: number) {
-  const docRecord = store.ensureDoc(docId);
-  const segData = docRecord.compDataById[segId];
-  if (!segData || String(segData.compName || '') !== 'TextSeg') {
-    return { code: -1, message: `Text segment not found. segId=${segId}` };
+export function docStoreApplyCompEditResult(
+  store: DocStore,
+  docId: string,
+  parentId: string,
+  editResult: CompEditResult,
+  reason: string,
+) {
+  const op = String(editResult?.op || '');
+  if (op === 'noop') {
+    return { code: 0, message: 'No edit applied.' };
   }
-  const rowId = getOwningRowId(docRecord, segId);
-  const rowData = rowId ? docRecord.compDataById[rowId] : null;
-  if (!rowData || String(rowData.compName || '') !== 'Row') {
-    return { code: -1, message: `Owning row not found. segId=${segId}` };
+  if (op === 'replaceSelf' || op === 'replaceRange') {
+    const result = docStoreReplaceChildRange(
+      store,
+      docId,
+      parentId,
+      editResult.compIdListOriginal,
+      editResult.compListNext,
+      { focus: editResult.focus, reason },
+    );
+    if (result.code !== 0) return result;
+    return { code: 0, message: 'Component edit applied.', data: result.data };
   }
-  const text = String(segData.data?.text || '');
-  const offset = Math.min(text.length, Math.max(0, Number(offsetRaw || 0)));
-  if (offset <= 0 || offset >= text.length) {
-    return { code: -1, message: 'Only middle segment split is implemented.' };
+  if (op === 'deleteSelf') {
+    const result = docStoreReplaceChildRange(
+      store,
+      docId,
+      parentId,
+      editResult.compIdListOriginal,
+      [],
+      { focus: editResult.focus, reason },
+    );
+    if (result.code !== 0) return result;
+    return { code: 0, message: 'Component delete applied.', data: result.data };
   }
-
-  const childIdList = Array.isArray(rowData.childIdList) ? rowData.childIdList.map((id) => String(id || '')) : [];
-  const segIndex = childIdList.indexOf(segId);
-  if (segIndex === -1) {
-    return { code: -1, message: `Segment is not in row. segId=${segId}, rowId=${rowId}` };
-  }
-
-  const segIdRight = createCompId(docRecord, 'seg');
-  const textLeft = text.slice(0, offset);
-  const textRight = text.slice(offset);
-  docRecord.compDataById[segId] = {
-    ...segData,
-    data: {
-      ...(segData.data || {}),
-      text: textLeft,
-    },
-  };
-  docRecord.compDataById[segIdRight] = {
-    compId: segIdRight,
-    compName: 'TextSeg',
-    childIdList: [],
-    data: {
-      text: textRight,
-    },
-    config: {
-      ...(segData.config || {}),
-    },
-  };
-
-  const childIdListLeft = childIdList.slice(0, segIndex + 1);
-  const childIdListRight = [segIdRight, ...childIdList.slice(segIndex + 1)];
-  const listIdMain = getListIdByMainRowId(docRecord, rowId);
-  const listIdParent = getOwningListIdForChildEntry(docRecord, rowId);
-  if (listIdParent) {
-    const rowIdRight = createCompId(docRecord, 'row');
-    rowData.childIdList = childIdListLeft;
-    docRecord.compDataById[rowIdRight] = createRowComp(rowIdRight, childIdListRight, rowData);
-    insertChildAfter(docRecord, listIdParent, rowId, rowIdRight);
-  } else if (listIdMain) {
-    const listIdParentOfMainList = getOwningListIdForChildEntry(docRecord, listIdMain);
-    if (listIdParentOfMainList) {
-      const rowIdLeft = createCompId(docRecord, 'row');
-      docRecord.compDataById[rowIdLeft] = createRowComp(rowIdLeft, childIdListLeft, rowData);
-      rowData.childIdList = childIdListRight;
-      insertChildBefore(docRecord, listIdParentOfMainList, listIdMain, rowIdLeft);
-    } else {
-      const rowIdRight = createCompId(docRecord, 'row');
-      rowData.childIdList = childIdListLeft;
-      docRecord.compDataById[rowIdRight] = createRowComp(rowIdRight, childIdListRight, rowData);
-      insertChildAtStart(docRecord, listIdMain, rowIdRight);
-    }
-  } else {
-    return { code: -1, message: `Row is not inside a list. rowId=${rowId}` };
-  }
-
-  store.clearSelectionState(docId);
-  store.updateFocusState(docId, {
-    compIdFocused: segIdRight,
-    segIdFocused: segIdRight,
-    offsetFocused: 0,
-    reasonLast: 'textSplit',
-  });
-  focusCompAfterRender(store, docId, segIdRight, 0);
-  return { code: 0, message: 'Text segment split.', data: { segIdRight } };
+  return { code: -1, message: `Unsupported edit op. op=${op}` };
 }
 
-export function docStoreDeleteEmptyTextSeg(store: DocStore, docId: string, segId: string) {
+export function docStoreReplaceChildRange(
+  store: DocStore,
+  docId: string,
+  parentId: string,
+  childIdListOldRaw: string[],
+  compDataListNextRaw: CompData[],
+  options: { focus?: CompFocusTarget; reason?: string } = {},
+) {
   const docRecord = store.ensureDoc(docId);
-  const rowId = getOwningRowId(docRecord, segId);
-  const rowData = rowId ? docRecord.compDataById[rowId] : null;
-  if (!rowData || String(rowData.compName || '') !== 'Row') {
-    return { code: -1, message: `Owning row not found. segId=${segId}` };
+  const parentData = docRecord.compDataById[String(parentId || '')];
+  if (!parentData) {
+    return { code: -1, message: `Parent component not found. compId=${parentId}` };
   }
-  const childIdList = Array.isArray(rowData.childIdList) ? rowData.childIdList.map((id) => String(id || '')) : [];
-  const segIndex = childIdList.indexOf(segId);
-  if (segIndex === -1) {
-    return { code: -1, message: `Segment is not in row. segId=${segId}` };
+  const childIdList = Array.isArray(parentData.childIdList) ? parentData.childIdList.map((id) => String(id || '')) : [];
+  const childIdListOld = (Array.isArray(childIdListOldRaw) ? childIdListOldRaw : []).map((id) => String(id || '')).filter(Boolean);
+  const compDataListNext = (Array.isArray(compDataListNextRaw) ? compDataListNextRaw : []).filter((compData) => compData?.compId);
+  if (childIdListOld.length === 0) {
+    return { code: -1, message: 'Child range is empty.' };
   }
-  const segIdPrev = childIdList[segIndex - 1] || '';
-  const segIdNext = childIdList[segIndex + 1] || '';
-  if (childIdList.length === 1) {
-    return docStoreDeleteRowWithOnlySeg(store, docId, rowId, segId);
+  const indexStart = findChildRangeIndex(childIdList, childIdListOld);
+  if (indexStart < 0) {
+    return { code: -1, message: `Child range not found. parentId=${parentId}` };
   }
-  rowData.childIdList = childIdList.filter((id) => id !== segId);
-  delete docRecord.compDataById[segId];
-  docRecord.compOrder = docRecord.compOrder.filter((id) => id !== segId);
+
+  const childIdSetNext = new Set(compDataListNext.map((compData) => String(compData.compId || '')));
+  for (const childIdOld of childIdListOld) {
+    if (!childIdSetNext.has(childIdOld)) {
+      removeCompSubtreeFromRecord(docRecord, childIdOld);
+    }
+  }
+  for (const compDataNext of compDataListNext) {
+    docRecord.compDataById[compDataNext.compId] = cloneCompData(compDataNext);
+  }
+  const childIdListNext = compDataListNext.map((compData) => String(compData.compId || '')).filter(Boolean);
+  parentData.childIdList = [
+    ...childIdList.slice(0, indexStart),
+    ...childIdListNext,
+    ...childIdList.slice(indexStart + childIdListOld.length),
+  ];
   store.clearSelectionState(docId);
-  if (segIdPrev) {
-    const textPrev = String(docRecord.compDataById[segIdPrev]?.data?.text || '');
-    store.updateFocusState(docId, {
-      compIdFocused: segIdPrev,
-      segIdFocused: segIdPrev,
-      offsetFocused: textPrev.length,
-      reasonLast: 'textDeleteEmpty',
-    });
-    focusCompAfterRender(store, docId, segIdPrev, textPrev.length);
-    return { code: 0, message: 'Empty text segment deleted.', data: { segIdFocused: segIdPrev } };
+  if (options.focus) {
+    docStoreApplyFocusAfterEdit(store, docId, options.focus, String(options.reason || 'compEdit'));
   }
-  if (segIdNext) {
-    store.updateFocusState(docId, {
-      compIdFocused: segIdNext,
-      segIdFocused: segIdNext,
-      offsetFocused: 0,
-      reasonLast: 'textDeleteEmpty',
-    });
-    focusCompAfterRender(store, docId, segIdNext, 0);
-    return { code: 0, message: 'Empty text segment deleted.', data: { segIdFocused: segIdNext } };
-  }
-  store.updateFocusState(docId, {
-    compIdFocused: rowId,
-    segIdFocused: '',
-    offsetFocused: 0,
-    reasonLast: 'textDeleteEmpty',
-  });
-  focusCompAfterRender(store, docId, rowId, 0);
-  return { code: 0, message: 'Empty text segment deleted.', data: { rowIdFocused: rowId } };
+  return { code: 0, message: 'Child range replaced.', data: { childIdListNext } };
 }
 
-export function docStoreDeleteRowWithOnlySeg(store: DocStore, docId: string, rowId: string, segId: string) {
+export function docStoreInsertChildAfter(
+  store: DocStore,
+  docId: string,
+  parentId: string,
+  childIdRef: string,
+  compDataNext: CompData,
+  options: { focus?: CompFocusTarget; reason?: string } = {},
+) {
   const docRecord = store.ensureDoc(docId);
-  const rowIdList = collectRowIdsInDocOrder(docRecord);
-  const rowIndex = rowIdList.indexOf(rowId);
-  const rowIdPrev = rowIndex > 0 ? rowIdList[rowIndex - 1] : '';
-  const rowIdNext = rowIndex !== -1 ? rowIdList[rowIndex + 1] || '' : '';
-  const listIdParent = getOwningListIdForChildEntry(docRecord, rowId);
-  const listIdMain = getListIdByMainRowId(docRecord, rowId);
-  if (listIdParent) {
-    removeEntryFromParentList(docRecord, listIdParent, rowId);
-  } else if (listIdMain) {
-    const listData = docRecord.compDataById[listIdMain];
-    const childIdList = Array.isArray(listData?.childIdList) ? listData.childIdList.map((id) => String(id || '')) : [];
-    const rowIdReplacement = childIdList.find((childId) => String(docRecord.compDataById[childId]?.compName || '') === 'Row') || '';
-    if (rowIdReplacement) {
-      listData.mainCompId = rowIdReplacement;
-      listData.childIdList = childIdList.filter((childId) => childId !== rowIdReplacement);
-    } else {
-      const listIdParentOfList = getOwningListIdForChildEntry(docRecord, listIdMain);
-      if (listIdParentOfList) {
-        removeEntryFromParentList(docRecord, listIdParentOfList, listIdMain);
-        delete docRecord.compDataById[listIdMain];
-        docRecord.compOrder = docRecord.compOrder.filter((id) => id !== listIdMain);
-      } else {
-        return { code: -1, message: 'Cannot delete the only row of the root list.' };
-      }
-    }
-  } else {
-    return { code: -1, message: `Row is not deletable. rowId=${rowId}` };
+  const parentData = docRecord.compDataById[String(parentId || '')];
+  if (!parentData) {
+    return { code: -1, message: `Parent component not found. compId=${parentId}` };
   }
-  delete docRecord.compDataById[segId];
-  delete docRecord.compDataById[rowId];
-  docRecord.compOrder = docRecord.compOrder.filter((id) => id !== segId && id !== rowId);
+  const childIdList = Array.isArray(parentData.childIdList) ? parentData.childIdList.map((id) => String(id || '')) : [];
+  const childIndex = childIdList.indexOf(String(childIdRef || ''));
+  if (childIndex < 0) {
+    return { code: -1, message: `Reference child not found. compId=${childIdRef}` };
+  }
+  docRecord.compDataById[compDataNext.compId] = cloneCompData(compDataNext);
+  parentData.childIdList = [
+    ...childIdList.slice(0, childIndex + 1),
+    compDataNext.compId,
+    ...childIdList.slice(childIndex + 1).filter((id) => id !== compDataNext.compId),
+  ];
   store.clearSelectionState(docId);
-  const rowIdFocus = rowIdPrev || rowIdNext;
-  if (rowIdFocus) {
-    const segIdFocus = getLastSegIdInRow(docRecord, rowIdFocus) || getFirstSegIdInRow(docRecord, rowIdFocus);
-    if (segIdFocus) {
-      const textFocus = String(docRecord.compDataById[segIdFocus]?.data?.text || '');
-      const offsetFocus = rowIdPrev ? textFocus.length : 0;
-      store.updateFocusState(docId, {
-        compIdFocused: segIdFocus,
-        segIdFocused: segIdFocus,
-        offsetFocused: offsetFocus,
-        reasonLast: 'rowDeleteEmpty',
-      });
-      focusCompAfterRender(store, docId, segIdFocus, offsetFocus);
-      return { code: 0, message: 'Empty row deleted.', data: { segIdFocused: segIdFocus } };
-    }
+  if (options.focus) {
+    docStoreApplyFocusAfterEdit(store, docId, options.focus, String(options.reason || 'compInsert'));
   }
+  return { code: 0, message: 'Child inserted.', data: { compIdInserted: compDataNext.compId } };
+}
+
+export function docStoreRemoveCompSubtree(store: DocStore, docId: string, compId: string) {
+  const docRecord = store.ensureDoc(docId);
+  removeCompSubtreeFromRecord(docRecord, compId);
+  return { code: 0, message: 'Component subtree removed.' };
+}
+
+export function docStoreReplaceCompData(store: DocStore, docId: string, compDataNext: CompData) {
+  const docRecord = store.ensureDoc(docId);
+  if (!compDataNext?.compId) {
+    return { code: -1, message: 'Replacement component id missing.' };
+  }
+  docRecord.compDataById[compDataNext.compId] = cloneCompData(compDataNext);
+  return { code: 0, message: 'Component data replaced.' };
+}
+
+export function docStoreApplyFocusAfterEdit(
+  store: DocStore,
+  docId: string,
+  focusNext: CompFocusTarget,
+  reason: string,
+) {
+  const compId = String(focusNext?.compId || '');
+  if (!compId) {
+    return { code: -1, message: 'Focus component id missing.' };
+  }
+  const offsetFocused = Number(focusNext?.point?.offset || 0);
   store.updateFocusState(docId, {
-    compIdFocused: '',
-    segIdFocused: '',
-    offsetFocused: 0,
-    reasonLast: 'rowDeleteEmpty',
+    compIdFocused: compId,
+    segIdFocused: compId,
+    offsetFocused,
+    reasonLast: reason,
   });
-  return { code: 0, message: 'Empty row deleted.' };
+  focusCompAfterRender(store, docId, compId, offsetFocused);
+  return { code: 0, message: 'Focus applied after edit.' };
 }
 
 export function docStoreGetSelectionText(store: DocStore, docId: string) {
@@ -250,104 +215,6 @@ export function docStoreGetSelectionText(store: DocStore, docId: string) {
   return textPartList.join('');
 }
 
-export function docStoreMergeTextSegWithPreviousBySegId(store: DocStore, docId: string, segId: string) {
-  const docRecord = store.ensureDoc(docId);
-  const segData = docRecord.compDataById[segId];
-  if (!segData || String(segData.compName || '') !== 'TextSeg') {
-    return { code: -1, message: `Text segment not found. segId=${segId}` };
-  }
-  const rowId = getOwningRowId(docRecord, segId);
-  const rowData = rowId ? docRecord.compDataById[rowId] : null;
-  if (!rowData || String(rowData.compName || '') !== 'Row') {
-    return { code: -1, message: `Owning row not found. segId=${segId}` };
-  }
-  const childIdList = Array.isArray(rowData.childIdList) ? rowData.childIdList.map((id) => String(id || '')) : [];
-  const segIndex = childIdList.indexOf(segId);
-  if (segIndex === -1) {
-    return { code: -1, message: `Segment is not in row. segId=${segId}, rowId=${rowId}` };
-  }
-  if (segIndex <= 0) {
-    return docStoreMergeRowWithPreviousBySegId(store, docId, segId);
-  }
-
-  const segIdPrev = childIdList[segIndex - 1] || '';
-  const segDataPrev = docRecord.compDataById[segIdPrev];
-  if (!segDataPrev || String(segDataPrev.compName || '') !== 'TextSeg') {
-    return { code: -1, message: `Previous text segment not found. segId=${segId}` };
-  }
-  const textPrev = String(segDataPrev.data?.text || '');
-  const textCurrent = String(segData.data?.text || '');
-  const offsetFocused = textPrev.length;
-  segDataPrev.data = {
-    ...(segDataPrev.data || {}),
-    text: textPrev + textCurrent,
-  };
-  rowData.childIdList = childIdList.filter((id) => id !== segId);
-  delete docRecord.compDataById[segId];
-  docRecord.compOrder = docRecord.compOrder.filter((id) => id !== segId);
-  store.clearSelectionState(docId);
-  store.updateFocusState(docId, {
-    compIdFocused: segIdPrev,
-    segIdFocused: segIdPrev,
-    offsetFocused,
-    reasonLast: 'textMergePrev',
-  });
-  focusCompAfterRender(store, docId, segIdPrev, offsetFocused);
-  return { code: 0, message: 'Text segment merged with previous segment.', data: { segIdFocused: segIdPrev } };
-}
-
-export function docStoreMergeRowWithPreviousBySegId(store: DocStore, docId: string, segId: string) {
-  const docRecord = store.ensureDoc(docId);
-  const rowId = getOwningRowId(docRecord, segId);
-  const rowData = rowId ? docRecord.compDataById[rowId] : null;
-  if (!rowData || String(rowData.compName || '') !== 'Row') {
-    return { code: -1, message: `Owning row not found. segId=${segId}` };
-  }
-  const childIdList = Array.isArray(rowData.childIdList) ? rowData.childIdList.map((id) => String(id || '')) : [];
-  if (childIdList[0] !== segId) {
-    return { code: -1, message: 'Only the first segment can merge with previous row.' };
-  }
-  const mergeTarget = getPreviousRowMergeTarget(docRecord, rowId);
-  if (!mergeTarget) {
-    return { code: -1, message: 'Previous row merge target not found.' };
-  }
-  const rowDataPrev = docRecord.compDataById[mergeTarget.rowIdPrev];
-  const childIdListPrev = Array.isArray(rowDataPrev?.childIdList) ? rowDataPrev.childIdList.map((id) => String(id || '')) : [];
-  const segIdPrevLast = childIdListPrev[childIdListPrev.length - 1] || '';
-  if (!segIdPrevLast) {
-    return { code: -1, message: 'Previous row has no segment.' };
-  }
-  const segDataPrevLast = docRecord.compDataById[segIdPrevLast];
-  const segDataCurrentFirst = docRecord.compDataById[segId];
-  const textPrev = String(segDataPrevLast?.data?.text || '');
-  const textCurrent = String(segDataCurrentFirst?.data?.text || '');
-  const isTextMergeable = String(segDataPrevLast?.compName || '') === 'TextSeg'
-    && String(segDataCurrentFirst?.compName || '') === 'TextSeg';
-  const segIdListMoved = isTextMergeable ? childIdList.slice(1) : childIdList;
-  const offsetFocused = textPrev.length;
-  if (isTextMergeable) {
-    segDataPrevLast.data = {
-      ...(segDataPrevLast.data || {}),
-      text: textPrev + textCurrent,
-    };
-    delete docRecord.compDataById[segId];
-    docRecord.compOrder = docRecord.compOrder.filter((id) => id !== segId);
-  }
-  rowDataPrev.childIdList = [...childIdListPrev, ...segIdListMoved];
-  removeEntryFromParentList(docRecord, mergeTarget.listIdParent, mergeTarget.entryId);
-  delete docRecord.compDataById[rowId];
-  docRecord.compOrder = docRecord.compOrder.filter((id) => id !== rowId);
-  store.clearSelectionState(docId);
-  store.updateFocusState(docId, {
-    compIdFocused: segIdPrevLast,
-    segIdFocused: segIdPrevLast,
-    offsetFocused,
-    reasonLast: 'textMergePrev',
-  });
-  focusCompAfterRender(store, docId, segIdPrevLast, offsetFocused);
-  return { code: 0, message: 'Row merged with previous row.', data: { segIdFocused: segIdPrevLast } };
-}
-
 export function docStoreIndentEntryBySegId(store: DocStore, docId: string, segId: string) {
   const docRecord = store.ensureDoc(docId);
   const selectionStateBefore = cloneActiveSelectionState(docRecord);
@@ -366,6 +233,24 @@ export function docStoreIndentEntryBySegId(store: DocStore, docId: string, segId
   return { code: 0, message: 'Entry indented.' };
 }
 
+export function docStoreIndentEntryByRowId(store: DocStore, docId: string, rowId: string, compIdFocus = '') {
+  const docRecord = store.ensureDoc(docId);
+  const selectionStateBefore = cloneActiveSelectionState(docRecord);
+  const selectedRowIdList = getSelectedRowIdListFromSelection(docRecord);
+  const selectionEntries = getSelectedTopLevelEntryInfoList(docRecord);
+  if (selectedRowIdList.length > 1 && selectionEntries.length > 0) {
+    return indentSelectedEntries(store, docId, selectionEntries, selectionStateBefore);
+  }
+  const entryInfo = getOutlineEntryInfoByRowId(docRecord, rowId);
+  if (!entryInfo) {
+    return { code: -1, message: `Owning entry not found. rowId=${rowId}` };
+  }
+  const result = indentEntryByEntryId(docRecord, entryInfo.entryId);
+  if (result.code !== 0) return result;
+  finishStructureEdit(store, docId, compIdFocus || getFirstSegIdInRow(docRecord, rowId), 'rowIndent', selectionStateBefore);
+  return { code: 0, message: 'Entry indented.' };
+}
+
 export function docStoreOutdentEntryBySegId(store: DocStore, docId: string, segId: string) {
   const docRecord = store.ensureDoc(docId);
   const selectionStateBefore = cloneActiveSelectionState(docRecord);
@@ -381,6 +266,24 @@ export function docStoreOutdentEntryBySegId(store: DocStore, docId: string, segI
   const result = outdentEntryByEntryId(docRecord, entryInfo.entryId);
   if (result.code !== 0) return result;
   finishStructureEdit(store, docId, segId, 'rowOutdent', selectionStateBefore);
+  return { code: 0, message: 'Entry outdented.' };
+}
+
+export function docStoreOutdentEntryByRowId(store: DocStore, docId: string, rowId: string, compIdFocus = '') {
+  const docRecord = store.ensureDoc(docId);
+  const selectionStateBefore = cloneActiveSelectionState(docRecord);
+  const selectedRowIdList = getSelectedRowIdListFromSelection(docRecord);
+  const selectionEntries = getSelectedTopLevelEntryInfoList(docRecord);
+  if (selectedRowIdList.length > 1 && selectionEntries.length > 0) {
+    return outdentSelectedEntries(store, docId, selectionEntries, selectionStateBefore);
+  }
+  const entryInfo = getOutlineEntryInfoByRowId(docRecord, rowId);
+  if (!entryInfo) {
+    return { code: -1, message: `Owning entry not found. rowId=${rowId}` };
+  }
+  const result = outdentEntryByEntryId(docRecord, entryInfo.entryId);
+  if (result.code !== 0) return result;
+  finishStructureEdit(store, docId, compIdFocus || getFirstSegIdInRow(docRecord, rowId), 'rowOutdent', selectionStateBefore);
   return { code: 0, message: 'Entry outdented.' };
 }
 
@@ -854,6 +757,43 @@ function focusCompAfterRender(store: DocStore, docId: string, segId: string, off
       },
     });
   }, 0);
+}
+
+function findChildRangeIndex(childIdList: string[], childIdListOld: string[]) {
+  if (childIdListOld.length === 0 || childIdListOld.length > childIdList.length) {
+    return -1;
+  }
+  for (let index = 0; index <= childIdList.length - childIdListOld.length; index += 1) {
+    const isMatch = childIdListOld.every((childId, offset) => childIdList[index + offset] === childId);
+    if (isMatch) return index;
+  }
+  return -1;
+}
+
+function cloneCompData(compData: CompData): CompData {
+  return {
+    ...compData,
+    childIdList: Array.isArray(compData.childIdList) ? compData.childIdList.map((id) => String(id || '')) : [],
+    mainCompId: compData.mainCompId ? String(compData.mainCompId) : undefined,
+    data: { ...(compData.data || {}) },
+    config: { ...(compData.config || {}) },
+  };
+}
+
+function removeCompSubtreeFromRecord(docRecord: DocRecord, compId: string) {
+  const compIdSafe = String(compId || '');
+  if (!compIdSafe) return;
+  const compData = docRecord.compDataById[compIdSafe];
+  if (!compData) return;
+  const childIdList = Array.isArray(compData.childIdList) ? compData.childIdList.map((id) => String(id || '')) : [];
+  for (const childId of childIdList) {
+    removeCompSubtreeFromRecord(docRecord, childId);
+  }
+  if (compData.mainCompId) {
+    removeCompSubtreeFromRecord(docRecord, String(compData.mainCompId));
+  }
+  delete docRecord.compDataById[compIdSafe];
+  docRecord.compOrder = docRecord.compOrder.filter((id) => id !== compIdSafe);
 }
 
 function createCompId(docRecord: DocRecord, prefix: string) {

@@ -12,6 +12,19 @@ export type CompEventResult = {
   data?: any;
 };
 
+export type CompFocusTarget = {
+  compId: string;
+  point?: any;
+  direction?: string;
+};
+
+export type CompEditResult = {
+  op: 'replaceSelf' | 'replaceRange' | 'deleteSelf' | 'noop';
+  compIdListOriginal: string[];
+  compListNext: CompData[];
+  focus?: CompFocusTarget;
+};
+
 export type TextDocData = {
   docId: string;
   docName: string;

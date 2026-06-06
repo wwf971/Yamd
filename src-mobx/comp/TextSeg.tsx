@@ -1,7 +1,7 @@
 import React from 'react';
 import { observer } from 'mobx-react-lite';
 import { useDocStoreContext } from '../DocStoreContext';
-import type { CompEvent, SelectionTrackPoint } from '../docStoreTypes';
+import type { CompData, CompEvent, SelectionTrackPoint } from '../docStoreTypes';
 import {
   applyCaretByDirection,
   applyCaretByOffset,
@@ -36,7 +36,7 @@ const TextSeg = observer(React.forwardRef<any, TextSegProps>(({ data = {}, confi
     : null;
   const dataComp = compData?.data || data || {};
   const configComp = compData?.config || config || {};
-  const sourceId = String(dataComp.sourceId || compId || 'text-seg');
+  const sourceId = String(compId || dataComp.sourceId || 'text-seg');
   const targetId = String(dataComp.targetId || contextDocStore?.docId || '');
   const text = String(dataComp.text || '');
   const isActive = configComp.isActive === true;
@@ -168,7 +168,11 @@ const TextSeg = observer(React.forwardRef<any, TextSegProps>(({ data = {}, confi
     const textNext = String(rootEl.textContent || '');
     if (text.length > 0 && textNext.length === 0) {
       offsetPendingRestoreRef.current = null;
-      emitEvent('textDeleteEmpty', { direction: 'left' });
+      emitEvent('childDeleteAttempt', {
+        compIdChild: compId,
+        direction: 'left',
+        point: { offset: 0 },
+      });
       return;
     }
     if (textNext !== text) {
@@ -374,19 +378,29 @@ const TextSeg = observer(React.forwardRef<any, TextSegProps>(({ data = {}, confi
 
     if (event.key === 'Tab') {
       event.preventDefault();
-      emitEvent(event.shiftKey ? 'rowOutdent' : 'rowIndent', { offset: offsetCurrent });
+      emitEvent(event.shiftKey ? 'rowOutdentAttempt' : 'rowIndentAttempt', {
+        compIdChild: compId,
+        point: { offset: offsetCurrent },
+      });
       return;
     }
 
     if (event.key === 'Enter' && isEditable) {
       event.preventDefault();
-      emitEvent('textSplit', { offset: offsetCurrent });
+      emitEvent('childSplitAttempt', {
+        compIdChild: compId,
+        point: { offset: offsetCurrent },
+      });
       return;
     }
 
     if ((event.key === 'Backspace' || event.key === 'Delete') && isEditable && offsetCurrent <= 0) {
       event.preventDefault();
-      emitEvent('textMergePrev', { offset: 0, direction: 'left' });
+      emitEvent('childMergePrevAttempt', {
+        compIdChild: compId,
+        direction: 'left',
+        point: { offset: 0 },
+      });
       return;
     }
 
@@ -488,9 +502,37 @@ const TextSeg = observer(React.forwardRef<any, TextSegProps>(({ data = {}, confi
         emitEvent('clickSingle', { ...(event?.data || {}), offset });
         return { code: 0, message: 'TextSeg click received.' };
       }
+      if (type === 'selfSplitQuery') {
+        return createSelfSplitResult({
+          compId,
+          dataComp,
+          configComp,
+          offsetRaw: Number(event?.data?.point?.offset || 0),
+        });
+      }
+      if (type === 'selfMergeQuery') {
+        return createSelfMergeResult({
+          compId,
+          dataComp,
+          configComp,
+          compDataOther: event?.data?.compDataOther,
+          direction: String(event?.data?.direction || ''),
+        });
+      }
+      if (type === 'selfDeleteQuery') {
+        return {
+          code: 0,
+          message: 'TextSeg delete result created.',
+          data: {
+            op: 'deleteSelf',
+            compIdListOriginal: [compId],
+            compListNext: [],
+          },
+        };
+      }
       return { code: -1, message: `Unsupported event: ${type}` };
     },
-  }), [applyFocusToDom, compId, contextDocStore, emitEvent, updateKeyboardSelectionState]);
+  }), [applyFocusToDom, compId, configComp, contextDocStore, dataComp, emitEvent, updateKeyboardSelectionState]);
 
   return (
     <span
@@ -582,6 +624,115 @@ function calcTextSegBulletPosition(textEl: HTMLElement | null, basisEl: HTMLElem
 }
 
 const ratioBulletYInLine = 0.55;
+
+function createSelfSplitResult({
+  compId,
+  dataComp,
+  configComp,
+  offsetRaw,
+}: {
+  compId: string;
+  dataComp: any;
+  configComp: any;
+  offsetRaw: number;
+}) {
+  const text = String(dataComp?.text || '');
+  const offset = Math.min(text.length, Math.max(0, Number(offsetRaw || 0)));
+  const compIdRight = createCompIdLocal('seg');
+  const compDataLeft: CompData = {
+    compId,
+    compName: 'TextSeg',
+    childIdList: [],
+    data: {
+      ...(dataComp || {}),
+      sourceId: compId,
+      text: text.slice(0, offset),
+    },
+    config: { ...(configComp || {}) },
+  };
+  const compDataRight: CompData = {
+    compId: compIdRight,
+    compName: 'TextSeg',
+    childIdList: [],
+    data: {
+      ...(dataComp || {}),
+      sourceId: compIdRight,
+      text: text.slice(offset),
+    },
+    config: { ...(configComp || {}) },
+  };
+  return {
+    code: 0,
+    message: 'TextSeg split result created.',
+    data: {
+      op: 'replaceSelf',
+      compIdListOriginal: [compId],
+      compListNext: [compDataLeft, compDataRight],
+      focus: {
+        compId: compIdRight,
+        point: { offset: 0 },
+      },
+    },
+  };
+}
+
+function createSelfMergeResult({
+  compId,
+  dataComp,
+  configComp,
+  compDataOther,
+  direction,
+}: {
+  compId: string;
+  dataComp: any;
+  configComp: any;
+  compDataOther: CompData | null | undefined;
+  direction: string;
+}) {
+  if (direction !== 'left') {
+    return { code: -1, message: `Unsupported merge direction. direction=${direction}` };
+  }
+  if (!compDataOther || String(compDataOther.compName || '') !== 'TextSeg') {
+    return { code: -1, message: 'Other component is not mergeable.' };
+  }
+  const compIdOther = String(compDataOther.compId || '');
+  const textOther = String(compDataOther.data?.text || '');
+  const textCurrent = String(dataComp?.text || '');
+  const isEditableMerged = compDataOther.config?.isEditable === true || configComp?.isEditable === true;
+  const compDataMerged: CompData = {
+    compId: compIdOther,
+    compName: 'TextSeg',
+    childIdList: [],
+    data: {
+      ...(compDataOther.data || {}),
+      sourceId: compIdOther,
+      text: textOther + textCurrent,
+    },
+    config: {
+      ...(compDataOther.config || {}),
+      ...(configComp || {}),
+      isEditable: isEditableMerged,
+    },
+  };
+  return {
+    code: 0,
+    message: 'TextSeg merge result created.',
+    data: {
+      op: 'replaceRange',
+      compIdListOriginal: [compIdOther, compId],
+      compListNext: [compDataMerged],
+      focus: {
+        compId: compIdOther,
+        point: { offset: textOther.length },
+      },
+    },
+  };
+}
+
+function createCompIdLocal(prefix: string) {
+  const randomPart = Math.random().toString(36).slice(2, 10);
+  return `${prefix}-${randomPart}`;
+}
 
 function getFirstTextLineRect(textEl: HTMLElement) {
   const walker = document.createTreeWalker(textEl, NodeFilter.SHOW_TEXT);
