@@ -747,15 +747,24 @@ function focusSegAfterStructureEdit(
 function focusCompAfterRender(store: DocStore, docId: string, segId: string, offset: number) {
   const schedule = typeof window !== 'undefined' ? window.setTimeout : setTimeout;
   schedule(() => {
-    void store.sendEventToComp(docId, segId, {
-      type: 'focus',
-      sourceId: segId,
-      targetId: docId,
-      data: {
-        segId,
-        offset,
-      },
-    });
+    const focusApply = () => {
+      const selection = typeof window !== 'undefined' ? window.getSelection?.() : null;
+      selection?.removeAllRanges();
+      void store.sendEventToComp(docId, segId, {
+        type: 'focus',
+        sourceId: segId,
+        targetId: docId,
+        data: {
+          segId,
+          offset,
+        },
+      });
+    };
+    if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+      window.requestAnimationFrame(focusApply);
+      return;
+    }
+    focusApply();
   }, 0);
 }
 

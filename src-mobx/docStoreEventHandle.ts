@@ -161,7 +161,9 @@ export async function docStoreReceiveEvent(
     eventNormalized.type === 'childSplitAttempt'
     || eventNormalized.type === 'childMergePrevAttempt'
     || eventNormalized.type === 'childDeleteAttempt'
+    || eventNormalized.type === 'childSelectionDeleteAttempt'
     || eventNormalized.type === 'rowSplitAttempt'
+    || eventNormalized.type === 'rowSelectionDeleteAttempt'
     || eventNormalized.type === 'rowIndentAttempt'
     || eventNormalized.type === 'rowOutdentAttempt'
     || eventNormalized.type === 'rowMergePrevAttempt'
@@ -292,7 +294,9 @@ function shouldDocEventPreferFocusedSeg(type: string) {
     'childSplitAttempt',
     'childMergePrevAttempt',
     'childDeleteAttempt',
+    'childSelectionDeleteAttempt',
     'rowSplitAttempt',
+    'rowSelectionDeleteAttempt',
     'rowIndentAttempt',
     'rowOutdentAttempt',
     'rowMergePrevAttempt',

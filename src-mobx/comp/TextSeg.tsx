@@ -150,6 +150,9 @@ const TextSeg = observer(React.forwardRef<any, TextSegProps>(({ data = {}, confi
   const applyFocusToDom = React.useCallback((reason: string, dataEvent: any = {}) => {
     const rootEl = rootRef.current;
     if (!rootEl) return 0;
+    if (contextDocStore && compId) {
+      contextDocStore.store.updateElActiveState(contextDocStore.docId, compId);
+    }
     rootEl.focus();
     if (Number.isFinite(dataEvent?.offset)) {
       applyCaretByOffset(rootEl, Number(dataEvent.offset));
@@ -161,7 +164,7 @@ const TextSeg = observer(React.forwardRef<any, TextSegProps>(({ data = {}, confi
     const offsetFocused = getCaretOffset(rootEl);
     updateFocusState(reason, offsetFocused);
     return offsetFocused;
-  }, [updateFocusState]);
+  }, [contextDocStore, compId, updateFocusState]);
 
   const syncTextFromDom = React.useCallback((rootEl: HTMLSpanElement | null) => {
     if (!contextDocStore || !compId || !isEditable || !rootEl) return;
@@ -247,6 +250,19 @@ const TextSeg = observer(React.forwardRef<any, TextSegProps>(({ data = {}, confi
     };
   }, [counterBulletMeasureReq, isBulletMeasureEnabled, measureBulletPosition]);
 
+  React.useEffect(() => {
+    if (!isPointerDown) return undefined;
+    const handlePointerEnd = () => {
+      window.setTimeout(() => {
+        setIsPointerDown(false);
+      }, 0);
+    };
+    window.addEventListener('mouseup', handlePointerEnd, true);
+    return () => {
+      window.removeEventListener('mouseup', handlePointerEnd, true);
+    };
+  }, [isPointerDown]);
+
   React.useLayoutEffect(() => {
     const offsetPending = offsetPendingRestoreRef.current;
     if (offsetPending === null) return;
@@ -297,6 +313,21 @@ const TextSeg = observer(React.forwardRef<any, TextSegProps>(({ data = {}, confi
       || event.key === 'ArrowRight'
       || event.key === 'ArrowUp'
       || event.key === 'ArrowDown';
+    if (
+      (event.key === 'Backspace' || event.key === 'Delete')
+      && isEditable
+      && isSelectionActive
+      && interactionState?.selectionState.pointAnchor
+      && interactionState?.selectionState.pointFocus
+    ) {
+      event.preventDefault();
+      emitEvent('childSelectionDeleteAttempt', {
+        compIdChild: compId,
+        pointAnchor: interactionState.selectionState.pointAnchor,
+        pointFocus: interactionState.selectionState.pointFocus,
+      });
+      return;
+    }
     if (event.shiftKey && isArrowKey) {
       event.preventDefault();
       applyCaretByOffset(rootEl, offsetCurrent);
@@ -511,15 +542,19 @@ const TextSeg = observer(React.forwardRef<any, TextSegProps>(({ data = {}, confi
         });
       }
       if (type === 'selfMergeQuery') {
+        const compDataSelf = event?.data?.compDataSelf;
         return createSelfMergeResult({
           compId,
-          dataComp,
-          configComp,
+          dataComp: compDataSelf?.data || dataComp,
+          configComp: compDataSelf?.config || configComp,
           compDataOther: event?.data?.compDataOther,
           direction: String(event?.data?.direction || ''),
         });
       }
       if (type === 'selfDeleteQuery') {
+        if (configComp?.isEditable !== true) {
+          return { code: -1, message: 'TextSeg is not editable.' };
+        }
         return {
           code: 0,
           message: 'TextSeg delete result created.',
@@ -529,6 +564,24 @@ const TextSeg = observer(React.forwardRef<any, TextSegProps>(({ data = {}, confi
             compListNext: [],
           },
         };
+      }
+      if (type === 'selfSelectionEdgeDeleteQuery') {
+        return createSelfSelectionEdgeDeleteResult({
+          compId,
+          dataComp,
+          configComp,
+          point: event?.data?.point,
+          side: String(event?.data?.side || ''),
+        });
+      }
+      if (type === 'selfSelectionDeleteQuery') {
+        return createSelfSelectionDeleteResult({
+          compId,
+          dataComp,
+          configComp,
+          pointAnchor: event?.data?.pointAnchor,
+          pointFocus: event?.data?.pointFocus,
+        });
       }
       return { code: -1, message: `Unsupported event: ${type}` };
     },
@@ -724,6 +777,116 @@ function createSelfMergeResult({
       focus: {
         compId: compIdOther,
         point: { offset: textOther.length },
+      },
+    },
+  };
+}
+
+function createSelfSelectionDeleteResult({
+  compId,
+  dataComp,
+  configComp,
+  pointAnchor,
+  pointFocus,
+}: {
+  compId: string;
+  dataComp: any;
+  configComp: any;
+  pointAnchor: SelectionTrackPoint | null | undefined;
+  pointFocus: SelectionTrackPoint | null | undefined;
+}) {
+  if (configComp?.isEditable !== true) {
+    return { code: -1, message: 'TextSeg is not editable.' };
+  }
+  if (!pointAnchor || !pointFocus || pointAnchor.segId !== compId || pointFocus.segId !== compId) {
+    return { code: -1, message: 'Selection is not within this component.' };
+  }
+  const text = String(dataComp?.text || '');
+  const offsetStart = Math.min(
+    text.length,
+    Math.max(0, Math.min(Number(pointAnchor.offset || 0), Number(pointFocus.offset || 0))),
+  );
+  const offsetEnd = Math.min(
+    text.length,
+    Math.max(0, Math.max(Number(pointAnchor.offset || 0), Number(pointFocus.offset || 0))),
+  );
+  if (offsetStart === offsetEnd) {
+    return { code: 0, message: 'Selection delete has no range.', data: { op: 'noop', compIdListOriginal: [compId], compListNext: [] } };
+  }
+  const compDataNext: CompData = {
+    compId,
+    compName: 'TextSeg',
+    childIdList: [],
+    data: {
+      ...(dataComp || {}),
+      sourceId: compId,
+      text: text.slice(0, offsetStart) + text.slice(offsetEnd),
+    },
+    config: { ...(configComp || {}) },
+  };
+  return {
+    code: 0,
+    message: 'TextSeg selection delete result created.',
+    data: {
+      op: 'replaceSelf',
+      compIdListOriginal: [compId],
+      compListNext: [compDataNext],
+      focus: {
+        compId,
+        point: { offset: offsetStart },
+      },
+    },
+  };
+}
+
+function createSelfSelectionEdgeDeleteResult({
+  compId,
+  dataComp,
+  configComp,
+  point,
+  side,
+}: {
+  compId: string;
+  dataComp: any;
+  configComp: any;
+  point: SelectionTrackPoint | null | undefined;
+  side: string;
+}) {
+  if (configComp?.isEditable !== true) {
+    return { code: -1, message: 'TextSeg is not editable.' };
+  }
+  if (!point || point.segId !== compId) {
+    return { code: -1, message: 'Selection point is not within this component.' };
+  }
+  const text = String(dataComp?.text || '');
+  const offset = Math.min(text.length, Math.max(0, Number(point.offset || 0)));
+  const textNext = side === 'keepBefore'
+    ? text.slice(0, offset)
+    : text.slice(offset);
+  if (side !== 'keepBefore' && side !== 'keepAfter') {
+    return { code: -1, message: `Unsupported selection edge side. side=${side}` };
+  }
+  const compDataNext: CompData = {
+    compId,
+    compName: 'TextSeg',
+    childIdList: [],
+    data: {
+      ...(dataComp || {}),
+      sourceId: compId,
+      text: textNext,
+    },
+    config: { ...(configComp || {}) },
+  };
+  return {
+    code: 0,
+    message: 'TextSeg selection edge delete result created.',
+    data: {
+      op: 'replaceSelf',
+      compIdListOriginal: [compId],
+      compListNext: [compDataNext],
+      focus: {
+        compId,
+        point: { offset: side === 'keepBefore' ? textNext.length : 0 },
       },
     },
   };

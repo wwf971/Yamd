@@ -96,6 +96,14 @@ export async function eventListDispatch({
       compId,
     });
   }
+  if (type === 'rowSelectionDeleteAttempt') {
+    return eventListRowSelectionDeleteAttempt({
+      event,
+      store,
+      docId,
+      compId,
+    });
+  }
   if (type === 'rowIndentAttempt') {
     const rowId = String(event?.data?.rowId || '');
     const compIdChild = String(event?.data?.compIdChild || '');
@@ -367,6 +375,132 @@ async function eventListRowDeleteAttempt({
   });
 }
 
+async function eventListRowSelectionDeleteAttempt({
+  event,
+  store,
+  docId,
+  compId,
+}: {
+  event: CompEvent;
+  store: DocStore;
+  docId: string;
+  compId: string;
+}) {
+  const pointAnchor = event?.data?.pointAnchor;
+  const pointFocus = event?.data?.pointFocus;
+  const rowEntryList = collectDirectRowEntries(store, docId, compId);
+  const selectionRange = normalizeRowSelectionRange(store, docId, rowEntryList, pointAnchor, pointFocus);
+  if (!selectionRange) {
+    return store.sendEventToParent(docId, compId, event);
+  }
+  const {
+    pointStart,
+    pointEnd,
+    entryStart,
+    entryEnd,
+    indexStart,
+    indexEnd,
+  } = selectionRange;
+  if (indexStart === indexEnd) {
+    return { code: -1, message: 'Same-row selection should be handled by Row.' };
+  }
+
+  const rowDataStart = store.getCompDataById(docId, entryStart.rowId);
+  const rowDataEnd = store.getCompDataById(docId, entryEnd.rowId);
+  const childIdListStart = getChildIdList(rowDataStart);
+  const childIdListEnd = getChildIdList(rowDataEnd);
+  const childIndexStart = childIdListStart.indexOf(getPointCompId(pointStart));
+  const childIndexEnd = childIdListEnd.indexOf(getPointCompId(pointEnd));
+  if (childIndexStart === -1 || childIndexEnd === -1 || !rowDataStart || !rowDataEnd) {
+    return { code: -1, message: 'Selection row edge is invalid.' };
+  }
+
+  const resultStart = await store.sendEventToCompDirect(docId, childIdListStart[childIndexStart], {
+    type: 'selfSelectionEdgeDeleteQuery',
+    sourceId: compId,
+    targetId: docId,
+    data: {
+      point: pointStart,
+      side: 'keepBefore',
+    },
+  });
+  if (resultStart.code !== 0) return resultStart;
+  const editStart = normalizeEditResult(resultStart.data);
+  const compDataStart = editStart?.compListNext[0];
+  if (!editStart || !compDataStart) {
+    return { code: -1, message: 'Cross-row start edit result invalid.' };
+  }
+
+  const resultEnd = await store.sendEventToCompDirect(docId, childIdListEnd[childIndexEnd], {
+    type: 'selfSelectionEdgeDeleteQuery',
+    sourceId: compId,
+    targetId: docId,
+    data: {
+      point: pointEnd,
+      side: 'keepAfter',
+    },
+  });
+  if (resultEnd.code !== 0) return resultEnd;
+  const editEnd = normalizeEditResult(resultEnd.data);
+  const compDataEnd = editEnd?.compListNext[0];
+  if (!editEnd || !compDataEnd) {
+    return { code: -1, message: 'Cross-row end edit result invalid.' };
+  }
+
+  const resultValidate = await validateSelectedChildrenForDelete({
+    store,
+    docId,
+    compId,
+    rowEntryList,
+    indexStart,
+    indexEnd,
+    childIdListStart,
+    childIdListEnd,
+    childIndexStart,
+    childIndexEnd,
+  });
+  if (resultValidate.code !== 0) return resultValidate;
+  const compIdListDelete = Array.isArray(resultValidate.data?.compIdListDelete)
+    ? resultValidate.data.compIdListDelete.map((compIdDelete: any) => String(compIdDelete || '')).filter(Boolean)
+    : [];
+
+  const compDataListEdge = await createMergedSelectionEdgeList({
+    store,
+    docId,
+    compId,
+    compDataStart,
+    compDataEnd,
+    pointStart,
+  });
+  compDataListEdge.forEach((compDataNext) => {
+    store.replaceCompData(docId, compDataNext);
+  });
+
+  const childIdListMerged = [
+    ...childIdListStart.slice(0, childIndexStart),
+    ...compDataListEdge.map((compData) => compData.compId),
+    ...childIdListEnd.slice(childIndexEnd + 1),
+  ];
+  compIdListDelete.forEach((compIdDelete) => {
+    store.removeCompSubtree(docId, compIdDelete);
+  });
+  store.replaceCompData(docId, createRowComp(entryStart.rowId, childIdListMerged, rowDataStart));
+
+  const entryIdListRemoved = rowEntryList
+    .slice(indexStart + 1, indexEnd + 1)
+    .map((entryInfo) => entryInfo.entryId);
+  if (entryIdListRemoved.length > 0) {
+    const resultRemoveRows = removeDirectRowEntries(store, docId, compId, entryIdListRemoved);
+    if (resultRemoveRows.code !== 0) return resultRemoveRows;
+  }
+  store.clearSelectionState(docId);
+  store.applyFocusAfterEdit(docId, {
+    compId: compDataListEdge[0]?.compId || compDataStart.compId,
+    point: { offset: Number(pointStart?.offset || 0) },
+  }, 'rowSelectionDeleteAttempt');
+  return { code: 0, message: 'Row selection deleted.' };
+}
+
 async function eventListRowNavigate({
   event,
   store,
@@ -518,6 +652,171 @@ function normalizeEditResult(dataEvent: any): CompEditResult | null {
     compListNext,
     focus: dataEvent?.focus,
   };
+}
+
+async function createMergedSelectionEdgeList({
+  store,
+  docId,
+  compId,
+  compDataStart,
+  compDataEnd,
+  pointStart,
+}: {
+  store: DocStore;
+  docId: string;
+  compId: string;
+  compDataStart: CompData;
+  compDataEnd: CompData;
+  pointStart: any;
+}) {
+  const resultMerge = await store.sendEventToCompDirect(docId, compDataEnd.compId, {
+    type: 'selfMergeQuery',
+    sourceId: compId,
+    targetId: docId,
+    data: {
+      direction: 'left',
+      point: pointStart,
+      compDataSelf: compDataEnd,
+      compDataOther: compDataStart,
+    },
+  });
+  if (resultMerge.code !== 0) {
+    return [compDataStart, compDataEnd];
+  }
+  const editMerge = normalizeEditResult(resultMerge.data);
+  return editMerge?.compListNext.length ? editMerge.compListNext : [compDataStart, compDataEnd];
+}
+
+async function validateSelectedChildrenForDelete({
+  store,
+  docId,
+  compId,
+  rowEntryList,
+  indexStart,
+  indexEnd,
+  childIdListStart,
+  childIdListEnd,
+  childIndexStart,
+  childIndexEnd,
+}: {
+  store: DocStore;
+  docId: string;
+  compId: string;
+  rowEntryList: Array<{ rowId: string; entryId: string }>;
+  indexStart: number;
+  indexEnd: number;
+  childIdListStart: string[];
+  childIdListEnd: string[];
+  childIndexStart: number;
+  childIndexEnd: number;
+}) {
+  const compIdListDelete = [
+    ...childIdListStart.slice(childIndexStart + 1),
+    ...rowEntryList.slice(indexStart + 1, indexEnd).flatMap((entryInfo) => {
+      const rowData = store.getCompDataById(docId, entryInfo.rowId);
+      return getChildIdList(rowData);
+    }),
+    ...childIdListEnd.slice(0, childIndexEnd),
+  ];
+  for (const compIdDelete of compIdListDelete) {
+    const resultDelete = await store.sendEventToCompDirect(docId, compIdDelete, {
+      type: 'selfDeleteQuery',
+      sourceId: compId,
+      targetId: docId,
+      data: {},
+    });
+    if (resultDelete.code !== 0) return resultDelete;
+  }
+  return { code: 0, message: 'Selected children are deletable.', data: { compIdListDelete } };
+}
+
+function normalizeRowSelectionRange(
+  store: DocStore,
+  docId: string,
+  rowEntryList: Array<{ rowId: string; entryId: string }>,
+  pointA: any,
+  pointB: any,
+) {
+  const rowIdA = getRowIdByChildId(store, docId, getPointCompId(pointA), rowEntryList);
+  const rowIdB = getRowIdByChildId(store, docId, getPointCompId(pointB), rowEntryList);
+  const indexA = rowEntryList.findIndex((entryInfo) => entryInfo.rowId === rowIdA);
+  const indexB = rowEntryList.findIndex((entryInfo) => entryInfo.rowId === rowIdB);
+  if (indexA === -1 || indexB === -1) return null;
+  const childIdListA = getChildIdList(store.getCompDataById(docId, rowIdA));
+  const childIdListB = getChildIdList(store.getCompDataById(docId, rowIdB));
+  const childIndexA = childIdListA.indexOf(getPointCompId(pointA));
+  const childIndexB = childIdListB.indexOf(getPointCompId(pointB));
+  const isForward = indexA < indexB
+    || (indexA === indexB && (
+      childIndexA < childIndexB
+      || (childIndexA === childIndexB && Number(pointA?.offset || 0) <= Number(pointB?.offset || 0))
+    ));
+  const indexStart = Math.min(indexA, indexB);
+  const indexEnd = Math.max(indexA, indexB);
+  return {
+    pointStart: isForward ? pointA : pointB,
+    pointEnd: isForward ? pointB : pointA,
+    entryStart: rowEntryList[indexStart],
+    entryEnd: rowEntryList[indexEnd],
+    indexStart,
+    indexEnd,
+  };
+}
+
+function collectDirectRowEntries(store: DocStore, docId: string, listId: string) {
+  const listData = store.getCompDataById(docId, listId);
+  if (!listData || String(listData.compName || '') !== 'List') return [];
+  const entryList: Array<{ rowId: string; entryId: string }> = [];
+  const mainCompId = String(listData.mainCompId || '');
+  if (isCompName(store, docId, mainCompId, 'Row')) {
+    entryList.push({ rowId: mainCompId, entryId: mainCompId });
+  }
+  for (const childId of getChildIdList(listData)) {
+    if (isCompName(store, docId, childId, 'Row')) {
+      entryList.push({ rowId: childId, entryId: childId });
+    }
+  }
+  return entryList;
+}
+
+function getRowIdByChildId(
+  store: DocStore,
+  docId: string,
+  compIdChild: string,
+  rowEntryList: Array<{ rowId: string }>,
+) {
+  for (const entryInfo of rowEntryList) {
+    const rowData = store.getCompDataById(docId, entryInfo.rowId);
+    if (getChildIdList(rowData).includes(compIdChild)) {
+      return entryInfo.rowId;
+    }
+  }
+  return '';
+}
+
+function removeDirectRowEntries(store: DocStore, docId: string, listId: string, entryIdListRemoved: string[]) {
+  const listData = store.getCompDataById(docId, listId);
+  if (!listData || String(listData.compName || '') !== 'List') {
+    return { code: -1, message: 'List not found.' };
+  }
+  const entryIdSetRemoved = new Set(entryIdListRemoved);
+  const listDataNext = {
+    ...listData,
+    childIdList: getChildIdList(listData).filter((childId) => !entryIdSetRemoved.has(childId)),
+  };
+  store.replaceCompData(docId, listDataNext);
+  entryIdListRemoved.forEach((entryId) => {
+    const entryData = store.getCompDataById(docId, entryId);
+    if (entryData) {
+      store.replaceCompData(docId, { ...entryData, childIdList: [], mainCompId: undefined });
+    }
+    store.removeCompSubtree(docId, entryId);
+  });
+  return { code: 0, message: 'Direct row entries removed.' };
+}
+
+function getPointCompId(point: any) {
+  return String(point?.compId || point?.segId || '');
 }
 
 function createFocusTargetForComp(compData: CompData | null) {
