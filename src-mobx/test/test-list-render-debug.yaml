@@ -1,0 +1,67 @@
+docName: test-list-render-debug
+dataDocInitial: {}
+configDocInitial:
+  isEditable: true
+compIdRoot: list-render-debug-root
+compById:
+  list-render-debug-root:
+    compName: List
+    childIdList:
+      - row-render-debug-one
+      - row-render-debug-two
+      - row-render-debug-three
+    data:
+      bulletType: circle
+    config:
+      isRoot: true
+  row-render-debug-one:
+    compName: Row
+    childIdList:
+      - seg-render-debug-one-a
+      - seg-render-debug-one-b
+    data: {}
+    config: {}
+  seg-render-debug-one-a:
+    compName: TextSeg
+    childIdList: []
+    data:
+      text: first row first segment
+    config:
+      isEditable: true
+      isRenderDebugEnabled: true
+  seg-render-debug-one-b:
+    compName: TextSeg
+    childIdList: []
+    data:
+      text: first row second segment
+    config:
+      isEditable: true
+      isRenderDebugEnabled: true
+  row-render-debug-two:
+    compName: Row
+    childIdList:
+      - seg-render-debug-two-a
+    data: {}
+    config: {}
+  seg-render-debug-two-a:
+    compName: TextSeg
+    childIdList: []
+    data:
+      text: second row segment
+    config:
+      isEditable: true
+      isRenderDebugEnabled: true
+  row-render-debug-three:
+    compName: Row
+    childIdList:
+      - seg-render-debug-three-a
+    data: {}
+    config: {}
+  seg-render-debug-three-a:
+    compName: TextSeg
+    childIdList: []
+    data:
+      text: third row segment
+    config:
+      isEditable: true
+      isRenderDebugEnabled: true

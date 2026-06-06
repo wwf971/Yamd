@@ -1,7 +1,7 @@
 import React from 'react';
 
 type DocCompRenderContextValue = {
-  renderCompListByParentId: (parentId: string) => React.ReactNode[];
+  renderCompListByParentId: (parentId: string) => React.ReactNode;
   renderCompById: (compId: string) => React.ReactNode;
   getCompDataById: (compId: string) => any;
 };

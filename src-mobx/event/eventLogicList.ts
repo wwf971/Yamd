@@ -1,4 +1,5 @@
 import type React from 'react';
+import { runInAction } from 'mobx';
 import type { DocStore } from '../docStore';
 import type { CompData, CompEditResult, CompEvent, CompFocusTarget } from '../docStoreTypes';
 import { getCaretOffsetByPoint, getClampedMousePoint } from '../util/caretUtils';
@@ -192,13 +193,15 @@ async function eventListRowSplitAttempt({
   const childIdListList = getChildIdList(listData);
   const isRowListChild = childIdListList.includes(rowId);
   if (isRowListChild) {
-    for (const compDataNext of editResult.compListNext) {
-      store.replaceCompData(docId, compDataNext);
-    }
-    store.replaceCompData(docId, rowDataLeft);
-    const result = store.insertChildAfter(docId, compId, rowId, rowDataRight, {
-      focus: editResult.focus,
-      reason: 'rowSplitAttempt',
+    const result = runInAction(() => {
+      for (const compDataNext of editResult.compListNext) {
+        store.replaceCompData(docId, compDataNext);
+      }
+      store.replaceCompData(docId, rowDataLeft);
+      return store.insertChildAfter(docId, compId, rowId, rowDataRight, {
+        focus: editResult.focus,
+        reason: 'rowSplitAttempt',
+      });
     });
     return result.code === 0 ? { ...result, message: 'Row split.' } : result;
   }
@@ -216,9 +219,6 @@ async function eventListRowSplitAttempt({
       compDataListRight,
       focus: editResult.focus,
     });
-    splitForMainRow.compDataListNext.forEach((compDataNext) => {
-      store.replaceCompData(docId, compDataNext);
-    });
     const rowDataBefore = createRowComp(createCompId(store, docId, 'row'), [
       ...childIdList.slice(0, childIndex),
       ...splitForMainRow.compIdListLeft,
@@ -231,28 +231,35 @@ async function eventListRowSplitAttempt({
       ...listData,
       mainCompId: rowId,
     };
-    store.replaceCompData(docId, rowDataOriginalNext);
-    const result = store.replaceChildRange(docId, listIdParent, [compId], [rowDataBefore, listDataNext], {
-      focus: splitForMainRow.focus,
-      reason: 'rowSplitAttempt',
+    const result = runInAction(() => {
+      splitForMainRow.compDataListNext.forEach((compDataNext) => {
+        store.replaceCompData(docId, compDataNext);
+      });
+      store.replaceCompData(docId, rowDataOriginalNext);
+      return store.replaceChildRange(docId, listIdParent, [compId], [rowDataBefore, listDataNext], {
+        focus: splitForMainRow.focus,
+        reason: 'rowSplitAttempt',
+      });
     });
     return result.code === 0 ? { ...result, message: 'Main row split before nested list.' } : result;
   }
 
-  for (const compDataNext of editResult.compListNext) {
-    store.replaceCompData(docId, compDataNext);
-  }
-  store.replaceCompData(docId, rowDataLeft);
-  store.replaceCompData(docId, rowDataRight);
   const listDataNext = {
     ...listData,
     childIdList: [rowDataRight.compId, ...childIdListList.filter((childId) => childId !== rowDataRight.compId)],
   };
-  store.replaceCompData(docId, listDataNext);
-  store.clearSelectionState(docId);
-  if (editResult.focus) {
-    store.applyFocusAfterEdit(docId, editResult.focus, 'rowSplitAttempt');
-  }
+  runInAction(() => {
+    for (const compDataNext of editResult.compListNext) {
+      store.replaceCompData(docId, compDataNext);
+    }
+    store.replaceCompData(docId, rowDataLeft);
+    store.replaceCompData(docId, rowDataRight);
+    store.replaceCompData(docId, listDataNext);
+    store.clearSelectionState(docId);
+    if (editResult.focus) {
+      store.applyFocusAfterEdit(docId, editResult.focus, 'rowSplitAttempt');
+    }
+  });
   return { code: 0, message: 'Root main row split.' };
 }
 

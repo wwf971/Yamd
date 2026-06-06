@@ -1,7 +1,7 @@
 import React from 'react';
 import yaml from 'js-yaml';
 import { observer } from 'mobx-react-lite';
-import { compByNameDefault, renderCompById } from '../docMobx';
+import { compByNameDefault, getCompByName } from '../docMobx';
 import { DocStoreProvider } from '../DocStoreContext';
 import { DocStore } from '../docStore';
 import DocViewer from '../comp/DocViewer';
@@ -17,6 +17,7 @@ import TEST_LIST_ROW_EDITABLE_YAML_RAW from './test-list-row-editable.yaml?raw';
 import TEST_LIST_ROW_NOT_EDITABLE_YAML_RAW from './test-list-row-not-editable.yaml?raw';
 import TEST_LIST_ROW_YAML_RAW from './test-list-row.yaml?raw';
 import TEST_LIST_BULLET_TYPES_YAML_RAW from './test-list-bullet-types.yaml?raw';
+import TEST_LIST_RENDER_DEBUG_YAML_RAW from './test-list-render-debug.yaml?raw';
 import './testMobx.css';
 
 const compByNameForTest = {
@@ -103,8 +104,6 @@ const TestItemDoc = observer(function TestItemDoc({ yamlRaw }) {
   const configDoc = storeDocTest.getDocConfig(docId);
   const interactionStateCurrent = storeDocTest.getInteractionState(docId);
   const selectionStateCurrent = interactionStateCurrent.selectionState;
-  const compDataByIdCurrent = storeDocTest.getCompDataByIdMap(docId);
-
   React.useEffect(() => {
     if (docTemplate.validationError) return undefined;
     const rootEl = rootElRef.current;
@@ -135,15 +134,19 @@ const TestItemDoc = observer(function TestItemDoc({ yamlRaw }) {
         storeDocTest.clearSelectionState(docId);
         return;
       }
-      storeDocTest.updateSelectionState(docId, selectionState);
       if (selectionState.isSelectionActive !== true && selectionState.pointFocus?.compId) {
+        if (selectionStateCurrent.isSelectionActive === true) {
+          storeDocTest.clearSelectionState(docId);
+        }
         storeDocTest.updateFocusState(docId, {
           compIdFocused: selectionState.pointFocus.compId,
           segIdFocused: selectionState.pointFocus.segId,
           offsetFocused: selectionState.pointFocus.offset,
           reasonLast: 'selectionChange',
         });
+        return;
       }
+      storeDocTest.updateSelectionState(docId, selectionState);
     };
 
     const handleCopy = (event) => {
@@ -222,44 +225,57 @@ const TestItemDoc = observer(function TestItemDoc({ yamlRaw }) {
     docTemplate.validationError,
   ]);
 
-  const renderCompByIdInDoc = React.useCallback((compId) => {
-    return renderCompById({
-      compId,
-      compDataById: compDataByIdCurrent,
-      compByName: compByNameForTest,
-      setCompRef: (compIdNext, element) => {
-        if (element) {
-          compRefById.current[compIdNext] = element;
-          storeDocTest.registerComp(
-            docId,
-            compIdNext,
-            async (event) => {
-              const compRef = compRefById.current[compIdNext];
-              if (!compRef?.dispatchEvent) {
-                return { code: -1, message: `Component is not ready. compId=${compIdNext}` };
-              }
-              return compRef.dispatchEvent(event);
-            },
-            { parentId: storeDocTest.getParentCompId(docId, compIdNext) },
-          );
-          return;
-        }
-        delete compRefById.current[compIdNext];
-        storeDocTest.unregisterComp(docId, compIdNext);
-      },
-      onEvent: (event, compData) => handleCompEvent(event, compData.compId),
-      onDataChange: (dataPatch, compData) => {
-        const compIdTarget = String(dataPatch?.compIdTarget || compData.compId);
-        const patchData = dataPatch?.dataPatch || dataPatch;
-        return storeDocTest.updateCompDataByPatch(docId, compIdTarget, patchData || {});
-      },
-      renderUnknown: (compData) => (
-        <div key={compData.compId} className="mobx-test-note">
-          Unsupported compName: {compData.compName}
-        </div>
-      ),
-    });
-  }, [compDataByIdCurrent, docId, handleCompEvent, storeDocTest]);
+  const setCompRef = React.useCallback((compIdNext, element) => {
+    if (element) {
+      compRefById.current[compIdNext] = element;
+      storeDocTest.registerComp(
+        docId,
+        compIdNext,
+        async (event) => {
+          const compRef = compRefById.current[compIdNext];
+          if (!compRef?.dispatchEvent) {
+            return { code: -1, message: `Component is not ready. compId=${compIdNext}` };
+          }
+          return compRef.dispatchEvent(event);
+        },
+        { parentId: storeDocTest.getParentCompId(docId, compIdNext) },
+      );
+      return;
+    }
+    delete compRefById.current[compIdNext];
+    storeDocTest.unregisterComp(docId, compIdNext);
+  }, [docId, storeDocTest]);
+
+  const handleDataChange = React.useCallback((dataPatch, compData) => {
+    const compIdTarget = String(dataPatch?.compIdTarget || compData.compId);
+    const patchData = dataPatch?.dataPatch || dataPatch;
+    return storeDocTest.updateCompDataByPatch(docId, compIdTarget, patchData || {});
+  }, [docId, storeDocTest]);
+
+  const renderContextValue = React.useMemo(() => ({
+    renderCompListByParentId: (parentId) => (
+      <TestCompChildren
+        parentId={parentId}
+        storeDocTest={storeDocTest}
+        docId={docId}
+        onCompEvent={handleCompEvent}
+        onDataChange={handleDataChange}
+        setCompRef={setCompRef}
+      />
+    ),
+    renderCompById: (compId) => (
+      <TestCompById
+        key={String(compId || '')}
+        compId={String(compId || '')}
+        storeDocTest={storeDocTest}
+        docId={docId}
+        onCompEvent={handleCompEvent}
+        onDataChange={handleDataChange}
+        setCompRef={setCompRef}
+      />
+    ),
+    getCompDataById: (compId) => storeDocTest.getCompDataById(docId, String(compId || '')),
+  }), [docId, handleCompEvent, handleDataChange, setCompRef, storeDocTest]);
 
   if (docTemplate.validationError) {
     return (
@@ -281,21 +297,92 @@ const TestItemDoc = observer(function TestItemDoc({ yamlRaw }) {
         </div>
         <DocStoreProvider value={{ store: storeDocTest, docId }}>
           <DocCompRenderProvider
-            value={{
-              renderCompListByParentId: (parentId) => {
-                const compDataParent = compDataByIdCurrent[parentId];
-                const childIdList = Array.isArray(compDataParent?.childIdList) ? compDataParent.childIdList : [];
-                return childIdList.map((childId) => renderCompByIdInDoc(childId));
-              },
-              renderCompById: (compId) => renderCompByIdInDoc(compId),
-              getCompDataById: (compId) => compDataByIdCurrent[String(compId || '')] || null,
-            }}
+            value={renderContextValue}
           >
-            {renderCompByIdInDoc(docTemplate.compIdRoot)}
+            <TestCompById
+              compId={docTemplate.compIdRoot}
+              storeDocTest={storeDocTest}
+              docId={docId}
+              onCompEvent={handleCompEvent}
+              onDataChange={handleDataChange}
+              setCompRef={setCompRef}
+            />
           </DocCompRenderProvider>
         </DocStoreProvider>
       </div>
     </div>
+  );
+});
+
+const TestCompChildren = observer(function TestCompChildren({
+  parentId,
+  storeDocTest,
+  docId,
+  onCompEvent,
+  onDataChange,
+  setCompRef,
+}) {
+  const compDataParent = storeDocTest.getCompDataById(docId, String(parentId || ''));
+  const childIdList = Array.isArray(compDataParent?.childIdList) ? compDataParent.childIdList : [];
+  return childIdList.map((childId) => (
+    <TestCompById
+      key={String(childId || '')}
+      compId={String(childId || '')}
+      storeDocTest={storeDocTest}
+      docId={docId}
+      onCompEvent={onCompEvent}
+      onDataChange={onDataChange}
+      setCompRef={setCompRef}
+    />
+  ));
+});
+
+const TestCompById = observer(function TestCompById({
+  compId,
+  storeDocTest,
+  docId,
+  onCompEvent,
+  onDataChange,
+  setCompRef,
+}) {
+  const compIdSafe = String(compId || '');
+  const compData = storeDocTest.getCompDataById(docId, compIdSafe);
+  const handleRef = React.useCallback((element) => {
+    setCompRef(compIdSafe, element);
+  }, [compIdSafe, setCompRef]);
+  const dataCompProp = React.useMemo(() => ({
+    compId: compIdSafe,
+  }), [compIdSafe]);
+  const configCompProp = React.useMemo(() => ({}), []);
+  const handleEvent = React.useCallback((event) => {
+    return onCompEvent(event, compIdSafe);
+  }, [compIdSafe, onCompEvent]);
+  const handleDataChangeFromComp = React.useCallback((dataPatch) => {
+    if (!compData) {
+      return { code: -1, message: `Component data missing. compId=${compIdSafe}` };
+    }
+    return onDataChange(dataPatch, compData);
+  }, [compData, compIdSafe, onDataChange]);
+  if (!compData) {
+    return null;
+  }
+  const Comp = getCompByName(compData.compName, compByNameForTest);
+  if (!Comp) {
+    return (
+      <div className="mobx-test-note">
+        Unsupported compName: {compData.compName}
+      </div>
+    );
+  }
+  return (
+    <Comp
+      key={compData.compId}
+      ref={handleRef}
+      data={dataCompProp}
+      config={configCompProp}
+      onEvent={handleEvent}
+      onDataChange={handleDataChangeFromComp}
+    />
   );
 });
 
@@ -305,6 +392,7 @@ const TestListRowEditableYaml = () => <TestItemDoc yamlRaw={TEST_LIST_ROW_EDITAB
 const TestListRowNotEditableYaml = () => <TestItemDoc yamlRaw={TEST_LIST_ROW_NOT_EDITABLE_YAML_RAW} />;
 const TestListRowYaml = () => <TestItemDoc yamlRaw={TEST_LIST_ROW_YAML_RAW} />;
 const TestListBulletTypesYaml = () => <TestItemDoc yamlRaw={TEST_LIST_BULLET_TYPES_YAML_RAW} />;
+const TestListRenderDebugYaml = () => <TestItemDoc yamlRaw={TEST_LIST_RENDER_DEBUG_YAML_RAW} />;
 
 export const mobxYamlTestItems = [
   {
@@ -351,6 +439,13 @@ export const mobxYamlTestItems = [
     description: 'List children rendered with circle, flat, and index marker policies.',
     parentKey: 'mobx-list',
     Comp: TestListBulletTypesYaml,
+  },
+  {
+    key: 'mobx-list-render-debug',
+    label: 'TextSeg render debug',
+    description: 'List test with TextSeg render counters enabled.',
+    parentKey: 'mobx-list',
+    Comp: TestListRenderDebugYaml,
   },
 ];
 

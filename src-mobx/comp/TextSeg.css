@@ -76,3 +76,17 @@
   outline: 1px dotted #94a3b8;
   outline-offset: 1px;
 }
+
+.mobx-seg-render-debug-enabled::after {
+  content: attr(data-mobx-render-debug);
+  display: inline-block;
+  margin-left: 2px;
+  padding: 0 2px;
+  border-radius: 2px;
+  background: #f1f5f9;
+  color: #64748b;
+  font-size: 10px;
+  line-height: 1.2;
+  pointer-events: none;
+  user-select: none;
+}

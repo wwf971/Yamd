@@ -748,18 +748,30 @@ export function selectionStateReadFromDom(rootEl: HTMLElement): Partial<Selectio
   if (!selection || selection.rangeCount === 0) {
     return null;
   }
+  if (!shouldSelectionStateTrackDomSelection(selection)) {
+    return null;
+  }
+  const isCollapsed = selection.isCollapsed === true;
+  if (isCollapsed) {
+    const pointFocus = selectionPointRead(rootEl, selection.focusNode, selection.focusOffset);
+    if (!pointFocus) {
+      return null;
+    }
+    return {
+      isSelectionActive: false,
+      mode: 'caret',
+      pointAnchor: pointFocus,
+      pointFocus,
+    };
+  }
   const pointAnchor = selectionPointRead(rootEl, selection.anchorNode, selection.anchorOffset);
   const pointFocus = selectionPointRead(rootEl, selection.focusNode, selection.focusOffset);
   if (!pointAnchor || !pointFocus) {
     return null;
   }
-  const isCollapsed = selection.isCollapsed === true;
-  if (!shouldSelectionStateTrackDomSelection(selection)) {
-    return null;
-  }
   return {
-    isSelectionActive: !isCollapsed,
-    mode: isCollapsed ? 'caret' : 'range',
+    isSelectionActive: true,
+    mode: 'range',
     pointAnchor,
     pointFocus,
   };

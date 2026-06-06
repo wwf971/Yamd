@@ -924,6 +924,9 @@ function focusCompAfterRender(store: DocStore, docId: string, segId: string, off
   const schedule = typeof window !== 'undefined' ? window.setTimeout : setTimeout;
   schedule(() => {
     const focusApply = () => {
+      if (!isFocusRequestCurrent(store, docId, segId, offset)) {
+        return;
+      }
       const selection = typeof window !== 'undefined' ? window.getSelection?.() : null;
       selection?.removeAllRanges();
       void store.sendEventToComp(docId, segId, {
@@ -942,6 +945,13 @@ function focusCompAfterRender(store: DocStore, docId: string, segId: string, off
     }
     focusApply();
   }, 0);
+}
+
+function isFocusRequestCurrent(store: DocStore, docId: string, segId: string, offset: number) {
+  const focusState = store.getInteractionState(docId).focusState;
+  return focusState.segIdFocused === segId
+    && focusState.compIdFocused === segId
+    && focusState.offsetFocused === offset;
 }
 
 function findChildRangeIndex(childIdList: string[], childIdListOld: string[]) {

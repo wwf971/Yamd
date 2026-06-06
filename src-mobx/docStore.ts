@@ -203,11 +203,17 @@ export class DocStore {
     focusStatePatch: Partial<FocusState>,
   ) {
     const docRecord = this.ensureDoc(docId);
-    docRecord.interactionState.focusState = {
-      ...docRecord.interactionState.focusState,
-      ...focusStatePatch,
-    };
-    this.syncRuntimeState(docId);
+    const focusStateCurrent = docRecord.interactionState.focusState;
+    const focusStateNext = normalizeFocusState(focusStateCurrent, focusStatePatch);
+    if (isFocusStateSame(focusStateCurrent, focusStateNext)) {
+      return { code: 0 };
+    }
+    const isRuntimeSyncNeeded = focusStateCurrent.compIdFocused !== focusStateNext.compIdFocused
+      || focusStateCurrent.segIdFocused !== focusStateNext.segIdFocused;
+    applyFocusStateNext(focusStateCurrent, focusStateNext);
+    if (isRuntimeSyncNeeded) {
+      this.syncRuntimeState(docId);
+    }
     return { code: 0 };
   }
 
@@ -215,21 +221,57 @@ export class DocStore {
     const docRecord = this.ensureDoc(docId);
     const compIdNext = String(compIdElActive || '');
     const elActiveState = docRecord.interactionState.elActiveState;
-    docRecord.interactionState.elActiveState = {
-      compIdElActive: compIdNext,
-      versionElActive: elActiveState.versionElActive + 1,
-    };
+    if (elActiveState.compIdElActive === compIdNext) {
+      return { code: 0 };
+    }
+    elActiveState.compIdElActive = compIdNext;
+    elActiveState.versionElActive += 1;
     this.syncRuntimeState(docId);
     return { code: 0 };
   }
 
   updateSelectionState(docId: string, selectionStateNext: Partial<SelectionState>) {
     const docRecord = this.ensureDoc(docId);
-    docRecord.interactionState.selectionState = {
-      ...docRecord.interactionState.selectionState,
-      ...selectionStateNext,
-    };
-    this.syncRuntimeState(docId);
+    const selectionStateCurrent = docRecord.interactionState.selectionState;
+    const selectionStateMerged = normalizeSelectionState(selectionStateCurrent, selectionStateNext);
+    if (isSelectionStateSame(selectionStateCurrent, selectionStateMerged)) {
+      return { code: 0 };
+    }
+    const isRuntimeSyncNeeded = !isSelectionRuntimeTargetSame(selectionStateCurrent, selectionStateMerged);
+    applySelectionStateNext(selectionStateCurrent, selectionStateMerged);
+    if (isRuntimeSyncNeeded) {
+      this.syncRuntimeState(docId);
+    }
+    return { code: 0 };
+  }
+
+  updateSelectionAndFocusState(
+    docId: string,
+    selectionStateNext: Partial<SelectionState>,
+    focusStatePatch: Partial<FocusState>,
+  ) {
+    const docRecord = this.ensureDoc(docId);
+    const selectionStateCurrent = docRecord.interactionState.selectionState;
+    const focusStateCurrent = docRecord.interactionState.focusState;
+    const selectionStateMerged = normalizeSelectionState(selectionStateCurrent, selectionStateNext);
+    const focusStateNext = normalizeFocusState(focusStateCurrent, focusStatePatch);
+    const isSelectionSame = isSelectionStateSame(selectionStateCurrent, selectionStateMerged);
+    const isFocusSame = isFocusStateSame(focusStateCurrent, focusStateNext);
+    if (isSelectionSame && isFocusSame) {
+      return { code: 0 };
+    }
+    const isRuntimeSyncNeeded = !isSelectionRuntimeTargetSame(selectionStateCurrent, selectionStateMerged)
+      || focusStateCurrent.compIdFocused !== focusStateNext.compIdFocused
+      || focusStateCurrent.segIdFocused !== focusStateNext.segIdFocused;
+    if (!isSelectionSame) {
+      applySelectionStateNext(selectionStateCurrent, selectionStateMerged);
+    }
+    if (!isFocusSame) {
+      applyFocusStateNext(focusStateCurrent, focusStateNext);
+    }
+    if (isRuntimeSyncNeeded) {
+      this.syncRuntimeState(docId);
+    }
     return { code: 0 };
   }
 
@@ -514,23 +556,37 @@ export class DocStore {
     const focusState = docRecord.interactionState.focusState;
     const elActiveState = docRecord.interactionState.elActiveState;
     const selectionState = docRecord.interactionState.selectionState;
+    const parentIdByCompId = createParentIdByCompId(docRecord);
+    const compIdFocusSet = createAncestorIdSet(parentIdByCompId, [
+      focusState.compIdFocused,
+      focusState.segIdFocused,
+    ]);
     const compIdSelectionList = [
       selectionState.pointAnchor?.compId || '',
       selectionState.pointFocus?.compId || '',
     ].filter(Boolean);
-    const runtimeStateByCompId: Record<string, CompRuntimeState> = {};
+    const compIdSelectionSet = createAncestorIdSet(parentIdByCompId, compIdSelectionList);
+    const runtimeStateByCompId = docRecord.interactionState.runtimeStateByCompId;
+    const compIdSet = new Set(compIdList);
+    for (const compIdExisting of Object.keys(runtimeStateByCompId)) {
+      if (!compIdSet.has(compIdExisting)) {
+        delete runtimeStateByCompId[compIdExisting];
+      }
+    }
     for (const compId of compIdList) {
-      runtimeStateByCompId[compId] = {
+      const runtimeStateNext: CompRuntimeState = {
         isFocusedLogical: focusState.compIdFocused === compId || focusState.segIdFocused === compId,
         isElActive: elActiveState.compIdElActive === compId,
-        isFocusWithin: this.isCompDescendantOrSelf(docRecord, compId, focusState.compIdFocused)
-          || this.isCompDescendantOrSelf(docRecord, compId, focusState.segIdFocused),
-        isSelectionWithin: compIdSelectionList.some((compIdSelection) => (
-          this.isCompDescendantOrSelf(docRecord, compId, compIdSelection)
-        )),
+        isFocusWithin: compIdFocusSet.has(compId),
+        isSelectionWithin: compIdSelectionSet.has(compId),
       };
+      const runtimeStateCurrent = runtimeStateByCompId[compId];
+      if (!runtimeStateCurrent) {
+        runtimeStateByCompId[compId] = runtimeStateNext;
+      } else {
+        applyRuntimeStateNext(runtimeStateCurrent, runtimeStateNext);
+      }
     }
-    docRecord.interactionState.runtimeStateByCompId = runtimeStateByCompId;
   }
 
   private isCompDescendantOrSelf(docRecord: DocRecord, compIdAncestor: string, compIdTarget: string) {
@@ -584,6 +640,163 @@ export class DocStore {
         isEditable: configDoc.isEditable,
       };
     }
+  }
+}
+
+function normalizeFocusState(focusStateCurrent: FocusState, focusStatePatch: Partial<FocusState>): FocusState {
+  return {
+    compIdFocused: focusStatePatch.compIdFocused !== undefined
+      ? String(focusStatePatch.compIdFocused || '')
+      : focusStateCurrent.compIdFocused,
+    segIdFocused: focusStatePatch.segIdFocused !== undefined
+      ? String(focusStatePatch.segIdFocused || '')
+      : focusStateCurrent.segIdFocused,
+    offsetFocused: focusStatePatch.offsetFocused !== undefined
+      ? Number(focusStatePatch.offsetFocused || 0)
+      : focusStateCurrent.offsetFocused,
+    reasonLast: focusStatePatch.reasonLast !== undefined
+      ? String(focusStatePatch.reasonLast || '')
+      : focusStateCurrent.reasonLast,
+  };
+}
+
+function isFocusStateSame(focusStateA: FocusState, focusStateB: FocusState) {
+  return focusStateA.compIdFocused === focusStateB.compIdFocused
+    && focusStateA.segIdFocused === focusStateB.segIdFocused
+    && focusStateA.offsetFocused === focusStateB.offsetFocused
+    && focusStateA.reasonLast === focusStateB.reasonLast;
+}
+
+function applyFocusStateNext(focusStateCurrent: FocusState, focusStateNext: FocusState) {
+  if (focusStateCurrent.compIdFocused !== focusStateNext.compIdFocused) {
+    focusStateCurrent.compIdFocused = focusStateNext.compIdFocused;
+  }
+  if (focusStateCurrent.segIdFocused !== focusStateNext.segIdFocused) {
+    focusStateCurrent.segIdFocused = focusStateNext.segIdFocused;
+  }
+  if (focusStateCurrent.offsetFocused !== focusStateNext.offsetFocused) {
+    focusStateCurrent.offsetFocused = focusStateNext.offsetFocused;
+  }
+  if (focusStateCurrent.reasonLast !== focusStateNext.reasonLast) {
+    focusStateCurrent.reasonLast = focusStateNext.reasonLast;
+  }
+}
+
+function normalizeSelectionState(
+  selectionStateCurrent: SelectionState,
+  selectionStatePatch: Partial<SelectionState>,
+): SelectionState {
+  return {
+    isSelectionActive: selectionStatePatch.isSelectionActive !== undefined
+      ? selectionStatePatch.isSelectionActive === true
+      : selectionStateCurrent.isSelectionActive,
+    mode: selectionStatePatch.mode !== undefined
+      ? selectionStatePatch.mode
+      : selectionStateCurrent.mode,
+    pointAnchor: selectionStatePatch.pointAnchor !== undefined
+      ? normalizeSelectionPoint(selectionStatePatch.pointAnchor)
+      : selectionStateCurrent.pointAnchor,
+    pointFocus: selectionStatePatch.pointFocus !== undefined
+      ? normalizeSelectionPoint(selectionStatePatch.pointFocus)
+      : selectionStateCurrent.pointFocus,
+  };
+}
+
+function normalizeSelectionPoint(point: SelectionState['pointAnchor']) {
+  if (!point) return null;
+  return {
+    compId: String(point.compId || ''),
+    segId: String(point.segId || ''),
+    offset: Number(point.offset || 0),
+  };
+}
+
+function isSelectionStateSame(selectionStateA: SelectionState, selectionStateB: SelectionState) {
+  return selectionStateA.isSelectionActive === selectionStateB.isSelectionActive
+    && selectionStateA.mode === selectionStateB.mode
+    && isSelectionPointSame(selectionStateA.pointAnchor, selectionStateB.pointAnchor)
+    && isSelectionPointSame(selectionStateA.pointFocus, selectionStateB.pointFocus);
+}
+
+function applySelectionStateNext(selectionStateCurrent: SelectionState, selectionStateNext: SelectionState) {
+  if (selectionStateCurrent.isSelectionActive !== selectionStateNext.isSelectionActive) {
+    selectionStateCurrent.isSelectionActive = selectionStateNext.isSelectionActive;
+  }
+  if (selectionStateCurrent.mode !== selectionStateNext.mode) {
+    selectionStateCurrent.mode = selectionStateNext.mode;
+  }
+  if (!isSelectionPointSame(selectionStateCurrent.pointAnchor, selectionStateNext.pointAnchor)) {
+    selectionStateCurrent.pointAnchor = selectionStateNext.pointAnchor;
+  }
+  if (!isSelectionPointSame(selectionStateCurrent.pointFocus, selectionStateNext.pointFocus)) {
+    selectionStateCurrent.pointFocus = selectionStateNext.pointFocus;
+  }
+}
+
+function isSelectionRuntimeTargetSame(selectionStateA: SelectionState, selectionStateB: SelectionState) {
+  return getSelectionRuntimeTargetKey(selectionStateA) === getSelectionRuntimeTargetKey(selectionStateB);
+}
+
+function getSelectionRuntimeTargetKey(selectionState: SelectionState) {
+  return [
+    selectionState.pointAnchor?.compId || '',
+    selectionState.pointFocus?.compId || '',
+  ].join('|');
+}
+
+function isSelectionPointSame(pointA: SelectionState['pointAnchor'], pointB: SelectionState['pointAnchor']) {
+  if (!pointA || !pointB) return pointA === pointB;
+  return pointA.compId === pointB.compId
+    && pointA.segId === pointB.segId
+    && pointA.offset === pointB.offset;
+}
+
+function createParentIdByCompId(docRecord: DocRecord) {
+  const parentIdByCompId: Record<string, string> = {};
+  const compIdList = Object.keys(docRecord.compDataById || {});
+  for (const compId of compIdList) {
+    const compData = docRecord.compDataById[compId];
+    const childIdList = Array.isArray(compData?.childIdList) ? compData.childIdList : [];
+    for (const childIdRaw of childIdList) {
+      const childId = String(childIdRaw || '');
+      if (childId) {
+        parentIdByCompId[childId] = compId;
+      }
+    }
+    const mainCompId = String(compData?.mainCompId || '').trim();
+    if (mainCompId) {
+      parentIdByCompId[mainCompId] = compId;
+    }
+  }
+  return parentIdByCompId;
+}
+
+function createAncestorIdSet(parentIdByCompId: Record<string, string>, compIdList: string[]) {
+  const ancestorIdSet = new Set<string>();
+  for (const compIdRaw of compIdList) {
+    let compIdCurrent = String(compIdRaw || '');
+    const visitedIdSet = new Set<string>();
+    while (compIdCurrent && !visitedIdSet.has(compIdCurrent)) {
+      visitedIdSet.add(compIdCurrent);
+      ancestorIdSet.add(compIdCurrent);
+      compIdCurrent = parentIdByCompId[compIdCurrent] || '';
+    }
+  }
+  return ancestorIdSet;
+}
+
+function applyRuntimeStateNext(runtimeStateCurrent: CompRuntimeState, runtimeStateNext: CompRuntimeState) {
+  if (runtimeStateCurrent.isFocusedLogical !== runtimeStateNext.isFocusedLogical) {
+    runtimeStateCurrent.isFocusedLogical = runtimeStateNext.isFocusedLogical;
+  }
+  if (runtimeStateCurrent.isElActive !== runtimeStateNext.isElActive) {
+    runtimeStateCurrent.isElActive = runtimeStateNext.isElActive;
+  }
+  if (runtimeStateCurrent.isFocusWithin !== runtimeStateNext.isFocusWithin) {
+    runtimeStateCurrent.isFocusWithin = runtimeStateNext.isFocusWithin;
+  }
+  if (runtimeStateCurrent.isSelectionWithin !== runtimeStateNext.isSelectionWithin) {
+    runtimeStateCurrent.isSelectionWithin = runtimeStateNext.isSelectionWithin;
   }
 }
 

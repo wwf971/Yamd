@@ -24,6 +24,7 @@ type TextSegProps = {
     isActive?: boolean;
     isDebug?: boolean;
     isEditable?: boolean;
+    isRenderDebugEnabled?: boolean;
   };
   onEvent?: (event: CompEvent) => Promise<any> | any;
 };
@@ -42,31 +43,42 @@ const TextSeg = observer(React.forwardRef<any, TextSegProps>(({ data = {}, confi
   const isActive = configComp.isActive === true;
   const isDebug = configComp.isDebug === true;
   const isEditable = configComp.isEditable === true;
+  const isRenderDebugEnabled = configComp.isRenderDebugEnabled === true;
   const runtimeState = contextDocStore && compId
     ? contextDocStore.store.getCompRuntimeState(contextDocStore.docId, compId)
     : null;
-  const interactionState = contextDocStore
+  const isFocusedLogical = runtimeState?.isFocusedLogical === true;
+  const isElActive = runtimeState?.isElActive === true;
+  const isSelectionWithin = runtimeState?.isSelectionWithin === true;
+  const isInteractionStateNeeded = isFocusedLogical || isSelectionWithin;
+  const interactionState = contextDocStore && isInteractionStateNeeded
     ? contextDocStore.store.getInteractionState(contextDocStore.docId)
     : null;
+  const selectionState = interactionState?.selectionState;
   const bulletPositionState = contextDocStore && compId
     ? contextDocStore.store.getCompBulletPosState(contextDocStore.docId, compId)
     : null;
   const rootRef = React.useRef<HTMLSpanElement | null>(null);
   const offsetPendingRestoreRef = React.useRef<number | null>(null);
   const isComposingRef = React.useRef(false);
+  const counterRenderRef = React.useRef(0);
   const [isPointerDown, setIsPointerDown] = React.useState(false);
+  counterRenderRef.current += 1;
   const counterBulletMeasureReq = Number(bulletPositionState?.counterBulletMeasureReq || 0);
   const compIdBasisBullet = String(bulletPositionState?.compIdBasis || '');
   const isBulletMeasureEnabled = bulletPositionState?.isBulletMeasureEnabled !== false;
-  const isSelectionActive = interactionState?.selectionState.isSelectionActive === true;
+  const textDebug = isRenderDebugEnabled
+    ? createTextSegRenderDebugText(compId, text, counterRenderRef.current)
+    : '';
+  const isSelectionActive = (isFocusedLogical || isSelectionWithin) && selectionState?.isSelectionActive === true;
   const isDomCaretMode = isEditable
-    && runtimeState?.isFocusedLogical === true
+    && isFocusedLogical
     && isPointerDown === false
     && !isSelectionActive;
   const isLogicalCaretMode = !isDomCaretMode;
   const isLogicalCaretVisible = isLogicalCaretMode
     && isPointerDown === false
-    && runtimeState?.isFocusedLogical === true
+    && isFocusedLogical
     && !isSelectionActive;
   const offsetLogicalCaret = isLogicalCaretVisible
     ? Math.min(text.length, Math.max(0, Number(interactionState?.focusState.offsetFocused || 0)))
@@ -74,9 +86,10 @@ const TextSeg = observer(React.forwardRef<any, TextSegProps>(({ data = {}, confi
   const className = [
     'mobx-text-seg',
     isActive ? 'is-active' : '',
-    runtimeState?.isFocusedLogical ? 'mobx-seg-focused-logical' : '',
-    runtimeState?.isElActive ? 'mobx-seg-el-active' : '',
-    runtimeState?.isSelectionWithin ? 'mobx-seg-selection-within' : '',
+    isFocusedLogical ? 'mobx-seg-focused-logical' : '',
+    isElActive ? 'mobx-seg-el-active' : '',
+    isSelectionWithin ? 'mobx-seg-selection-within' : '',
+    isRenderDebugEnabled ? 'mobx-seg-render-debug-enabled' : '',
     isDebug ? 'mobx-seg-debug' : '',
   ].filter(Boolean).join(' ');
 
@@ -116,9 +129,9 @@ const TextSeg = observer(React.forwardRef<any, TextSegProps>(({ data = {}, confi
   }, [contextDocStore, getPointCurrent, updateFocusState]);
 
   const resolveSelectionAnchorForExtend = React.useCallback((offsetCurrent: number): SelectionTrackPoint => {
-    const pointAnchorSelection = interactionState?.selectionState.pointAnchor;
-    const pointFocusSelection = interactionState?.selectionState.pointFocus;
-    const isSelectionCurrent = interactionState?.selectionState.isSelectionActive === true;
+    const pointAnchorSelection = selectionState?.pointAnchor;
+    const pointFocusSelection = selectionState?.pointFocus;
+    const isSelectionCurrent = selectionState?.isSelectionActive === true;
     if (
       isSelectionCurrent
       && pointAnchorSelection
@@ -132,7 +145,7 @@ const TextSeg = observer(React.forwardRef<any, TextSegProps>(({ data = {}, confi
       };
     }
     return getPointCurrent(offsetCurrent);
-  }, [compId, getPointCurrent, interactionState?.selectionState.isSelectionActive, interactionState?.selectionState.pointAnchor, interactionState?.selectionState.pointFocus]);
+  }, [compId, getPointCurrent, selectionState?.isSelectionActive, selectionState?.pointAnchor, selectionState?.pointFocus]);
 
   const emitEvent = React.useCallback((type: string, dataEvent: any = {}) => {
     if (!onEvent) return undefined;
@@ -295,8 +308,12 @@ const TextSeg = observer(React.forwardRef<any, TextSegProps>(({ data = {}, confi
     ) {
       return;
     }
+    if (focusStoreFocusedSegIfKeyEventIsStale(contextDocStore, compId)) {
+      event.preventDefault();
+      return;
+    }
 
-    const pointFocusSelection = interactionState?.selectionState.pointFocus;
+    const pointFocusSelection = selectionState?.pointFocus;
     const offsetFocusFromSelection = (
       isSelectionActive
       && pointFocusSelection
@@ -317,14 +334,14 @@ const TextSeg = observer(React.forwardRef<any, TextSegProps>(({ data = {}, confi
       (event.key === 'Backspace' || event.key === 'Delete')
       && isEditable
       && isSelectionActive
-      && interactionState?.selectionState.pointAnchor
-      && interactionState?.selectionState.pointFocus
+      && selectionState?.pointAnchor
+      && selectionState?.pointFocus
     ) {
       event.preventDefault();
       emitEvent('childSelectionDeleteAttempt', {
         compIdChild: compId,
-        pointAnchor: interactionState.selectionState.pointAnchor,
-        pointFocus: interactionState.selectionState.pointFocus,
+        pointAnchor: selectionState.pointAnchor,
+        pointFocus: selectionState.pointFocus,
       });
       return;
     }
@@ -500,14 +517,19 @@ const TextSeg = observer(React.forwardRef<any, TextSegProps>(({ data = {}, confi
     emitEvent('clickSingle', { offset: getCaretOffset(rootEl) });
   }, [
     emitEvent,
+    contextDocStore,
     getCaretClientXCurrent,
+    compId,
     isEditable,
     isLogicalCaretMode,
     isLogicalCaretVisible,
     isSelectionActive,
     offsetLogicalCaret,
+    resolveSelectionAnchorForExtend,
+    selectionState,
     text,
     text.length,
+    updateKeyboardSelectionState,
     updateFocusState,
   ]);
 
@@ -604,6 +626,7 @@ const TextSeg = observer(React.forwardRef<any, TextSegProps>(({ data = {}, confi
       data-mobx-comp-id={compId}
       data-mobx-comp-name="TextSeg"
       data-mobx-seg-id={compId}
+      data-mobx-render-debug={textDebug}
       onFocus={() => {
         if (!contextDocStore || !compId) return;
         contextDocStore.store.updateElActiveState(contextDocStore.docId, compId);
@@ -927,6 +950,32 @@ function createSelfClipboardTextResult({
 function createCompIdLocal(prefix: string) {
   const randomPart = Math.random().toString(36).slice(2, 10);
   return `${prefix}-${randomPart}`;
+}
+
+function focusStoreFocusedSegIfKeyEventIsStale(contextDocStore: ReturnType<typeof useDocStoreContext>, compId: string) {
+  if (!contextDocStore || !compId) {
+    return false;
+  }
+  const focusState = contextDocStore.store.getInteractionState(contextDocStore.docId).focusState;
+  const segIdFocused = String(focusState.segIdFocused || '');
+  if (!segIdFocused || segIdFocused === compId) {
+    return false;
+  }
+  void contextDocStore.store.sendEventToComp(contextDocStore.docId, segIdFocused, {
+    type: 'focus',
+    sourceId: segIdFocused,
+    targetId: contextDocStore.docId,
+    data: {
+      segId: segIdFocused,
+      offset: Number(focusState.offsetFocused || 0),
+    },
+  });
+  return true;
+}
+
+function createTextSegRenderDebugText(compId: string, text: string, counterRender: number) {
+  const textMain = String(text || '').replace(/\s+/g, ' ').trim().slice(0, 32);
+  return `render ${counterRender} id ${compId} text ${textMain}`;
 }
 
 function getFirstTextLineRect(textEl: HTMLElement) {
