@@ -19,13 +19,20 @@ compById:
     config: {}
   list-root-a1:
     compName: List
+    childIdList:
+      - list-root-entry-a1
+    data:
+      bulletType: circle
+    config:
+      isRoot: true
+  list-root-entry-a1:
+    compName: List
     mainCompId: row-root-a1
     childIdList:
       - row-child-b1
       - list-child-c1
     data: {}
-    config:
-      isRoot: true
+    config: {}
   row-root-a1:
     compName: Row
     childIdList:

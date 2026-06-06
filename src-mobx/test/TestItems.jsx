@@ -16,6 +16,7 @@ import TEST_ROW_YAML_RAW from './test-row.yaml?raw';
 import TEST_LIST_ROW_EDITABLE_YAML_RAW from './test-list-row-editable.yaml?raw';
 import TEST_LIST_ROW_NOT_EDITABLE_YAML_RAW from './test-list-row-not-editable.yaml?raw';
 import TEST_LIST_ROW_YAML_RAW from './test-list-row.yaml?raw';
+import TEST_LIST_BULLET_TYPES_YAML_RAW from './test-list-bullet-types.yaml?raw';
 import './testMobx.css';
 
 const compByNameForTest = {
@@ -48,6 +49,7 @@ const TestItemDoc = observer(function TestItemDoc({ yamlRaw }) {
   const parentIdByCompId = React.useMemo(() => buildParentMap(docTemplate.compDataById, docTemplate.compIdRoot), [docTemplate]);
 
   React.useEffect(() => {
+    if (docTemplate.validationError) return;
     storeDocTest.ensureDoc(docId, {
       docId,
       docName: docTemplate.docName,
@@ -63,6 +65,7 @@ const TestItemDoc = observer(function TestItemDoc({ yamlRaw }) {
   }, [docId, docTemplate, storeDocTest]);
 
   React.useEffect(() => {
+    if (docTemplate.validationError) return undefined;
     const compIdList = Object.keys(docTemplate.compDataById);
     for (const compId of compIdList) {
       const parentId = parentIdByCompId[compId] || null;
@@ -103,6 +106,7 @@ const TestItemDoc = observer(function TestItemDoc({ yamlRaw }) {
   const compDataByIdCurrent = storeDocTest.getCompDataByIdMap(docId);
 
   React.useEffect(() => {
+    if (docTemplate.validationError) return undefined;
     const rootEl = rootElRef.current;
     if (!rootEl) return undefined;
 
@@ -143,12 +147,22 @@ const TestItemDoc = observer(function TestItemDoc({ yamlRaw }) {
     };
 
     const handleCopy = (event) => {
-      const textSelected = storeDocTest.getSelectionText(docId);
+      const selectionStateCurrent = storeDocTest.getInteractionState(docId).selectionState;
+      if (selectionStateCurrent.isSelectionActive !== true) {
+        return;
+      }
+      const textSelected = storeDocTest.getSelectionMarkdownTextSync(docId);
       if (!textSelected) {
         return;
       }
       event.preventDefault();
       event.clipboardData?.setData('text/plain', textSelected);
+      void storeDocTest.getSelectionMarkdownText(docId).then((textSelectedAsync) => {
+        if (!textSelectedAsync || !navigator.clipboard?.writeText) {
+          return;
+        }
+        return navigator.clipboard.writeText(textSelectedAsync);
+      }).catch(() => undefined);
     };
 
     const handleKeyDown = (event) => {
@@ -178,9 +192,10 @@ const TestItemDoc = observer(function TestItemDoc({ yamlRaw }) {
       document.removeEventListener('keyup', handleKeyUp, true);
       document.removeEventListener('selectionchange', handleSelectionChange);
     };
-  }, [docId, storeDocTest]);
+  }, [docId, docTemplate.validationError, storeDocTest]);
 
   React.useLayoutEffect(() => {
+    if (docTemplate.validationError) return;
     const rootEl = rootElRef.current;
     if (!rootEl) return;
     if (selectionStateCurrent.isSelectionActive !== true) return;
@@ -204,6 +219,7 @@ const TestItemDoc = observer(function TestItemDoc({ yamlRaw }) {
     selectionStateCurrent.pointFocus?.compId,
     selectionStateCurrent.pointFocus?.segId,
     selectionStateCurrent.pointFocus?.offset,
+    docTemplate.validationError,
   ]);
 
   const renderCompByIdInDoc = React.useCallback((compId) => {
@@ -245,6 +261,16 @@ const TestItemDoc = observer(function TestItemDoc({ yamlRaw }) {
     });
   }, [compDataByIdCurrent, docId, handleCompEvent, storeDocTest]);
 
+  if (docTemplate.validationError) {
+    return (
+      <div className="mobx-test-page" ref={rootElRef} data-mobx-doc-id={docId}>
+        <div className="mobx-test-shell">
+          <div className="mobx-test-note">{docTemplate.validationError}</div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="mobx-test-page" ref={rootElRef} data-mobx-doc-id={docId}>
       <div className="mobx-test-shell">
@@ -278,6 +304,7 @@ const TestRowYaml = () => <TestItemDoc yamlRaw={TEST_ROW_YAML_RAW} />;
 const TestListRowEditableYaml = () => <TestItemDoc yamlRaw={TEST_LIST_ROW_EDITABLE_YAML_RAW} />;
 const TestListRowNotEditableYaml = () => <TestItemDoc yamlRaw={TEST_LIST_ROW_NOT_EDITABLE_YAML_RAW} />;
 const TestListRowYaml = () => <TestItemDoc yamlRaw={TEST_LIST_ROW_YAML_RAW} />;
+const TestListBulletTypesYaml = () => <TestItemDoc yamlRaw={TEST_LIST_BULLET_TYPES_YAML_RAW} />;
 
 export const mobxYamlTestItems = [
   {
@@ -318,6 +345,13 @@ export const mobxYamlTestItems = [
     parentKey: 'mobx-list',
     Comp: TestListRowYaml,
   },
+  {
+    key: 'mobx-list-bullet-types',
+    label: 'bulletType variants',
+    description: 'List children rendered with circle, flat, and index marker policies.',
+    parentKey: 'mobx-list',
+    Comp: TestListBulletTypesYaml,
+  },
 ];
 
 export default TestTextBasicYaml;
@@ -343,6 +377,8 @@ function parseTestDocTemplate(textYaml) {
     return acc;
   }, {});
 
+  const validationError = validateDocTemplateRoot(compDataById);
+
   return {
     docName,
     dataInitial: {
@@ -353,7 +389,26 @@ function parseTestDocTemplate(textYaml) {
     },
     compIdRoot,
     compDataById,
+    validationError,
   };
+}
+
+function validateDocTemplateRoot(compDataById) {
+  const compRootList = Object.values(compDataById || {}).filter((compData) => compData?.config?.isRoot === true);
+  if (compRootList.length === 0) {
+    return '';
+  }
+  if (compRootList.length > 1) {
+    return 'Doc data rejected: exactly one root component is allowed.';
+  }
+  const compRoot = compRootList[0];
+  if (compRoot.compName !== 'List') {
+    return 'Doc data rejected: root component must be a List.';
+  }
+  if (String(compRoot.mainCompId || '').trim()) {
+    return 'Doc data rejected: root List must not have mainCompId.';
+  }
+  return '';
 }
 
 function parseYamlRaw(textYaml) {

@@ -303,6 +303,25 @@ async function eventListRowMergePrevAttempt({
     .map((childId) => store.getCompDataById(docId, childId))
     .filter((compData): compData is CompData => Boolean(compData));
   const focus = editResult.focus;
+  if (mergeTarget.entryId !== mergeTarget.rowId) {
+    editResult.compListNext.forEach((compDataNext) => {
+      store.replaceCompData(docId, compDataNext);
+    });
+    store.replaceCompData(docId, createRowComp(
+      mergeTarget.rowId,
+      [...editResult.compListNext.map((compData) => compData.compId), ...compDataListMoved.map((compData) => compData.compId)],
+      rowData,
+    ));
+    if (rowDataPrev) {
+      store.replaceCompData(docId, { ...rowDataPrev, childIdList: [] });
+    }
+    const resultRemovePrev = store.replaceChildRange(docId, mergeTarget.listIdParent, [mergeTarget.rowIdPrev], [], {
+      focus,
+      reason: 'rowMergePrevAttempt',
+    });
+    return resultRemovePrev.code === 0 ? { code: 0, message: 'Main row merged with previous row.' } : resultRemovePrev;
+  }
+
   const replaceResult = store.replaceChildRange(
     docId,
     mergeTarget.rowIdPrev,
@@ -578,7 +597,7 @@ function getPreviousRowMergeTarget(store: DocStore, docId: string, listId: strin
     }
     return null;
   }
-  if (mainCompId !== rowId || childIdList.length > 0) {
+  if (mainCompId !== rowId) {
     return null;
   }
   const listIdParent = String(store.getParentCompId(docId, listId) || '');

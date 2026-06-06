@@ -19,12 +19,19 @@ compById:
     config: {}
   list-not-editable-root:
     compName: List
+    childIdList:
+      - list-not-editable-entry
+    data:
+      bulletType: circle
+    config:
+      isRoot: true
+  list-not-editable-entry:
+    compName: List
     mainCompId: row-not-editable-main
     childIdList:
       - row-not-editable-child
     data: {}
-    config:
-      isRoot: true
+    config: {}
   row-not-editable-main:
     compName: Row
     childIdList:

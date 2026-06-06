@@ -1,0 +1,145 @@
+docName: test-list-bullet-types
+dataDocInitial: {}
+configDocInitial:
+  isEditable: true
+compIdRoot: doc-viewer-list-bullet-types
+compById:
+  doc-viewer-list-bullet-types:
+    compName: DocViewer
+    childIdList:
+      - event-tester-list-bullet-types
+    data: {}
+    config:
+      maxHeight: 220
+  event-tester-list-bullet-types:
+    compName: EventTester
+    childIdList:
+      - list-bullet-root
+    data: {}
+    config: {}
+  list-bullet-root:
+    compName: List
+    childIdList:
+      - list-bullet-circle
+      - list-bullet-flat
+      - list-bullet-index
+    data:
+      bulletType: circle
+    config:
+      isRoot: true
+  list-bullet-circle:
+    compName: List
+    mainCompId: row-bullet-circle-main
+    childIdList:
+      - row-bullet-circle-child
+    data:
+      bulletType: circle
+    config: {}
+  row-bullet-circle-main:
+    compName: Row
+    childIdList:
+      - seg-bullet-circle-main
+    data: {}
+    config: {}
+  seg-bullet-circle-main:
+    compName: TextSeg
+    childIdList: []
+    data:
+      text: circle marker parent
+    config:
+      isEditable: true
+  row-bullet-circle-child:
+    compName: Row
+    childIdList:
+      - seg-bullet-circle-child
+    data: {}
+    config: {}
+  seg-bullet-circle-child:
+    compName: TextSeg
+    childIdList: []
+    data:
+      text: circle marker child
+    config:
+      isEditable: true
+  list-bullet-flat:
+    compName: List
+    mainCompId: row-bullet-flat-main
+    childIdList:
+      - row-bullet-flat-child
+    data:
+      bulletType: flat
+    config: {}
+  row-bullet-flat-main:
+    compName: Row
+    childIdList:
+      - seg-bullet-flat-main
+    data: {}
+    config: {}
+  seg-bullet-flat-main:
+    compName: TextSeg
+    childIdList: []
+    data:
+      text: flat marker parent
+    config:
+      isEditable: true
+  row-bullet-flat-child:
+    compName: Row
+    childIdList:
+      - seg-bullet-flat-child
+    data: {}
+    config: {}
+  seg-bullet-flat-child:
+    compName: TextSeg
+    childIdList: []
+    data:
+      text: flat child without marker
+    config:
+      isEditable: true
+  list-bullet-index:
+    compName: List
+    mainCompId: row-bullet-index-main
+    childIdList:
+      - row-bullet-index-child-one
+      - row-bullet-index-child-two
+    data:
+      bulletType: index
+    config: {}
+  row-bullet-index-main:
+    compName: Row
+    childIdList:
+      - seg-bullet-index-main
+    data: {}
+    config: {}
+  seg-bullet-index-main:
+    compName: TextSeg
+    childIdList: []
+    data:
+      text: index marker parent
+    config:
+      isEditable: true
+  row-bullet-index-child-one:
+    compName: Row
+    childIdList:
+      - seg-bullet-index-child-one
+    data: {}
+    config: {}
+  seg-bullet-index-child-one:
+    compName: TextSeg
+    childIdList: []
+    data:
+      text: first indexed child
+    config:
+      isEditable: true
+  row-bullet-index-child-two:
+    compName: Row
+    childIdList:
+      - seg-bullet-index-child-two
+    data: {}
+    config: {}
+  seg-bullet-index-child-two:
+    compName: TextSeg
+    childIdList: []
+    data:
+      text: second indexed child
+    config:
+      isEditable: true

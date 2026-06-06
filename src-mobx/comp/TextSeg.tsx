@@ -583,6 +583,13 @@ const TextSeg = observer(React.forwardRef<any, TextSegProps>(({ data = {}, confi
           pointFocus: event?.data?.pointFocus,
         });
       }
+      if (type === 'selfClipboardTextQuery') {
+        return createSelfClipboardTextResult({
+          dataComp,
+          offsetStartRaw: event?.data?.offsetStart,
+          offsetEndRaw: event?.data?.offsetEnd,
+        });
+      }
       return { code: -1, message: `Unsupported event: ${type}` };
     },
   }), [applyFocusToDom, compId, configComp, contextDocStore, dataComp, emitEvent, updateKeyboardSelectionState]);
@@ -888,6 +895,31 @@ function createSelfSelectionEdgeDeleteResult({
         compId,
         point: { offset: side === 'keepBefore' ? textNext.length : 0 },
       },
+    },
+  };
+}
+
+function createSelfClipboardTextResult({
+  dataComp,
+  offsetStartRaw,
+  offsetEndRaw,
+}: {
+  dataComp: any;
+  offsetStartRaw: number | undefined;
+  offsetEndRaw: number | undefined;
+}) {
+  const text = String(dataComp?.text || '');
+  const offsetStart = Number.isFinite(Number(offsetStartRaw))
+    ? Math.min(text.length, Math.max(0, Number(offsetStartRaw)))
+    : 0;
+  const offsetEnd = Number.isFinite(Number(offsetEndRaw))
+    ? Math.min(text.length, Math.max(0, Number(offsetEndRaw)))
+    : text.length;
+  return {
+    code: 0,
+    message: 'TextSeg clipboard text created.',
+    data: {
+      text: text.slice(Math.min(offsetStart, offsetEnd), Math.max(offsetStart, offsetEnd)),
     },
   };
 }

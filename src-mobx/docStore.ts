@@ -7,7 +7,7 @@ import {
   docStoreSendEventToCompDirect,
   docStoreSendEventToDoc,
   docStoreSendEventToParent,
-} from './docStoreEventHandle';
+} from './event/eventLogicDoc';
 import {
   docStoreGetCompBulletPosState,
   docStorePickCompBulletProviderId,
@@ -18,6 +18,8 @@ import {
   docStoreApplyCompEditResult,
   docStoreApplyFocusAfterEdit,
   docStoreGetSelectionText,
+  docStoreGetSelectionMarkdownText,
+  docStoreGetSelectionMarkdownTextSync,
   docStoreIndentEntryByRowId,
   docStoreIndentEntryBySegId,
   docStoreInsertChildAfter,
@@ -342,6 +344,14 @@ export class DocStore {
 
   getSelectionText(docId: string) {
     return docStoreGetSelectionText(this, docId);
+  }
+
+  getSelectionMarkdownText(docId: string) {
+    return docStoreGetSelectionMarkdownText(this, docId);
+  }
+
+  getSelectionMarkdownTextSync(docId: string) {
+    return docStoreGetSelectionMarkdownTextSync(this, docId);
   }
 
   applyCompEditResult(docId: string, parentId: string, editResult: CompEditResult, reason: string) {

@@ -1,4 +1,5 @@
 import type { DocStore } from './docStore';
+import { ConfigIndentTextWhenCopyAsMarkdown } from './config';
 import type {
   CompData,
   CompEditResult,
@@ -18,6 +19,12 @@ type StructureEditResult = {
   code: number;
   message: string;
   data?: any;
+};
+
+type RowClipboardInfo = {
+  rowId: string;
+  depth: number;
+  segIdList: string[];
 };
 
 const createEventId = (length = 12) => {
@@ -213,6 +220,52 @@ export function docStoreGetSelectionText(store: DocStore, docId: string) {
     rowIdLast = rowIdCurrent;
   }
   return textPartList.join('');
+}
+
+export async function docStoreGetSelectionMarkdownText(store: DocStore, docId: string) {
+  const docRecord = store.ensureDoc(docId);
+  const selectionRange = getSelectionRangeBySegOrder(docRecord);
+  if (!selectionRange) return '';
+
+  const rowInfoListAll = collectRowClipboardInfoList(docRecord);
+  const rowInfoById = Object.fromEntries(rowInfoListAll.map((rowInfo) => [rowInfo.rowId, rowInfo]));
+  const rowIdListSelected = collectSelectedRowIdsFromSegRange(docRecord, selectionRange.indexStart, selectionRange.indexEnd);
+  const rowInfoListSelected = rowIdListSelected
+    .map((rowId) => rowInfoById[rowId])
+    .filter((rowInfo): rowInfo is RowClipboardInfo => Boolean(rowInfo));
+  if (rowInfoListSelected.length === 0) return '';
+
+  const depthBase = Math.min(...rowInfoListSelected.map((rowInfo) => rowInfo.depth));
+  const lineList: string[] = [];
+  for (const rowInfo of rowInfoListSelected) {
+    const textRow = await getRowClipboardText(store, docId, rowInfo, selectionRange.pointStart, selectionRange.pointEnd);
+    const depthRelative = Math.max(0, rowInfo.depth - depthBase);
+    lineList.push(`${ConfigIndentTextWhenCopyAsMarkdown.repeat(depthRelative)}- ${textRow}`);
+  }
+  return lineList.join('\n');
+}
+
+export function docStoreGetSelectionMarkdownTextSync(store: DocStore, docId: string) {
+  const docRecord = store.ensureDoc(docId);
+  const selectionRange = getSelectionRangeBySegOrder(docRecord);
+  if (!selectionRange) return '';
+
+  const rowInfoListAll = collectRowClipboardInfoList(docRecord);
+  const rowInfoById = Object.fromEntries(rowInfoListAll.map((rowInfo) => [rowInfo.rowId, rowInfo]));
+  const rowIdListSelected = collectSelectedRowIdsFromSegRange(docRecord, selectionRange.indexStart, selectionRange.indexEnd);
+  const rowInfoListSelected = rowIdListSelected
+    .map((rowId) => rowInfoById[rowId])
+    .filter((rowInfo): rowInfo is RowClipboardInfo => Boolean(rowInfo));
+  if (rowInfoListSelected.length === 0) return '';
+
+  const depthBase = Math.min(...rowInfoListSelected.map((rowInfo) => rowInfo.depth));
+  const lineList: string[] = [];
+  for (const rowInfo of rowInfoListSelected) {
+    const textRow = getRowClipboardTextSync(store, docId, rowInfo, selectionRange.pointStart, selectionRange.pointEnd);
+    const depthRelative = Math.max(0, rowInfo.depth - depthBase);
+    lineList.push(`${ConfigIndentTextWhenCopyAsMarkdown.repeat(depthRelative)}- ${textRow}`);
+  }
+  return lineList.join('\n');
 }
 
 export function docStoreIndentEntryBySegId(store: DocStore, docId: string, segId: string) {
@@ -471,6 +524,129 @@ function getSelectedRowIdListFromSelection(docRecord: DocRecord) {
     rowIdList.push(rowId);
   }
   return rowIdList;
+}
+
+function getSelectionRangeBySegOrder(docRecord: DocRecord) {
+  const selectionState = docRecord.interactionState.selectionState;
+  const pointAnchor = selectionState.pointAnchor;
+  const pointFocus = selectionState.pointFocus;
+  if (selectionState.isSelectionActive !== true || !pointAnchor || !pointFocus) {
+    return null;
+  }
+
+  const segIdList = collectTextSegIdsInDocOrder(docRecord);
+  const indexAnchor = segIdList.indexOf(pointAnchor.segId);
+  const indexFocus = segIdList.indexOf(pointFocus.segId);
+  if (indexAnchor === -1 || indexFocus === -1) {
+    return null;
+  }
+
+  const isForward = indexAnchor < indexFocus
+    || (indexAnchor === indexFocus && Number(pointAnchor.offset || 0) <= Number(pointFocus.offset || 0));
+  return {
+    pointStart: isForward ? pointAnchor : pointFocus,
+    pointEnd: isForward ? pointFocus : pointAnchor,
+    indexStart: Math.min(indexAnchor, indexFocus),
+    indexEnd: Math.max(indexAnchor, indexFocus),
+  };
+}
+
+function collectSelectedRowIdsFromSegRange(docRecord: DocRecord, indexStart: number, indexEnd: number) {
+  const segIdList = collectTextSegIdsInDocOrder(docRecord);
+  const rowIdList: string[] = [];
+  const rowIdSet = new Set<string>();
+  for (let index = indexStart; index <= indexEnd; index += 1) {
+    const rowId = getOwningRowId(docRecord, segIdList[index]);
+    if (!rowId || rowIdSet.has(rowId)) continue;
+    rowIdSet.add(rowId);
+    rowIdList.push(rowId);
+  }
+  return rowIdList;
+}
+
+async function getRowClipboardText(
+  store: DocStore,
+  docId: string,
+  rowInfo: RowClipboardInfo,
+  pointStart: SelectionTrackPoint,
+  pointEnd: SelectionTrackPoint,
+) {
+  const childIdList = rowInfo.segIdList;
+  const indexStartRaw = childIdList.indexOf(pointStart.segId);
+  const indexEndRaw = childIdList.indexOf(pointEnd.segId);
+  const indexStart = indexStartRaw === -1 ? 0 : indexStartRaw;
+  const indexEnd = indexEndRaw === -1 ? childIdList.length - 1 : indexEndRaw;
+  const indexMin = Math.min(indexStart, indexEnd);
+  const indexMax = Math.max(indexStart, indexEnd);
+  const textPartList: string[] = [];
+  for (let index = indexMin; index <= indexMax; index += 1) {
+    const compId = childIdList[index];
+    const compData = store.getCompDataById(docId, compId);
+    if (!compData) continue;
+    const offsetStart = compId === pointStart.segId ? Number(pointStart.offset || 0) : undefined;
+    const offsetEnd = compId === pointEnd.segId ? Number(pointEnd.offset || 0) : undefined;
+    textPartList.push(await getCompClipboardText(store, docId, compData, offsetStart, offsetEnd));
+  }
+  return textPartList.join('');
+}
+
+function getRowClipboardTextSync(
+  store: DocStore,
+  docId: string,
+  rowInfo: RowClipboardInfo,
+  pointStart: SelectionTrackPoint,
+  pointEnd: SelectionTrackPoint,
+) {
+  const childIdList = rowInfo.segIdList;
+  const indexStartRaw = childIdList.indexOf(pointStart.segId);
+  const indexEndRaw = childIdList.indexOf(pointEnd.segId);
+  const indexStart = indexStartRaw === -1 ? 0 : indexStartRaw;
+  const indexEnd = indexEndRaw === -1 ? childIdList.length - 1 : indexEndRaw;
+  const indexMin = Math.min(indexStart, indexEnd);
+  const indexMax = Math.max(indexStart, indexEnd);
+  const textPartList: string[] = [];
+  for (let index = indexMin; index <= indexMax; index += 1) {
+    const compId = childIdList[index];
+    const compData = store.getCompDataById(docId, compId);
+    if (!compData) continue;
+    const offsetStart = compId === pointStart.segId ? Number(pointStart.offset || 0) : undefined;
+    const offsetEnd = compId === pointEnd.segId ? Number(pointEnd.offset || 0) : undefined;
+    textPartList.push(getCompClipboardTextFallback(compData, offsetStart, offsetEnd));
+  }
+  return textPartList.join('');
+}
+
+async function getCompClipboardText(
+  store: DocStore,
+  docId: string,
+  compData: CompData,
+  offsetStart: number | undefined,
+  offsetEnd: number | undefined,
+) {
+  const result = await store.sendEventToCompDirect(docId, compData.compId, {
+    type: 'selfClipboardTextQuery',
+    sourceId: compData.compId,
+    targetId: docId,
+    data: {
+      offsetStart,
+      offsetEnd,
+    },
+  });
+  if (result.code === 0 && typeof result.data?.text === 'string') {
+    return result.data.text;
+  }
+  return getCompClipboardTextFallback(compData, offsetStart, offsetEnd);
+}
+
+function getCompClipboardTextFallback(compData: CompData, offsetStartRaw: number | undefined, offsetEndRaw: number | undefined) {
+  const text = String(compData.data?.text || '');
+  const offsetStart = Number.isFinite(Number(offsetStartRaw))
+    ? Math.min(text.length, Math.max(0, Number(offsetStartRaw)))
+    : 0;
+  const offsetEnd = Number.isFinite(Number(offsetEndRaw))
+    ? Math.min(text.length, Math.max(0, Number(offsetEndRaw)))
+    : text.length;
+  return text.slice(Math.min(offsetStart, offsetEnd), Math.max(offsetStart, offsetEnd));
 }
 
 function getOutlineEntryInfoBySegId(docRecord: DocRecord, segId: string) {
@@ -902,6 +1078,64 @@ function collectTextSegIdsFromComp(docRecord: DocRecord, compId: string, segIdLi
   }
 }
 
+function collectRowClipboardInfoList(docRecord: DocRecord) {
+  const compIdRoot = String(docRecord.compIdRoot || '');
+  const rowInfoList: RowClipboardInfo[] = [];
+  collectRowClipboardInfoFromComp(docRecord, compIdRoot, 0, rowInfoList, new Set<string>());
+  return rowInfoList;
+}
+
+function collectRowClipboardInfoFromComp(
+  docRecord: DocRecord,
+  compId: string,
+  depth: number,
+  rowInfoList: RowClipboardInfo[],
+  compIdSetVisited: Set<string>,
+) {
+  const compIdSafe = String(compId || '');
+  if (!compIdSafe || compIdSetVisited.has(compIdSafe)) return;
+  compIdSetVisited.add(compIdSafe);
+  const compData = docRecord.compDataById[compIdSafe];
+  if (!compData) return;
+
+  const compName = String(compData.compName || '');
+  if (compName === 'Row') {
+    rowInfoList.push({
+      rowId: compIdSafe,
+      depth,
+      segIdList: getSegIdListInRow(docRecord, compIdSafe),
+    });
+    return;
+  }
+
+  if (compName === 'List') {
+    const mainCompId = String(compData.mainCompId || '');
+    if (mainCompId) {
+      collectRowClipboardInfoFromComp(docRecord, mainCompId, depth, rowInfoList, compIdSetVisited);
+    }
+    const childIdList = Array.isArray(compData.childIdList) ? compData.childIdList.map((id) => String(id || '')) : [];
+    for (const childId of childIdList) {
+      collectRowClipboardInfoFromComp(docRecord, childId, depth + 1, rowInfoList, compIdSetVisited);
+    }
+    return;
+  }
+
+  const mainCompId = String(compData.mainCompId || '');
+  if (mainCompId) {
+    collectRowClipboardInfoFromComp(docRecord, mainCompId, depth, rowInfoList, compIdSetVisited);
+  }
+  const childIdList = Array.isArray(compData.childIdList) ? compData.childIdList.map((id) => String(id || '')) : [];
+  for (const childId of childIdList) {
+    collectRowClipboardInfoFromComp(docRecord, childId, depth, rowInfoList, compIdSetVisited);
+  }
+}
+
+function getSegIdListInRow(docRecord: DocRecord, rowId: string) {
+  const rowData = docRecord.compDataById[rowId];
+  const childIdList = Array.isArray(rowData?.childIdList) ? rowData.childIdList.map((id) => String(id || '')) : [];
+  return childIdList.filter((childId) => String(docRecord.compDataById[childId]?.compName || '') === 'TextSeg');
+}
+
 function getListIdByMainRowId(docRecord: DocRecord, rowId: string) {
   const compIdList = Object.keys(docRecord.compDataById || {});
   for (const compId of compIdList) {
@@ -961,13 +1195,6 @@ function getPreviousRowMergeTarget(docRecord: DocRecord, rowId: string) {
   return { listIdParent: listIdParentOfList, entryId: listIdMain, rowIdPrev: entryIdPrev };
 }
 
-function removeEntryFromParentList(docRecord: DocRecord, listIdParent: string, entryId: string) {
-  const listParent = docRecord.compDataById[listIdParent];
-  if (!listParent) return;
-  const childIdList = Array.isArray(listParent.childIdList) ? listParent.childIdList.map((id) => String(id || '')) : [];
-  listParent.childIdList = childIdList.filter((id) => id !== entryId);
-}
-
 function insertChildAfter(docRecord: DocRecord, listId: string, childIdRef: string, childIdNext: string) {
   const listData = docRecord.compDataById[listId];
   if (!listData) return;
@@ -981,25 +1208,6 @@ function insertChildAfter(docRecord: DocRecord, listId: string, childIdRef: stri
   const childIndexCurrent = childIdListCurrent.indexOf(childIdRef);
   childIdListCurrent.splice(childIndexCurrent + 1, 0, childIdNext);
   listData.childIdList = childIdListCurrent;
-}
-
-function insertChildBefore(docRecord: DocRecord, listId: string, childIdRef: string, childIdNext: string) {
-  const listData = docRecord.compDataById[listId];
-  if (!listData) return;
-  const childIdList = Array.isArray(listData.childIdList) ? listData.childIdList.map((id) => String(id || '')) : [];
-  const childIndex = childIdList.indexOf(childIdRef);
-  if (childIndex === -1) return;
-  const childIdListNext = childIdList.filter((id) => id !== childIdNext);
-  const childIndexNext = childIdListNext.indexOf(childIdRef);
-  childIdListNext.splice(childIndexNext, 0, childIdNext);
-  listData.childIdList = childIdListNext;
-}
-
-function insertChildAtStart(docRecord: DocRecord, listId: string, childIdNext: string) {
-  const listData = docRecord.compDataById[listId];
-  if (!listData) return;
-  const childIdList = Array.isArray(listData.childIdList) ? listData.childIdList.map((id) => String(id || '')) : [];
-  listData.childIdList = [childIdNext, ...childIdList.filter((id) => id !== childIdNext)];
 }
 
 function isCompName(docRecord: DocRecord, compId: string, compName: string) {

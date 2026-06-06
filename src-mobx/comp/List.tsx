@@ -9,6 +9,7 @@ import './List.css';
 type ListProps = {
   data?: {
     compId?: string;
+    bulletType?: string;
   };
   config?: {
     isRoot?: boolean;
@@ -23,9 +24,11 @@ const List = observer(React.forwardRef<any, ListProps>(({ data = {}, config = {}
   const compData = contextDocStore && compId
     ? contextDocStore.store.getCompDataById(contextDocStore.docId, compId)
     : null;
+  const dataComp = compData?.data || data || {};
   const configComp = compData?.config || config || {};
   const sourceId = String(compId || 'list');
   const isRoot = configComp.isRoot === true;
+  const bulletType = normalizeBulletType(dataComp.bulletType);
   const runtimeState = contextDocStore && compId
     ? contextDocStore.store.getCompRuntimeState(contextDocStore.docId, compId)
     : null;
@@ -63,9 +66,13 @@ const List = observer(React.forwardRef<any, ListProps>(({ data = {}, config = {}
     const compName = String(childCompData?.compName || '');
     return compName === 'List' || compName === 'Row';
   });
+  const isMainless = !compIdMain;
+  const isBulletFlat = bulletType === 'flat';
   const className = [
     'mobx-list',
     isRoot ? 'is-root' : '',
+    isMainless ? 'is-mainless' : '',
+    `mobx-list-bullet-type-${bulletType}`,
     runtimeState?.isFocusedLogical ? 'mobx-list-focused-logical' : '',
     runtimeState?.isElActive ? 'mobx-list-el-active' : '',
     runtimeState?.isFocusWithin ? 'mobx-list-focus-within' : '',
@@ -186,8 +193,8 @@ const List = observer(React.forwardRef<any, ListProps>(({ data = {}, config = {}
         {compIdMain ? <div className="mobx-list-row-main">{renderCompById(compIdMain)}</div> : null}
       </div>
       {childIdListNested.length > 0 ? (
-        <div className="mobx-list-children">
-          {childIdListNested.map((childId) => {
+        <div className={isBulletFlat ? 'mobx-list-children-flat' : 'mobx-list-children'}>
+          {childIdListNested.map((childId, childIndex) => {
             const childIdSafe = String(childId || '');
             const bulletPositionStateChild = contextDocStore && childIdSafe
               ? contextDocStore.store.getCompBulletPosState(contextDocStore.docId, childIdSafe)
@@ -198,10 +205,13 @@ const List = observer(React.forwardRef<any, ListProps>(({ data = {}, config = {}
             const styleItem = posYBulletPreferred === null
               ? undefined
               : { '--mobx-list-bullet-y': `${posYBulletPreferred}px` } as React.CSSProperties;
+            if (isBulletFlat) {
+              return <div key={childIdSafe} className="mobx-list-flat-item">{renderCompById(childIdSafe)}</div>;
+            }
             return (
               <div key={childIdSafe} className="mobx-list-item" style={styleItem}>
                 <div className="mobx-list-bullet-box">
-                  <div className="mobx-list-bullet-disc" />
+                  {renderBulletMarker(bulletType, childIndex)}
                 </div>
                 <div className="mobx-list-item-content">{renderCompById(childIdSafe)}</div>
               </div>
@@ -214,3 +224,15 @@ const List = observer(React.forwardRef<any, ListProps>(({ data = {}, config = {}
 }));
 
 export default List;
+
+function normalizeBulletType(bulletTypeRaw: unknown) {
+  const bulletType = String(bulletTypeRaw || 'circle');
+  return bulletType === 'flat' || bulletType === 'index' ? bulletType : 'circle';
+}
+
+function renderBulletMarker(bulletType: string, childIndex: number) {
+  if (bulletType === 'index') {
+    return <div className="mobx-list-bullet-index">{childIndex + 1}.</div>;
+  }
+  return <div className="mobx-list-bullet-disc" />;
+}

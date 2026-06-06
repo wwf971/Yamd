@@ -1,5 +1,5 @@
-import type { DocStore } from './docStore';
-import type { CompEvent, CompEventResult, DocRecord } from './docStoreTypes';
+import type { DocStore } from '../docStore';
+import type { CompEvent, CompEventResult, DocRecord } from '../docStoreTypes';
 
 const createEventId = (length = 12) => {
   const chars = '0123456789abcdefghijklmnopqrstuvwxyz';

@@ -23,8 +23,7 @@ compById:
       - seg-root-1
       - seg-root-2
     data: {}
-    config:
-      isRoot: true
+    config: {}
   seg-root-1:
     compName: TextSeg
     childIdList: []
