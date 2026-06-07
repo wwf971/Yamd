@@ -310,6 +310,35 @@ async function eventListRowMergePrevAttempt({
     .map((childId) => store.getCompDataById(docId, childId))
     .filter((compData): compData is CompData => Boolean(compData));
   const focus = editResult.focus;
+  if (mergeTarget.listIdAdoptChildren) {
+    const replaceResult = store.replaceChildRange(
+      docId,
+      mergeTarget.rowIdPrev,
+      [compIdPrevLast],
+      [...editResult.compListNext, ...compDataListMoved],
+      { focus, reason: 'rowMergePrevAttempt' },
+    );
+    if (replaceResult.code !== 0) return replaceResult;
+
+    const entryDataCurrent = store.getCompDataById(docId, mergeTarget.entryId);
+    const childIdListAdopted = getChildIdList(entryDataCurrent);
+    const rowDataCurrent = store.getCompDataById(docId, mergeTarget.rowId);
+    if (rowDataCurrent) {
+      store.replaceCompData(docId, createRowComp(mergeTarget.rowId, compIdCurrentFirst ? [compIdCurrentFirst] : [], rowDataCurrent));
+    }
+    if (childIdListAdopted.length > 0) {
+      moveChildEntriesAfterRow(store, docId, mergeTarget.listIdAdoptChildren, mergeTarget.rowIdPrev, childIdListAdopted);
+    }
+    if (entryDataCurrent) {
+      store.replaceCompData(docId, { ...entryDataCurrent, childIdList: [], mainCompId: undefined });
+    }
+    const resultRemoveCurrent = store.replaceChildRange(docId, mergeTarget.listIdParent, [mergeTarget.entryId], [], {
+      focus,
+      reason: 'rowMergePrevAttempt',
+    });
+    store.removeCompSubtree(docId, mergeTarget.rowId);
+    return resultRemoveCurrent.code === 0 ? { code: 0, message: 'Row merged with previous sibling subtree.' } : resultRemoveCurrent;
+  }
   if (mergeTarget.entryId !== mergeTarget.rowId && mergeTarget.isRowPrevParentMain !== true) {
     editResult.compListNext.forEach((compDataNext) => {
       store.replaceCompData(docId, compDataNext);
@@ -594,12 +623,13 @@ function getPreviousRowMergeTarget(store: DocStore, docId: string, listId: strin
   const rowIndex = childIdList.indexOf(rowId);
   if (rowIndex >= 0) {
     const entryIdPrev = rowIndex > 0 ? childIdList[rowIndex - 1] : mainCompId;
-    if (isCompName(store, docId, entryIdPrev, 'Row')) {
+    const rowTargetPrev = getLastRowTargetInEntryTree(store, docId, entryIdPrev);
+    if (rowTargetPrev) {
       return {
         listIdParent: listId,
         entryId: rowId,
         rowId,
-        rowIdPrev: entryIdPrev,
+        rowIdPrev: rowTargetPrev.rowId,
       };
     }
     return null;
@@ -628,15 +658,63 @@ function getPreviousRowMergeTarget(store: DocStore, docId: string, listId: strin
     return null;
   }
   const entryIdPrev = childIdListParent[entryIndex - 1];
-  if (!isCompName(store, docId, entryIdPrev, 'Row')) {
+  const rowTargetPrev = getLastRowTargetInEntryTree(store, docId, entryIdPrev);
+  if (!rowTargetPrev) {
     return null;
   }
   return {
     listIdParent,
     entryId: listId,
     rowId,
-    rowIdPrev: entryIdPrev,
+    rowIdPrev: rowTargetPrev.rowId,
+    listIdAdoptChildren: rowTargetPrev.listIdOwner,
   };
+}
+
+function getLastRowTargetInEntryTree(store: DocStore, docId: string, entryId: string): { rowId: string; listIdOwner: string } | null {
+  if (isCompName(store, docId, entryId, 'Row')) {
+    const listIdOwner = String(store.getParentCompId(docId, entryId) || '');
+    return listIdOwner ? { rowId: entryId, listIdOwner } : null;
+  }
+  const entryData = store.getCompDataById(docId, entryId);
+  if (!entryData || String(entryData.compName || '') !== 'List') {
+    return null;
+  }
+  const childIdList = getChildIdList(entryData);
+  for (let index = childIdList.length - 1; index >= 0; index -= 1) {
+    const rowTarget = getLastRowTargetInEntryTree(store, docId, childIdList[index]);
+    if (rowTarget) return rowTarget;
+  }
+  const mainCompId = String(entryData.mainCompId || '');
+  if (isCompName(store, docId, mainCompId, 'Row')) {
+    return { rowId: mainCompId, listIdOwner: entryId };
+  }
+  return null;
+}
+
+function moveChildEntriesAfterRow(store: DocStore, docId: string, listId: string, rowId: string, entryIdList: string[]) {
+  const listData = store.getCompDataById(docId, listId);
+  if (!listData || String(listData.compName || '') !== 'List') {
+    return { code: -1, message: 'Target list not found.' };
+  }
+  const entryIdListSafe = entryIdList.map((entryId) => String(entryId || '')).filter(Boolean);
+  const entryIdSet = new Set(entryIdListSafe);
+  const childIdList = getChildIdList(listData).filter((childId) => !entryIdSet.has(childId));
+  const rowIndex = childIdList.indexOf(rowId);
+  const indexInsert = String(listData.mainCompId || '') === rowId
+    ? 0
+    : rowIndex >= 0
+      ? rowIndex + 1
+      : childIdList.length;
+  store.replaceCompData(docId, {
+    ...listData,
+    childIdList: [
+      ...childIdList.slice(0, indexInsert),
+      ...entryIdListSafe,
+      ...childIdList.slice(indexInsert),
+    ],
+  });
+  return { code: 0, message: 'Child entries moved.' };
 }
 
 function getEntryInfoForRow(store: DocStore, docId: string, listId: string, rowId: string) {
