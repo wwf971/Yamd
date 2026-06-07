@@ -294,6 +294,48 @@ const TextSeg = observer(React.forwardRef<any, TextSegProps>(({ data = {}, confi
     applyCaretByOffset(rootEl, offsetFocused);
   }, [isDomCaretMode, isSelectionActive, interactionState?.focusState.offsetFocused]);
 
+  const handlePaste = React.useCallback((event: React.ClipboardEvent<HTMLSpanElement>) => {
+    if (!isEditable) return;
+    const rootEl = rootRef.current;
+    if (!rootEl) return;
+    event.preventDefault();
+    if (focusStoreFocusedSegIfKeyEventIsStale(contextDocStore, compId)) {
+      return;
+    }
+    const textPaste = String(event.clipboardData?.getData('text/plain') || '');
+    if (!textPaste) return;
+    const pointFocusSelection = selectionState?.pointFocus;
+    const offsetFocusFromSelection = (
+      isSelectionActive
+      && pointFocusSelection
+      && pointFocusSelection.segId === compId
+    )
+      ? Number(pointFocusSelection.offset || 0)
+      : undefined;
+    const offsetCurrentRaw = Number.isFinite(offsetFocusFromSelection)
+      ? Number(offsetFocusFromSelection)
+      : (isLogicalCaretVisible ? offsetLogicalCaret : getCaretOffset(rootEl));
+    const offsetCurrent = Math.min(text.length, Math.max(0, Number(offsetCurrentRaw || 0)));
+    emitEvent('childPasteAttempt', {
+      compIdChild: compId,
+      text: textPaste,
+      point: { offset: offsetCurrent },
+      pointAnchor: selectionState?.pointAnchor,
+      pointFocus: selectionState?.pointFocus,
+    });
+  }, [
+    compId,
+    contextDocStore,
+    emitEvent,
+    isEditable,
+    isLogicalCaretVisible,
+    isSelectionActive,
+    offsetLogicalCaret,
+    selectionState?.pointAnchor,
+    selectionState?.pointFocus,
+    text.length,
+  ]);
+
   const handleKeyDown = React.useCallback((event: React.KeyboardEvent<HTMLSpanElement>) => {
     const rootEl = rootRef.current;
     if (!rootEl) return;
@@ -674,6 +716,7 @@ const TextSeg = observer(React.forwardRef<any, TextSegProps>(({ data = {}, confi
         });
       }}
       onKeyDown={handleKeyDown}
+      onPaste={handlePaste}
     >
       {isLogicalCaretVisible ? (
         <>

@@ -310,7 +310,7 @@ async function eventListRowMergePrevAttempt({
     .map((childId) => store.getCompDataById(docId, childId))
     .filter((compData): compData is CompData => Boolean(compData));
   const focus = editResult.focus;
-  if (mergeTarget.entryId !== mergeTarget.rowId) {
+  if (mergeTarget.entryId !== mergeTarget.rowId && mergeTarget.isRowPrevParentMain !== true) {
     editResult.compListNext.forEach((compDataNext) => {
       store.replaceCompData(docId, compDataNext);
     });
@@ -611,7 +611,20 @@ function getPreviousRowMergeTarget(store: DocStore, docId: string, listId: strin
   const listParentData = store.getCompDataById(docId, listIdParent);
   const childIdListParent = getChildIdList(listParentData);
   const entryIndex = childIdListParent.indexOf(listId);
-  if (entryIndex <= 0) {
+  if (entryIndex === 0) {
+    const rowIdPrev = String(listParentData?.mainCompId || '');
+    if (isCompName(store, docId, rowIdPrev, 'Row')) {
+      return {
+        listIdParent,
+        entryId: listId,
+        rowId,
+        rowIdPrev,
+        isRowPrevParentMain: true,
+      };
+    }
+    return null;
+  }
+  if (entryIndex < 0) {
     return null;
   }
   const entryIdPrev = childIdListParent[entryIndex - 1];

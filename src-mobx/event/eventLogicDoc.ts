@@ -69,7 +69,7 @@ export async function docStoreSendEventToParent(
   if (!compEntry) {
     return { code: -1, message: `Component not found. compId=${compId}` };
   }
-  const compIdParent = compEntry.parentId;
+  const compIdParent = store.getParentCompId(docId, compId) || compEntry.parentId;
   if (!compIdParent) {
     return { code: -1, message: `No parent component. compId=${compId}` };
   }
@@ -162,6 +162,7 @@ export async function docStoreReceiveEvent(
     || eventNormalized.type === 'childMergePrevAttempt'
     || eventNormalized.type === 'childDeleteAttempt'
     || eventNormalized.type === 'childSelectionDeleteAttempt'
+    || eventNormalized.type === 'childPasteAttempt'
     || eventNormalized.type === 'rowSplitAttempt'
     || eventNormalized.type === 'rowSelectionDeleteAttempt'
     || eventNormalized.type === 'rowIndentAttempt'
@@ -295,6 +296,7 @@ function shouldDocEventPreferFocusedSeg(type: string) {
     'childMergePrevAttempt',
     'childDeleteAttempt',
     'childSelectionDeleteAttempt',
+    'childPasteAttempt',
     'rowSplitAttempt',
     'rowSelectionDeleteAttempt',
     'rowIndentAttempt',

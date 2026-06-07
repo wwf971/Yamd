@@ -1,5 +1,6 @@
 import React from 'react';
 import yaml from 'js-yaml';
+import { reaction } from 'mobx';
 import { observer } from 'mobx-react-lite';
 import { compByNameDefault, getCompByName } from '../docMobx';
 import { DocStoreProvider } from '../DocStoreContext';
@@ -102,8 +103,6 @@ const TestItemDoc = observer(function TestItemDoc({ yamlRaw }) {
 
   const dataDoc = storeDocTest.getDocData(docId);
   const configDoc = storeDocTest.getDocConfig(docId);
-  const interactionStateCurrent = storeDocTest.getInteractionState(docId);
-  const selectionStateCurrent = interactionStateCurrent.selectionState;
   React.useEffect(() => {
     if (docTemplate.validationError) return undefined;
     const rootEl = rootElRef.current;
@@ -197,33 +196,36 @@ const TestItemDoc = observer(function TestItemDoc({ yamlRaw }) {
     };
   }, [docId, docTemplate.validationError, storeDocTest]);
 
-  React.useLayoutEffect(() => {
-    if (docTemplate.validationError) return;
-    const rootEl = rootElRef.current;
-    if (!rootEl) return;
-    if (selectionStateCurrent.isSelectionActive !== true) return;
-    const pointAnchor = selectionStateCurrent.pointAnchor;
-    const pointFocus = selectionStateCurrent.pointFocus;
-    if (!pointAnchor || !pointFocus) return;
-    const selectionFromDom = selectionStateReadFromDom(rootEl);
-    if (isRangeSelectionEqual(selectionFromDom, selectionStateCurrent)) {
-      return;
-    }
-    const isApplied = applyRangeSelectionToDom(rootEl, pointAnchor, pointFocus);
-    if (isApplied) {
-      isApplyingSelectionFromStoreRef.current = true;
-    }
-  }, [
-    selectionStateCurrent.isSelectionActive,
-    selectionStateCurrent.mode,
-    selectionStateCurrent.pointAnchor?.compId,
-    selectionStateCurrent.pointAnchor?.segId,
-    selectionStateCurrent.pointAnchor?.offset,
-    selectionStateCurrent.pointFocus?.compId,
-    selectionStateCurrent.pointFocus?.segId,
-    selectionStateCurrent.pointFocus?.offset,
-    docTemplate.validationError,
-  ]);
+  React.useEffect(() => {
+    if (docTemplate.validationError) return undefined;
+    return reaction(
+      () => {
+        const selectionState = storeDocTest.getInteractionState(docId).selectionState;
+        return {
+          isSelectionActive: selectionState.isSelectionActive,
+          mode: selectionState.mode,
+          pointAnchor: cloneSelectionPoint(selectionState.pointAnchor),
+          pointFocus: cloneSelectionPoint(selectionState.pointFocus),
+        };
+      },
+      (selectionStateCurrent) => {
+        const rootEl = rootElRef.current;
+        if (!rootEl || selectionStateCurrent.isSelectionActive !== true) return;
+        const pointAnchor = selectionStateCurrent.pointAnchor;
+        const pointFocus = selectionStateCurrent.pointFocus;
+        if (!pointAnchor || !pointFocus) return;
+        const selectionFromDom = selectionStateReadFromDom(rootEl);
+        if (isRangeSelectionEqual(selectionFromDom, selectionStateCurrent)) {
+          return;
+        }
+        const isApplied = applyRangeSelectionToDom(rootEl, pointAnchor, pointFocus);
+        if (isApplied) {
+          isApplyingSelectionFromStoreRef.current = true;
+        }
+      },
+      { fireImmediately: true },
+    );
+  }, [docId, docTemplate.validationError, storeDocTest]);
 
   const setCompRef = React.useCallback((compIdNext, element) => {
     if (element) {
@@ -549,6 +551,15 @@ function createRandomId() {
     id += chars[Math.floor(Math.random() * chars.length)];
   }
   return id;
+}
+
+function cloneSelectionPoint(point) {
+  if (!point) return null;
+  return {
+    compId: String(point.compId || ''),
+    segId: String(point.segId || ''),
+    offset: Number(point.offset || 0),
+  };
 }
 
 function applyRangeSelectionToDom(rootEl, pointAnchor, pointFocus) {

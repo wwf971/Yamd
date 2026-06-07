@@ -17,9 +17,6 @@ import {
 import {
   docStoreApplyCompEditResult,
   docStoreApplyFocusAfterEdit,
-  docStoreGetSelectionText,
-  docStoreGetSelectionMarkdownText,
-  docStoreGetSelectionMarkdownTextSync,
   docStoreIndentEntryByRowId,
   docStoreIndentEntryBySegId,
   docStoreInsertChildAfter,
@@ -29,6 +26,12 @@ import {
   docStoreReplaceChildRange,
   docStoreReplaceCompData,
 } from './docStoreEdit';
+import {
+  docStoreGetSelectionMarkdownText,
+  docStoreGetSelectionMarkdownTextSync,
+  docStoreGetSelectionText,
+  docStorePasteText,
+} from './docStoreEditCopyPaste';
 import type {
   CompBulletPosState,
   CompData,
@@ -446,6 +449,16 @@ export class DocStore {
 
   outdentEntryByRowId(docId: string, rowId: string, compIdFocus = '') {
     return docStoreOutdentEntryByRowId(this, docId, rowId, compIdFocus);
+  }
+
+  pasteText(
+    docId: string,
+    rowId: string,
+    segId: string,
+    textPaste: string,
+    point: any,
+  ) {
+    return docStorePasteText(this, docId, rowId, segId, textPaste, point);
   }
 
   getDocYamlRaw(docId: string) {

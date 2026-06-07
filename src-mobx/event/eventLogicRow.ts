@@ -112,6 +112,15 @@ export async function eventRowDispatch({
       childIdList,
     });
   }
+  if (type === 'childPasteAttempt') {
+    return eventRowChildPasteAttempt({
+      event,
+      store,
+      docId,
+      compId,
+      childIdList,
+    });
+  }
   if (type === 'rowIndentAttempt' || type === 'rowOutdentAttempt') {
     return store.sendEventToParent(docId, compId, {
       type,
@@ -183,6 +192,32 @@ export function eventRowClick({
     targetId: docId,
     data: { reason: 'clickGap' },
   });
+}
+
+async function eventRowChildPasteAttempt({
+  event,
+  store,
+  docId,
+  compId,
+  childIdList,
+}: {
+  event: CompEvent;
+  store: DocStore;
+  docId: string;
+  compId: string;
+  childIdList: string[];
+}) {
+  const compIdChild = pickChildIdFromEvent(event);
+  if (!childIdList.includes(compIdChild)) {
+    return { code: -1, message: `Child component not found in row. compId=${compIdChild}` };
+  }
+  return store.pasteText(
+    docId,
+    compId,
+    compIdChild,
+    String(event?.data?.text || ''),
+    event?.data?.point,
+  );
 }
 
 async function eventRowChildSelectionDeleteAttempt({
