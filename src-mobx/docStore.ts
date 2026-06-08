@@ -287,6 +287,24 @@ export class DocStore {
     });
   }
 
+  unfocusDoc(docId: string, reason = 'docUnfocus') {
+    return this.updateSelectionAndFocusState(
+      docId,
+      {
+        isSelectionActive: false,
+        mode: 'caret',
+        pointAnchor: null,
+        pointFocus: null,
+      },
+      {
+        compIdFocused: '',
+        segIdFocused: '',
+        offsetFocused: 0,
+        reasonLast: reason,
+      },
+    );
+  }
+
   getDocIds() {
     return Object.keys(this.docById);
   }

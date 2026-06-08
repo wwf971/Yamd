@@ -10,6 +10,7 @@ import List from '../comp/List';
 import Row from '../comp/Row';
 import TextSeg from '../comp/TextSeg';
 import { selectionStateReadFromDom } from '../event/eventLogicRow';
+import { useDocUnfocusBoundary } from '../util/useDocUnfocusBoundary';
 import EventTester from './EventTester';
 import { DocCompRenderProvider } from './DocCompRenderContext';
 import TEST_TEXT_BASIC_YAML_RAW from './test-text-basic.yaml?raw';
@@ -49,6 +50,14 @@ const TestItemDoc = observer(function TestItemDoc({ yamlRaw }) {
   const isCopyModifierDownRef = React.useRef(false);
   const isApplyingSelectionFromStoreRef = React.useRef(false);
   const parentIdByCompId = React.useMemo(() => buildParentMap(docTemplate.compDataById, docTemplate.compIdRoot), [docTemplate]);
+
+  useDocUnfocusBoundary({
+    store: storeDocTest,
+    docId,
+    focusAreaRef: rootElRef,
+    isEnabled: !docTemplate.validationError,
+    reason: 'docUnfocus',
+  });
 
   React.useEffect(() => {
     if (docTemplate.validationError) return;

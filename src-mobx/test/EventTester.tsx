@@ -1,7 +1,9 @@
 import React from 'react';
 import { LeftIcon, RightIcon, UpIcon, DownIcon } from '@wwf971/react-comp-misc';
+import { observer } from 'mobx-react-lite';
 import { useDocStoreContext } from '../DocStoreContext';
 import type { CompEvent } from '../docStoreTypes';
+import { useDocUnfocusBoundary } from '../util/useDocUnfocusBoundary';
 import { useDocCompRenderContext } from './DocCompRenderContext';
 import './testMobx.css';
 
@@ -18,9 +20,12 @@ type EventTesterProps = {
   onDataChange?: (dataPatch: Record<string, any>) => Promise<any> | any;
 };
 
-const EventTester = ({ data = {}, config = {}, onEvent, onDataChange }: EventTesterProps) => {
+const EventTester = observer(({ data = {}, config = {}, onEvent, onDataChange }: EventTesterProps) => {
   const contextDocStore = useDocStoreContext();
   const { renderCompListByParentId } = useDocCompRenderContext();
+  const rootRef = React.useRef<HTMLDivElement | null>(null);
+  const docAreaRef = React.useRef<HTMLDivElement | null>(null);
+  const isFocusWithinPrevRef = React.useRef(false);
   const compId = String(data.compId || '');
   const compData = contextDocStore && compId
     ? contextDocStore.store.getCompDataById(contextDocStore.docId, compId)
@@ -29,6 +34,10 @@ const EventTester = ({ data = {}, config = {}, onEvent, onDataChange }: EventTes
   const configComp = compData?.config || config || {};
   const isInline = configComp.isInline === true;
   const compIdTarget = String(dataComp.compIdTarget || compData?.childIdList?.[0] || '');
+  const runtimeState = contextDocStore && compId
+    ? contextDocStore.store.getCompRuntimeState(contextDocStore.docId, compId)
+    : null;
+  const isFocusWithin = runtimeState?.isFocusWithin === true;
 
   const [focusXPercent, setFocusXPercent] = React.useState(50);
   const [targetId, setTargetId] = React.useState(String(data.targetId || ''));
@@ -43,6 +52,41 @@ const EventTester = ({ data = {}, config = {}, onEvent, onDataChange }: EventTes
   React.useEffect(() => {
     setSourceId(String(dataComp.sourceId || compId || 'event-tester'));
   }, [dataComp.sourceId, compId]);
+
+  React.useLayoutEffect(() => {
+    if (!contextDocStore || !compId) return undefined;
+    const rootEl = rootRef.current;
+    if (!rootEl) return undefined;
+    contextDocStore.store.registerCompElement(contextDocStore.docId, compId, rootEl);
+    return () => {
+      contextDocStore.store.unregisterCompElement(contextDocStore.docId, compId, rootEl);
+    };
+  }, [contextDocStore, compId]);
+
+  React.useEffect(() => {
+    const wasFocusWithin = isFocusWithinPrevRef.current;
+    isFocusWithinPrevRef.current = isFocusWithin;
+    if (!wasFocusWithin || isFocusWithin) return;
+    const docAreaEl = docAreaRef.current;
+    if (!docAreaEl) return;
+    const activeElement = document.activeElement;
+    if (activeElement instanceof HTMLElement && docAreaEl.contains(activeElement)) {
+      activeElement.blur();
+    }
+    const selection = window.getSelection?.();
+    if (selection && selection.rangeCount > 0) {
+      selection.removeAllRanges();
+    }
+  }, [isFocusWithin]);
+
+  useDocUnfocusBoundary({
+    store: contextDocStore?.store,
+    docId: String(contextDocStore?.docId || ''),
+    focusAreaRef: docAreaRef,
+    triggerAreaRef: rootRef,
+    compIdFocusOnBoundary: compId,
+    reason: 'eventTesterDocUnfocus',
+  });
 
   const pushLog = React.useCallback((direction: string, eventType: string, dataEvent: any) => {
     setLogs((prev) => {
@@ -85,14 +129,21 @@ const EventTester = ({ data = {}, config = {}, onEvent, onDataChange }: EventTes
   }, [sendWrappedEvent, sourceId, targetId]);
 
   return (
-    <div className={`event-tester-root ${isInline ? 'is-inline' : ''}`}>
+    <div
+      ref={rootRef}
+      className={`event-tester-root ${isInline ? 'is-inline' : ''}`}
+      data-mobx-comp-id={compId}
+      data-mobx-comp-name="EventTester"
+    >
       <div className="event-tester-title-row">
         <div className="event-tester-title">Event Tester</div>
         <button type="button" className="event-btn event-btn-sub" onClick={() => setLogs([])}>
           Clear
         </button>
       </div>
-      {compId ? renderCompListByParentId(compId) : null}
+      <div ref={docAreaRef} className="event-tester-doc-area">
+        {compId ? renderCompListByParentId(compId) : null}
+      </div>
 
       <div className="event-input-row">
         <label className="event-inline-field">
@@ -211,6 +262,6 @@ Line 3 checks wrapping in narrow width.`,
       </div>
     </div>
   );
-};
+});
 
 export default EventTester;

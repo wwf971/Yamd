@@ -4,6 +4,7 @@ import TextBasic from './comp/TextBasic';
 import { DocStoreProvider } from './DocStoreContext';
 import { DocStore, createDocStore } from './docStore';
 import type { CompEvent } from './docStoreTypes';
+import { useDocUnfocusBoundary } from './util/useDocUnfocusBoundary';
 import './docMobx.css';
 
 export const compIdDocRoot = 'comp-doc-root';
@@ -100,6 +101,7 @@ const DocMobxInner = (
 ) => {
   const storeRef = React.useRef<DocStore | null>(null);
   const textBasicRef = React.useRef<any>(null);
+  const rootRef = React.useRef<HTMLDivElement | null>(null);
   const docId = String(data.docId || 'mobx-doc');
 
   if (!storeRef.current) {
@@ -122,6 +124,13 @@ const DocMobxInner = (
       isEditable: config.isEditable,
     });
   }, [storeDoc, docId, config.isEditable]);
+
+  useDocUnfocusBoundary({
+    store: storeDoc,
+    docId,
+    focusAreaRef: rootRef,
+    reason: 'docUnfocus',
+  });
 
   React.useEffect(() => {
     storeDoc.initCompData(docId, {
@@ -209,7 +218,7 @@ const DocMobxInner = (
 
   return (
     <DocStoreProvider value={{ store: storeDoc, docId }}>
-      <div className="mobx-doc-root">
+      <div ref={rootRef} className="mobx-doc-root">
         <div className="mobx-doc-meta-row">
           <div className="mobx-doc-meta-item">Doc: {dataDoc.docId}</div>
           <div className="mobx-doc-meta-item">Mode: {isEditable ? 'edit' : 'view'}</div>
