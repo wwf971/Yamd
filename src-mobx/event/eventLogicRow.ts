@@ -294,6 +294,21 @@ async function eventRowChildSplitAttempt({
   if (!childIdList.includes(compIdChild)) {
     return { code: -1, message: `Child component not found in row. compId=${compIdChild}` };
   }
+  if (isRowEmptyTextOnly(store, docId, childIdList, compIdChild)) {
+    const resultOutdent = await store.sendEventToParent(docId, compId, {
+      type: 'rowOutdentAttempt',
+      sourceId: compId,
+      targetId: docId,
+      data: {
+        ...(event?.data || {}),
+        rowId: compId,
+        compIdChild,
+      },
+    });
+    if (resultOutdent.code === 0) {
+      return { ...resultOutdent, message: 'Empty row outdented.' };
+    }
+  }
   const result = await store.sendEventToCompDirect(docId, compIdChild, {
     type: 'selfSplitQuery',
     sourceId: compId,
@@ -663,6 +678,15 @@ function normalizeChildSelectionRange(childIdList: string[], pointA: any, pointB
 
 function getPointCompId(point: any) {
   return String(point?.compId || point?.segId || '');
+}
+
+function isRowEmptyTextOnly(store: DocStore, docId: string, childIdList: string[], compIdChild: string) {
+  if (childIdList.length !== 1 || childIdList[0] !== compIdChild) {
+    return false;
+  }
+  const compData = store.getCompDataById(docId, compIdChild);
+  return String(compData?.compName || '') === 'TextSeg'
+    && String(compData?.data?.text || '') === '';
 }
 
 function pickChildIdFromEvent(event: CompEvent) {
