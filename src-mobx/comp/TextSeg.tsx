@@ -11,6 +11,7 @@ import {
   isCaretOnFirstLine,
   isCaretOnLastLine,
 } from '../util/caretUtils';
+import { useDocDragInteraction } from '../util/useDocDragInteraction';
 import './TextSeg.css';
 
 type TextSegProps = {
@@ -55,6 +56,10 @@ const TextSeg = observer(React.forwardRef<any, TextSegProps>(({ data = {}, confi
     ? contextDocStore.store.getInteractionState(contextDocStore.docId)
     : null;
   const selectionState = interactionState?.selectionState;
+  const dragItemId = compId ? `segment:${compId}` : '';
+  const dragRuntimeState = contextDocStore && dragItemId
+    ? contextDocStore.store.getDragItemRuntimeState(contextDocStore.docId, dragItemId)
+    : null;
   const bulletPositionState = contextDocStore && compId
     ? contextDocStore.store.getCompBulletPosState(contextDocStore.docId, compId)
     : null;
@@ -95,9 +100,20 @@ const TextSeg = observer(React.forwardRef<any, TextSegProps>(({ data = {}, confi
     isFocusedLogical ? 'mobx-seg-focused-logical' : '',
     isElActive ? 'mobx-seg-el-active' : '',
     isSelectionWithin ? 'mobx-seg-selection-within' : '',
+    dragRuntimeState?.isDragged ? 'mobx-drag-item-dragged' : '',
+    dragRuntimeState?.isDragHovered ? 'mobx-drag-item-hovered' : '',
+    dragRuntimeState?.isDropAllowed === false ? 'mobx-drag-item-drop-denied' : '',
+    dragRuntimeState?.isInsertSegmentBefore ? 'mobx-drag-seg-insert-before' : '',
+    dragRuntimeState?.isInsertSegmentAfter ? 'mobx-drag-seg-insert-after' : '',
     isRenderDebugEnabled ? 'mobx-seg-render-debug-enabled' : '',
     isDebug ? 'mobx-seg-debug' : '',
   ].filter(Boolean).join(' ');
+
+  const { handlePointerDownCapture } = useDocDragInteraction({
+    docId: contextDocStore?.docId || '',
+    compId,
+    store: contextDocStore?.store,
+  });
 
   const updateFocusState = React.useCallback((reason: string, offset?: number) => {
     if (!contextDocStore || !compId) return;
@@ -341,6 +357,21 @@ const TextSeg = observer(React.forwardRef<any, TextSegProps>(({ data = {}, confi
     const rootEl = rootRef.current;
     if (!rootEl) return;
     if (event.nativeEvent.isComposing || event.key === 'Process') return;
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'a') {
+      event.preventDefault();
+      if (focusStoreFocusedSegIfKeyEventIsStale(contextDocStore, compId)) {
+        return;
+      }
+      contextDocStore?.store.updateSelectionState(contextDocStore.docId, {
+        isSelectionActive: true,
+        mode: 'range',
+        pointAnchor: getPointCurrent(0),
+        pointFocus: getPointCurrent(text.length),
+      });
+      updateFocusState('selectAllTextSeg', text.length);
+      applyRangeSelectionByOffset(rootEl, 0, text.length);
+      return;
+    }
     if (
       event.key === 'Control'
       || event.key === 'Meta'
@@ -574,6 +605,7 @@ const TextSeg = observer(React.forwardRef<any, TextSegProps>(({ data = {}, confi
     text.length,
     updateKeyboardSelectionState,
     updateFocusState,
+    getPointCurrent,
   ]);
 
   React.useImperativeHandle(ref, () => ({
@@ -669,7 +701,9 @@ const TextSeg = observer(React.forwardRef<any, TextSegProps>(({ data = {}, confi
       data-mobx-comp-id={compId}
       data-mobx-comp-name="TextSeg"
       data-mobx-seg-id={compId}
+      data-mobx-drag-item-id={dragItemId}
       data-mobx-render-debug={textDebug}
+      onPointerDownCapture={handlePointerDownCapture}
       onFocus={() => {
         if (!contextDocStore || !compId) return;
         contextDocStore.store.updateElActiveState(contextDocStore.docId, compId);
@@ -718,6 +752,9 @@ const TextSeg = observer(React.forwardRef<any, TextSegProps>(({ data = {}, confi
           event.preventDefault();
           event.stopPropagation();
           setIsPointerDown(false);
+          if (contextDocStore?.store.consumeFocusClickSuppressed(contextDocStore.docId)) {
+            return;
+          }
           contextDocStore?.store.focusExpandToParent(contextDocStore.docId, compId, 'shiftClickExpand');
           return;
         }
@@ -1074,6 +1111,53 @@ function focusStoreFocusedSegIfKeyEventIsStale(contextDocStore: ReturnType<typeo
 function createTextSegRenderDebugText(compId: string, text: string, counterRender: number) {
   const textMain = String(text || '').replace(/\s+/g, ' ').trim().slice(0, 32);
   return `render ${counterRender} id ${compId} text ${textMain}`;
+}
+
+function applyRangeSelectionByOffset(element: HTMLElement | null, offsetStart: number, offsetEnd: number) {
+  if (!element) return false;
+  const pointStart = getDomPointAtOffset(element, offsetStart);
+  const pointEnd = getDomPointAtOffset(element, offsetEnd);
+  const selection = window.getSelection();
+  if (!pointStart || !pointEnd || !selection) return false;
+  const range = document.createRange();
+  range.setStart(pointStart.node, pointStart.offset);
+  range.setEnd(pointEnd.node, pointEnd.offset);
+  selection.removeAllRanges();
+  selection.addRange(range);
+  return true;
+}
+
+function getDomPointAtOffset(element: HTMLElement, offsetRaw: number) {
+  const offsetTarget = Math.min(
+    String(element.textContent || '').length,
+    Math.max(0, Number(offsetRaw || 0)),
+  );
+  const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+  let offsetPassed = 0;
+  let textNodeLast: Node | null = null;
+  while (true) {
+    const nodeCurrent = walker.nextNode();
+    if (!nodeCurrent) break;
+    textNodeLast = nodeCurrent;
+    const textLength = String(nodeCurrent.textContent || '').length;
+    if (offsetTarget <= offsetPassed + textLength) {
+      return {
+        node: nodeCurrent,
+        offset: Math.max(0, offsetTarget - offsetPassed),
+      };
+    }
+    offsetPassed += textLength;
+  }
+  if (textNodeLast) {
+    return {
+      node: textNodeLast,
+      offset: String(textNodeLast.textContent || '').length,
+    };
+  }
+  return {
+    node: element,
+    offset: 0,
+  };
 }
 
 function getFirstTextLineRect(textEl: HTMLElement) {

@@ -1,4 +1,5 @@
 .mobx-list {
+  position: relative;
   margin-top: 2px;
   border: 1px solid transparent;
   border-radius: 2px;
@@ -6,6 +7,7 @@
 }
 
 .mobx-list-main {
+  position: relative;
   display: block;
   padding: 1px;
   outline: none;
@@ -45,6 +47,15 @@
   align-items: stretch;
 }
 
+.mobx-list-children-mainless {
+  padding-left: 0;
+}
+
+.mobx-list-transparent-item {
+  margin: 0;
+  width: 100%;
+}
+
 .mobx-list-flat-item {
   margin: 0;
   width: 100%;
@@ -52,9 +63,22 @@
 
 .mobx-list-item {
   margin: 0;
+  position: relative;
   display: flex;
   align-items: flex-start;
   width: 100%;
+}
+
+.mobx-list-item-bullet-connected::before {
+  content: "";
+  position: absolute;
+  top: calc(var(--mobx-list-bullet-y, 0.66em) + 4px);
+  left: 6px;
+  width: 1px;
+  height: max(0px, calc(100% - var(--mobx-list-bullet-y, 0.66em) + var(--mobx-list-bullet-y-next, 0.66em) - 8px));
+  background: #333;
+  transform: translateX(-50%);
+  pointer-events: none;
 }
 
 .mobx-list-bullet-box {
@@ -88,4 +112,100 @@
 .mobx-list-item-content {
   margin-left: -2px;
   width: 100%;
+}
+
+.mobx-drag-item-dragged {
+  opacity: 0.55;
+}
+
+.mobx-drag-item-hovered {
+  background: rgba(34, 197, 94, 0.08);
+}
+
+.mobx-drag-item-drop-denied {
+  background: rgba(239, 68, 68, 0.08);
+}
+
+.mobx-drag-insert-before::before,
+.mobx-drag-insert-after::after,
+.mobx-drag-insert-inside::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  width: fit-content;
+  min-height: 13px;
+  padding: 0 3px;
+  border-top: 2px solid #16a34a;
+  border-right: 1px solid #16a34a;
+  border-bottom: 1px solid #16a34a;
+  border-left: 1px solid #16a34a;
+  border-radius: 2px;
+  background: #fff;
+  color: #166534;
+  font-size: 10px;
+  line-height: 12px;
+  pointer-events: none;
+}
+
+.mobx-drag-insert-before::before {
+  content: "insert before";
+}
+
+.mobx-drag-insert-after::after {
+  content: "insert as next sibling";
+}
+
+.mobx-drag-insert-inside::before {
+  content: "insert as first child";
+}
+
+.mobx-drag-insert-before::before {
+  top: -2px;
+}
+
+.mobx-drag-insert-after::after {
+  bottom: -2px;
+}
+
+.mobx-drag-insert-inside::before {
+  top: 50%;
+}
+
+.mobx-drag-insert-main::before,
+.mobx-drag-insert-before-sibling::after {
+  content: "";
+  position: absolute;
+  top: -2px;
+  width: fit-content;
+  min-height: 13px;
+  padding: 0 3px;
+  border-top: 2px solid #16a34a;
+  border-right: 1px solid #16a34a;
+  border-bottom: 1px solid #16a34a;
+  border-left: 1px solid #16a34a;
+  border-radius: 2px;
+  background: #fff;
+  color: #166534;
+  font-size: 10px;
+  line-height: 12px;
+  pointer-events: none;
+}
+
+.mobx-drag-insert-main::before {
+  content: "insert as main row";
+}
+
+.mobx-drag-insert-before-sibling::after {
+  content: "insert as previous sibling";
+}
+
+.mobx-drag-insert-main::before {
+  left: 0;
+  right: 50%;
+}
+
+.mobx-drag-insert-before-sibling::after {
+  left: 50%;
+  right: 0;
 }

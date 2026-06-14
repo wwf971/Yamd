@@ -77,6 +77,40 @@ export type CompRuntimeState = {
   isSelectionWithin: boolean;
 };
 
+export type DragDropKind = 'none' | 'segment' | 'outline' | 'mainRow';
+
+export type DragItemKind = 'segment' | 'row' | 'list';
+
+export type DragDropInfo = {
+  kind: DragDropKind;
+  targetId: string;
+  drop: any;
+};
+
+export type DragItemRuntimeState = {
+  isDragged: boolean;
+  isDragHovered: boolean;
+  isDropAllowed: boolean;
+  isInsertBefore: boolean;
+  isInsertAfter: boolean;
+  isInsertInside: boolean;
+  isInsertMain: boolean;
+  isInsertBeforeSibling: boolean;
+  isInsertSegmentBefore: boolean;
+  isInsertSegmentAfter: boolean;
+};
+
+export type DragState = {
+  isDragging: boolean;
+  itemIdDragged: string;
+  itemKindDragged: DragItemKind | '';
+  compIdDragged: string;
+  dropInfoActive: DragDropInfo | null;
+  runtimeStateByItemId: Record<string, DragItemRuntimeState>;
+  versionDrag: number;
+  isFocusClickSuppressed: boolean;
+};
+
 export type CompBulletPosState = {
   isBulletMeasureEnabled?: boolean;
   counterBulletMeasureReq: number;
@@ -92,6 +126,7 @@ export type DocInteractionState = {
   focusState: FocusState;
   elActiveState: ElActiveState;
   selectionState: SelectionState;
+  dragState: DragState;
   runtimeStateByCompId: Record<string, CompRuntimeState>;
   bulletPosStateByCompId: Record<string, CompBulletPosState>;
 };

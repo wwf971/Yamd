@@ -1,4 +1,5 @@
 .mobx-text-seg {
+  position: relative;
   min-height: 18px;
   border: 1px solid transparent;
   border-radius: 2px;
@@ -90,4 +91,35 @@
   line-height: 1.2;
   pointer-events: none;
   user-select: none;
+}
+
+.mobx-drag-item-dragged {
+  opacity: 0.55;
+}
+
+.mobx-drag-item-hovered {
+  background: rgba(34, 197, 94, 0.08);
+}
+
+.mobx-drag-item-drop-denied {
+  background: rgba(239, 68, 68, 0.08);
+}
+
+.mobx-drag-seg-insert-before::before,
+.mobx-drag-seg-insert-after::before {
+  content: "";
+  position: absolute;
+  top: -1px;
+  bottom: -1px;
+  width: 2px;
+  background: #16a34a;
+  pointer-events: none;
+}
+
+.mobx-drag-seg-insert-before::before {
+  left: -2px;
+}
+
+.mobx-drag-seg-insert-after::before {
+  right: -2px;
 }

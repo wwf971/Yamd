@@ -32,6 +32,19 @@ import {
   docStoreGetSelectionText,
   docStorePasteText,
 } from './docStoreEditCopyPaste';
+import {
+  createDragState,
+  docStoreClearDragPreview,
+  docStoreClearDragState,
+  docStoreClearFocusClickSuppressed,
+  docStoreCompleteDragMoveFromState,
+  docStoreConsumeFocusClickSuppressed,
+  docStoreGetDragItemRuntimeState,
+  docStorePreviewDragDrop,
+  docStorePreviewDragDropFromPoint,
+  docStoreStartDragFromFocus,
+  docStoreSuppressNextFocusClick,
+} from './docStoreDrag';
 import type {
   CompBulletPosState,
   CompData,
@@ -42,6 +55,7 @@ import type {
   CompRuntimeState,
   DocInteractionState,
   DocRecord,
+  DragDropInfo,
   FocusState,
   SelectionState,
   TextDocConfig,
@@ -58,6 +72,11 @@ export type {
   CompRuntimeState,
   DocInteractionState,
   DocRecord,
+  DragDropInfo,
+  DragDropKind,
+  DragItemKind,
+  DragItemRuntimeState,
+  DragState,
   ElActiveState,
   FocusState,
   SelectionState,
@@ -90,6 +109,7 @@ const createInteractionState = (): DocInteractionState => ({
     pointAnchor: null,
     pointFocus: null,
   },
+  dragState: createDragState(),
   runtimeStateByCompId: {},
   bulletPosStateByCompId: {},
 });
@@ -199,6 +219,46 @@ export class DocStore {
 
   pickCompBulletProviderId(docId: string, compId: string) {
     return docStorePickCompBulletProviderId(this, docId, compId);
+  }
+
+  getDragItemRuntimeState(docId: string, itemId: string) {
+    return docStoreGetDragItemRuntimeState(this, docId, itemId);
+  }
+
+  startDragFromFocus(docId: string, compIdFallback = '') {
+    return docStoreStartDragFromFocus(this, docId, compIdFallback);
+  }
+
+  previewDragDropFromPoint(docId: string, clientX: number, clientY: number) {
+    return docStorePreviewDragDropFromPoint(this, docId, clientX, clientY);
+  }
+
+  previewDragDrop(docId: string, dropInfo: DragDropInfo | null, isDropAllowed: boolean) {
+    return docStorePreviewDragDrop(this, docId, dropInfo, isDropAllowed);
+  }
+
+  clearDragPreview(docId: string) {
+    return docStoreClearDragPreview(this, docId);
+  }
+
+  clearDragState(docId: string) {
+    return docStoreClearDragState(this, docId);
+  }
+
+  completeDragMove(docId: string) {
+    return docStoreCompleteDragMoveFromState(this, docId);
+  }
+
+  suppressNextFocusClick(docId: string) {
+    return docStoreSuppressNextFocusClick(this, docId);
+  }
+
+  consumeFocusClickSuppressed(docId: string) {
+    return docStoreConsumeFocusClickSuppressed(this, docId);
+  }
+
+  clearFocusClickSuppressed(docId: string) {
+    return docStoreClearFocusClickSuppressed(this, docId);
   }
 
   updateFocusState(

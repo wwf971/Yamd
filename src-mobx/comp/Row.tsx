@@ -4,6 +4,7 @@ import { useDocStoreContext } from '../DocStoreContext';
 import type { CompEvent } from '../docStoreTypes';
 import { eventRowClick, eventRowDispatch } from '../event/eventLogicRow';
 import { useDocCompRenderContext } from '../test/DocCompRenderContext';
+import { useDocDragInteraction } from '../util/useDocDragInteraction';
 import './Row.css';
 
 type RowProps = {
@@ -45,6 +46,7 @@ const Row = observer(React.forwardRef<any, RowProps>(({ data = {}, config = {}, 
   const compIdBasisBullet = String(bulletPositionState?.compIdBasis || compId);
   const isBulletMeasureEnabled = bulletPositionState?.isBulletMeasureEnabled !== false;
   const counterBulletMeasureDoneProvider = Number(bulletProviderState?.counterBulletMeasureDone || 0);
+  const compIdBasisBulletProvider = String(bulletProviderState?.compIdBasis || '');
   const posYBulletPreferredProvider = bulletProviderState?.posYBulletPreferred ?? null;
   const messageBulletMeasureProvider = String(bulletProviderState?.messageBulletMeasure || '');
   const segIdList = childIdList.filter((childIdRaw) => {
@@ -52,6 +54,14 @@ const Row = observer(React.forwardRef<any, RowProps>(({ data = {}, config = {}, 
     const childCompData = getCompDataById(childId);
     return String(childCompData?.compName || '') === 'TextSeg';
   });
+  const dragItemId = compId ? `row:${compId}` : '';
+  const dragRuntimeState = contextDocStore && dragItemId
+    ? contextDocStore.store.getDragItemRuntimeState(contextDocStore.docId, dragItemId)
+    : null;
+  const dragSegListItemId = compId ? `rowSegList:${compId}` : '';
+  const dragSegListRuntimeState = contextDocStore && dragSegListItemId
+    ? contextDocStore.store.getDragItemRuntimeState(contextDocStore.docId, dragSegListItemId)
+    : null;
   const className = [
     'mobx-row',
     isRoot ? 'is-root' : '',
@@ -59,7 +69,23 @@ const Row = observer(React.forwardRef<any, RowProps>(({ data = {}, config = {}, 
     runtimeState?.isElActive ? 'mobx-row-el-active' : '',
     runtimeState?.isFocusWithin ? 'mobx-row-focus-within' : '',
     runtimeState?.isSelectionWithin ? 'mobx-row-selection-within' : '',
+    dragRuntimeState?.isDragged ? 'mobx-drag-item-dragged' : '',
+    dragRuntimeState?.isDragHovered ? 'mobx-drag-item-hovered' : '',
+    dragRuntimeState?.isDropAllowed === false ? 'mobx-drag-item-drop-denied' : '',
+    dragRuntimeState?.isInsertBefore ? 'mobx-drag-insert-before' : '',
+    dragRuntimeState?.isInsertAfter ? 'mobx-drag-insert-after' : '',
+    dragRuntimeState?.isInsertInside ? 'mobx-drag-insert-inside' : '',
   ].filter(Boolean).join(' ');
+  const classNameSegList = [
+    'mobx-row-seg-list',
+    dragSegListRuntimeState?.isDragHovered ? 'mobx-row-seg-list-drag-hovered' : '',
+    dragSegListRuntimeState?.isDropAllowed === false ? 'mobx-drag-item-drop-denied' : '',
+  ].filter(Boolean).join(' ');
+  const { handlePointerDownCapture } = useDocDragInteraction({
+    docId: contextDocStore?.docId || '',
+    compId,
+    store: contextDocStore?.store,
+  });
 
   React.useImperativeHandle(ref, () => ({
     dispatchEvent: async (event: CompEvent) => {
@@ -116,6 +142,7 @@ const Row = observer(React.forwardRef<any, RowProps>(({ data = {}, config = {}, 
 
   React.useLayoutEffect(() => {
     if (!contextDocStore || !compId || counterBulletMeasureReq <= 0 || !compIdProviderBullet) return;
+    if (compIdBasisBulletProvider !== compIdBasisBullet) return;
     contextDocStore.store.updateCompBulletPosResult(contextDocStore.docId, compId, {
       compIdBasis: compIdBasisBullet,
       compIdProvider: compIdProviderBullet,
@@ -126,6 +153,7 @@ const Row = observer(React.forwardRef<any, RowProps>(({ data = {}, config = {}, 
     contextDocStore,
     compId,
     compIdBasisBullet,
+    compIdBasisBulletProvider,
     compIdProviderBullet,
     counterBulletMeasureDoneProvider,
     counterBulletMeasureReq,
@@ -139,6 +167,9 @@ const Row = observer(React.forwardRef<any, RowProps>(({ data = {}, config = {}, 
       className={className}
       data-mobx-comp-id={compId}
       data-mobx-comp-name="Row"
+      data-mobx-outline-item-id={dragItemId}
+      data-mobx-drag-item-id={dragItemId}
+      onPointerDownCapture={handlePointerDownCapture}
     >
       <div
         ref={rowRef}
@@ -150,6 +181,11 @@ const Row = observer(React.forwardRef<any, RowProps>(({ data = {}, config = {}, 
         }}
         onClick={(event) => {
           if (!contextDocStore || !compId) return;
+          if (event.shiftKey && contextDocStore.store.consumeFocusClickSuppressed(contextDocStore.docId)) {
+            event.preventDefault();
+            event.stopPropagation();
+            return;
+          }
           eventRowClick({
             event,
             store: contextDocStore.store,
@@ -160,7 +196,7 @@ const Row = observer(React.forwardRef<any, RowProps>(({ data = {}, config = {}, 
           });
         }}
       >
-        <div className="mobx-row-seg-list">{childIdList.map((childId) => renderCompById(String(childId || '')))}</div>
+        <div className={classNameSegList} data-mobx-row-seg-list-id={compId}>{childIdList.map((childId) => renderCompById(String(childId || '')))}</div>
       </div>
     </div>
   );

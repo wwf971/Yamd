@@ -40,6 +40,7 @@ export function docStoreRequestCompBulletPos(
   state.compIdRequester = String(request.compIdRequester || '');
   state.compIdBasis = String(request.compIdBasis || compIdTarget || '');
   state.compIdProvider = String(request.compIdProvider || '');
+  state.posYBulletPreferred = null;
   state.messageBulletMeasure = 'requested';
   return { code: 0, message: 'Bullet position requested.' };
 }
@@ -51,6 +52,12 @@ export function docStoreUpdateCompBulletPosResult(
   result: Partial<CompBulletPosState> = {},
 ) {
   const state = store.getCompBulletPosState(docId, compIdTarget);
+  const compIdBasisResult = result.compIdBasis !== undefined
+    ? String(result.compIdBasis || '')
+    : state.compIdBasis;
+  if (compIdBasisResult && state.compIdBasis && compIdBasisResult !== state.compIdBasis) {
+    return { code: -1, message: 'Stale bullet position ignored.' };
+  }
   state.counterBulletMeasureDone += 1;
   state.posYBulletPreferred = Number.isFinite(result.posYBulletPreferred)
     ? Number(result.posYBulletPreferred)

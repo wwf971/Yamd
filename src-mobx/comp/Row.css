@@ -1,4 +1,5 @@
 .mobx-row {
+  position: relative;
   margin-top: 0;
   margin-left: 0;
   border: 1px solid transparent;
@@ -31,6 +32,75 @@
 }
 
 .mobx-row-seg-list {
+  position: relative;
   display: block;
   line-height: 1.25;
+  min-height: 18px;
+}
+
+.mobx-drag-item-dragged {
+  opacity: 0.55;
+}
+
+.mobx-drag-item-hovered {
+  background: rgba(34, 197, 94, 0.08);
+}
+
+.mobx-drag-item-drop-denied {
+  background: rgba(239, 68, 68, 0.08);
+}
+
+.mobx-drag-insert-before::before,
+.mobx-drag-insert-after::after,
+.mobx-drag-insert-inside::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  width: fit-content;
+  min-height: 13px;
+  padding: 0 3px;
+  border-top: 2px solid #16a34a;
+  border-right: 1px solid #16a34a;
+  border-bottom: 1px solid #16a34a;
+  border-left: 1px solid #16a34a;
+  border-radius: 2px;
+  background: #fff;
+  color: #166534;
+  font-size: 10px;
+  line-height: 12px;
+  pointer-events: none;
+}
+
+.mobx-drag-insert-before::before {
+  content: "insert before";
+}
+
+.mobx-drag-insert-after::after {
+  content: "insert as next sibling";
+}
+
+.mobx-drag-insert-inside::before {
+  content: "insert as first child";
+}
+
+.mobx-drag-insert-before::before {
+  top: -2px;
+}
+
+.mobx-drag-insert-after::after {
+  bottom: -2px;
+}
+
+.mobx-drag-insert-inside::before {
+  top: 50%;
+}
+
+.mobx-row-seg-list-drag-hovered::before {
+  content: "";
+  display: inline-block;
+  width: 2px;
+  min-height: 1em;
+  background: #16a34a;
+  vertical-align: -0.12em;
 }
