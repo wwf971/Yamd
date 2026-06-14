@@ -696,17 +696,12 @@ function applyFocusAfterCopyPaste(
     return { code: -1, message: 'Focus component id missing.' };
   }
   const offsetFocused = Number(focusNext?.point?.offset || 0);
-  store.updateFocusState(docId, {
-    compIdFocused: compId,
-    segIdFocused: compId,
-    offsetFocused,
-    reasonLast: reason,
-  });
-  focusCompAfterRender(store, docId, compId, offsetFocused);
+  store.segFocus(docId, compId, offsetFocused, reason);
+  compFocusAfterRender(store, docId, compId, offsetFocused);
   return { code: 0, message: 'Focus applied after edit.' };
 }
 
-function focusCompAfterRender(store: DocStore, docId: string, segId: string, offset: number) {
+function compFocusAfterRender(store: DocStore, docId: string, segId: string, offset: number) {
   const schedule = typeof window !== 'undefined' ? window.setTimeout : setTimeout;
   schedule(() => {
     const focusApply = () => {

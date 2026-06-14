@@ -126,12 +126,12 @@ export async function docStoreReceiveEvent(
   }
 
   if (eventNormalized.type === 'focus') {
-    store.updateFocusState(docId, {
-      compIdFocused: eventNormalized.sourceId,
-      segIdFocused: String(eventNormalized?.data?.segId || ''),
-      offsetFocused: Number(eventNormalized?.data?.offset || 0),
-      reasonLast: String(eventNormalized?.data?.reason || eventNormalized.type),
-    });
+    const segIdFocused = String(eventNormalized?.data?.segId || '');
+    if (segIdFocused) {
+      store.segFocus(docId, segIdFocused, Number(eventNormalized?.data?.offset || 0), String(eventNormalized?.data?.reason || eventNormalized.type));
+    } else {
+      store.compIdFocus(docId, eventNormalized.sourceId, String(eventNormalized?.data?.reason || eventNormalized.type));
+    }
     return { code: 0, message: 'Focus event received.' };
   }
 
@@ -144,12 +144,12 @@ export async function docStoreReceiveEvent(
   }
 
   if (eventNormalized.type === 'clickSingle') {
-    store.updateFocusState(docId, {
-      compIdFocused: eventNormalized.sourceId,
-      segIdFocused: String(eventNormalized?.data?.segId || ''),
-      offsetFocused: Number(eventNormalized?.data?.offset || 0),
-      reasonLast: String(eventNormalized?.data?.reason || eventNormalized.type),
-    });
+    const segIdFocused = String(eventNormalized?.data?.segId || '');
+    if (segIdFocused) {
+      store.segFocus(docId, segIdFocused, Number(eventNormalized?.data?.offset || 0), String(eventNormalized?.data?.reason || eventNormalized.type));
+    } else {
+      store.compIdFocus(docId, eventNormalized.sourceId, String(eventNormalized?.data?.reason || eventNormalized.type));
+    }
     return { code: 0, message: 'Click event received.' };
   }
 
@@ -251,6 +251,12 @@ function pickDocEventTarget(docRecord: DocRecord, event: CompEvent) {
   const focusState = docRecord.interactionState.focusState;
   if (shouldDocEventPreferFocusedSeg(event.type)) {
     const compIdFocused = String(focusState.compIdFocused || '');
+    const compIdRowTarget = shouldDocEventPreferFocusedRow(event.type)
+      ? getRowTargetFromFocusedComp(docRecord, compIdFocused)
+      : '';
+    if (compIdRowTarget) {
+      return compIdRowTarget;
+    }
     if (compIdFocused && docRecord.compDataById[compIdFocused]) {
       return compIdFocused;
     }
@@ -308,6 +314,18 @@ function shouldDocEventPreferFocusedSeg(type: string) {
   ].includes(type);
 }
 
+function shouldDocEventPreferFocusedRow(type: string) {
+  return [
+    'rowSplitAttempt',
+    'rowSelectionDeleteAttempt',
+    'rowIndentAttempt',
+    'rowOutdentAttempt',
+    'rowMergePrevAttempt',
+    'rowDeleteAttempt',
+    'rowNavigate',
+  ].includes(type);
+}
+
 function isStoreOwnedEvent(type: string) {
   return [].includes(type);
 }
@@ -328,6 +346,41 @@ function findFirstDocEventTargetFromComp(docRecord: DocRecord, compId: string): 
     if (compIdFound) {
       return compIdFound;
     }
+  }
+  return '';
+}
+
+function getRowTargetFromFocusedComp(docRecord: DocRecord, compIdFocused: string) {
+  const compDataFocused = docRecord.compDataById[String(compIdFocused || '')];
+  const compName = String(compDataFocused?.compName || '');
+  if (compName === 'Row') {
+    return String(compDataFocused.compId || '');
+  }
+  if (compName === 'List') {
+    const mainCompId = String(compDataFocused.mainCompId || '');
+    if (isCompName(docRecord, mainCompId, 'Row')) {
+      return mainCompId;
+    }
+    return findFirstRowFromComp(docRecord, compDataFocused.compId);
+  }
+  return '';
+}
+
+function findFirstRowFromComp(docRecord: DocRecord, compId: string): string {
+  const compData = docRecord.compDataById[String(compId || '')];
+  if (!compData) return '';
+  if (String(compData.compName || '') === 'Row') {
+    return String(compData.compId || '');
+  }
+  const mainCompId = String(compData.mainCompId || '');
+  if (mainCompId) {
+    const rowIdMain = findFirstRowFromComp(docRecord, mainCompId);
+    if (rowIdMain) return rowIdMain;
+  }
+  const childIdList = Array.isArray(compData.childIdList) ? compData.childIdList : [];
+  for (const childId of childIdList) {
+    const rowIdChild = findFirstRowFromComp(docRecord, String(childId || ''));
+    if (rowIdChild) return rowIdChild;
   }
   return '';
 }

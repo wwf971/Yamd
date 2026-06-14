@@ -1,0 +1,121 @@
+docName: test-focus-feature
+dataDocInitial: {}
+configDocInitial:
+  isEditable: true
+compIdRoot: doc-viewer-focus-feature
+compById:
+  doc-viewer-focus-feature:
+    compName: DocViewer
+    childIdList:
+      - event-tester-focus-feature
+    data: {}
+    config: {}
+  event-tester-focus-feature:
+    compName: EventTester
+    childIdList:
+      - list-focus-root
+    data: {}
+    config: {}
+  list-focus-root:
+    compName: List
+    childIdList:
+      - list-focus-entry-alpha
+      - list-focus-entry-delta
+    data:
+      bulletType: circle
+    config:
+      isRoot: true
+  list-focus-entry-alpha:
+    compName: List
+    mainCompId: row-focus-alpha
+    childIdList:
+      - list-focus-entry-bravo
+    data: {}
+    config: {}
+  row-focus-alpha:
+    compName: Row
+    childIdList:
+      - seg-focus-alpha-one
+      - seg-focus-alpha-two
+    data: {}
+    config: {}
+  seg-focus-alpha-one:
+    compName: TextSeg
+    childIdList: []
+    data:
+      text: alpha editable segment
+    config:
+      isEditable: true
+      isRenderDebugEnabled: true
+  seg-focus-alpha-two:
+    compName: TextSeg
+    childIdList: []
+    data:
+      text: keep caret here, then shift click to cycle focus
+    config:
+      isEditable: true
+      isRenderDebugEnabled: true
+  list-focus-entry-bravo:
+    compName: List
+    mainCompId: row-focus-bravo
+    childIdList:
+      - row-focus-charlie
+    data: {}
+    config: {}
+  row-focus-bravo:
+    compName: Row
+    childIdList:
+      - seg-focus-bravo-one
+    data: {}
+    config: {}
+  seg-focus-bravo-one:
+    compName: TextSeg
+    childIdList: []
+    data:
+      text: nested bravo segment for parent focus
+    config:
+      isEditable: true
+      isRenderDebugEnabled: true
+  row-focus-charlie:
+    compName: Row
+    childIdList:
+      - seg-focus-charlie-one
+      - seg-focus-charlie-two
+    data: {}
+    config: {}
+  seg-focus-charlie-one:
+    compName: TextSeg
+    childIdList: []
+    data:
+      text: charlie first segment
+    config:
+      isEditable: true
+      isRenderDebugEnabled: true
+  seg-focus-charlie-two:
+    compName: TextSeg
+    childIdList: []
+    data:
+      text: charlie second segment for cross segment selection
+    config:
+      isEditable: true
+      isRenderDebugEnabled: true
+  list-focus-entry-delta:
+    compName: List
+    mainCompId: row-focus-delta
+    childIdList: []
+    data: {}
+    config: {}
+  row-focus-delta:
+    compName: Row
+    childIdList:
+      - seg-focus-delta-one
+    data: {}
+    config: {}
+  seg-focus-delta-one:
+    compName: TextSeg
+    childIdList: []
+    data:
+      text: delta sibling segment
+    config:
+      isEditable: true
+      isRenderDebugEnabled: true

@@ -20,6 +20,7 @@ import TEST_LIST_ROW_NOT_EDITABLE_YAML_RAW from './test-list-row-not-editable.ya
 import TEST_LIST_ROW_YAML_RAW from './test-list-row.yaml?raw';
 import TEST_LIST_BULLET_TYPES_YAML_RAW from './test-list-bullet-types.yaml?raw';
 import TEST_LIST_RENDER_DEBUG_YAML_RAW from './test-list-render-debug.yaml?raw';
+import TEST_FOCUS_FEATURE_YAML_RAW from './test-focus-feature.yaml?raw';
 import './testMobx.css';
 
 const compByNameForTest = {
@@ -146,12 +147,7 @@ const TestItemDoc = observer(function TestItemDoc({ yamlRaw }) {
         if (selectionStateCurrent.isSelectionActive === true) {
           storeDocTest.clearSelectionState(docId);
         }
-        storeDocTest.updateFocusState(docId, {
-          compIdFocused: selectionState.pointFocus.compId,
-          segIdFocused: selectionState.pointFocus.segId,
-          offsetFocused: selectionState.pointFocus.offset,
-          reasonLast: 'selectionChange',
-        });
+        storeDocTest.segFocus(docId, selectionState.pointFocus.segId, selectionState.pointFocus.offset, 'selectionChange');
         return;
       }
       storeDocTest.updateSelectionState(docId, selectionState);
@@ -404,6 +400,7 @@ const TestListRowNotEditableYaml = () => <TestItemDoc yamlRaw={TEST_LIST_ROW_NOT
 const TestListRowYaml = () => <TestItemDoc yamlRaw={TEST_LIST_ROW_YAML_RAW} />;
 const TestListBulletTypesYaml = () => <TestItemDoc yamlRaw={TEST_LIST_BULLET_TYPES_YAML_RAW} />;
 const TestListRenderDebugYaml = () => <TestItemDoc yamlRaw={TEST_LIST_RENDER_DEBUG_YAML_RAW} />;
+const TestFocusFeatureYaml = () => <TestItemDoc yamlRaw={TEST_FOCUS_FEATURE_YAML_RAW} />;
 
 export const mobxYamlTestItems = [
   {
@@ -417,6 +414,12 @@ export const mobxYamlTestItems = [
     label: 'Row.tsx',
     description: 'YAML viewer + EventTester + Row with TextSeg children only.',
     Comp: TestRowYaml,
+  },
+  {
+    key: 'mobx-focus-feature',
+    label: 'Focus feature',
+    description: 'Shift-click focus cycling and text selection tracking.',
+    Comp: TestFocusFeatureYaml,
   },
   {
     key: 'mobx-list',

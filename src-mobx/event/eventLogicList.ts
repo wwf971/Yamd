@@ -27,13 +27,7 @@ export async function eventListFocus(
       },
     });
   }
-  store.updateFocusState(docId, {
-    compIdFocused: compId,
-    segIdFocused: '',
-    offsetFocused: 0,
-    reasonLast: reason,
-  });
-  return { code: 0, message: 'List focused.' };
+  return store.compIdFocus(docId, compId, reason);
 }
 
 export async function eventListDispatch({
@@ -133,6 +127,12 @@ export function eventListClick({
   sourceId: string;
   onEvent?: EventHandler;
 }) {
+  if (event.shiftKey) {
+    event.preventDefault();
+    event.stopPropagation();
+    store.focusExpandToParent(docId, compId, 'shiftClickExpand');
+    return;
+  }
   const targetEl = event.target instanceof Element ? event.target : null;
   const compElCurrent = event.currentTarget.closest('[data-mobx-comp-id]');
   if (targetEl?.closest('[data-mobx-comp-id]') !== compElCurrent) {

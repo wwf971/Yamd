@@ -220,6 +220,86 @@ export class DocStore {
     return { code: 0 };
   }
 
+  compIdFocus(docId: string, compId: string, reason = 'compIdFocus', offsetFocused?: number) {
+    const docRecord = this.ensureDoc(docId);
+    const offsetFocusedNext = Number.isFinite(offsetFocused)
+      ? Number(offsetFocused)
+      : Number(docRecord.interactionState.focusState.offsetFocused || 0);
+    return this.updateFocusState(docId, {
+      compIdFocused: String(compId || ''),
+      segIdFocused: '',
+      offsetFocused: offsetFocusedNext,
+      reasonLast: reason,
+    });
+  }
+
+  segFocus(docId: string, segId: string, offsetFocused = 0, reason = 'segFocus') {
+    const segIdSafe = String(segId || '');
+    return this.updateFocusState(docId, {
+      compIdFocused: segIdSafe,
+      segIdFocused: segIdSafe,
+      offsetFocused: Number(offsetFocused || 0),
+      reasonLast: reason,
+    });
+  }
+
+  focusExpandToParent(docId: string, compIdFallback = '', reason = 'shiftClickExpand') {
+    const docRecord = this.ensureDoc(docId);
+    const focusState = docRecord.interactionState.focusState;
+    const compIdBase = String(focusState.compIdFocused || focusState.segIdFocused || compIdFallback || '');
+    const compIdFallbackSafe = String(compIdFallback || '');
+    if (!compIdBase) {
+      return { code: -1, message: 'No logical focus to expand.' };
+    }
+    const compDataBase = docRecord.compDataById[compIdBase];
+    if (!compDataBase) {
+      return { code: -1, message: `Focused component not found. compId=${compIdBase}` };
+    }
+    if (compDataBase.config?.isRoot === true) {
+      const compDataFallback = docRecord.compDataById[compIdFallbackSafe];
+      if (compDataFallback && compIdFallbackSafe && compIdFallbackSafe !== compIdBase) {
+        if (String(compDataFallback.compName || '') === 'TextSeg') {
+          return this.segFocus(docId, compIdFallbackSafe, focusState.offsetFocused, reason);
+        }
+        return this.compIdFocus(docId, compIdFallbackSafe, reason);
+      }
+      return { code: 0, message: 'Focus already at root component.' };
+    }
+    const compIdParent = this.getParentCompId(docId, compIdBase);
+    if (!compIdParent) {
+      const compDataFallback = docRecord.compDataById[compIdFallbackSafe];
+      if (compDataFallback && compIdFallbackSafe && compIdFallbackSafe !== compIdBase) {
+        if (String(compDataFallback.compName || '') === 'TextSeg') {
+          return this.segFocus(docId, compIdFallbackSafe, focusState.offsetFocused, reason);
+        }
+        return this.compIdFocus(docId, compIdFallbackSafe, reason);
+      }
+      return { code: -1, message: `No parent component. compId=${compIdBase}` };
+    }
+    return this.compIdFocus(docId, compIdParent, reason);
+  }
+
+  rowIdFocusedForOutlineOp(docId: string) {
+    const docRecord = this.ensureDoc(docId);
+    const focusState = docRecord.interactionState.focusState;
+    const compIdFocused = String(focusState.compIdFocused || '');
+    const segIdFocused = String(focusState.segIdFocused || '');
+    if (this.isCompName(docRecord, compIdFocused, 'Row')) {
+      return compIdFocused;
+    }
+    if (this.isCompName(docRecord, compIdFocused, 'List')) {
+      const mainCompId = String(docRecord.compDataById[compIdFocused]?.mainCompId || '');
+      return this.isCompName(docRecord, mainCompId, 'Row') ? mainCompId : '';
+    }
+    if (segIdFocused) {
+      return getOwningRowId(docRecord, segIdFocused);
+    }
+    if (compIdFocused) {
+      return getOwningRowId(docRecord, compIdFocused);
+    }
+    return '';
+  }
+
   updateElActiveState(docId: string, compIdElActive: string) {
     const docRecord = this.ensureDoc(docId);
     const compIdNext = String(compIdElActive || '');
@@ -675,13 +755,15 @@ export class DocStore {
 }
 
 function normalizeFocusState(focusStateCurrent: FocusState, focusStatePatch: Partial<FocusState>): FocusState {
+  const compIdFocused = focusStatePatch.compIdFocused !== undefined
+    ? String(focusStatePatch.compIdFocused || '')
+    : focusStateCurrent.compIdFocused;
+  const segIdFocused = focusStatePatch.segIdFocused !== undefined
+    ? String(focusStatePatch.segIdFocused || '')
+    : focusStateCurrent.segIdFocused;
   return {
-    compIdFocused: focusStatePatch.compIdFocused !== undefined
-      ? String(focusStatePatch.compIdFocused || '')
-      : focusStateCurrent.compIdFocused,
-    segIdFocused: focusStatePatch.segIdFocused !== undefined
-      ? String(focusStatePatch.segIdFocused || '')
-      : focusStateCurrent.segIdFocused,
+    compIdFocused,
+    segIdFocused,
     offsetFocused: focusStatePatch.offsetFocused !== undefined
       ? Number(focusStatePatch.offsetFocused || 0)
       : focusStateCurrent.offsetFocused,
@@ -814,6 +896,19 @@ function createAncestorIdSet(parentIdByCompId: Record<string, string>, compIdLis
     }
   }
   return ancestorIdSet;
+}
+
+function getOwningRowId(docRecord: DocRecord, compIdChild: string) {
+  const compIdList = Object.keys(docRecord.compDataById || {});
+  for (const compId of compIdList) {
+    const compData = docRecord.compDataById[compId];
+    if (String(compData?.compName || '') !== 'Row') continue;
+    const childIdList = Array.isArray(compData.childIdList) ? compData.childIdList.map((id) => String(id || '')) : [];
+    if (childIdList.includes(compIdChild)) {
+      return compId;
+    }
+  }
+  return '';
 }
 
 function applyRuntimeStateNext(runtimeStateCurrent: CompRuntimeState, runtimeStateNext: CompRuntimeState) {

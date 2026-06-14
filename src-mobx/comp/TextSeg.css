@@ -1,8 +1,8 @@
 .mobx-text-seg {
   min-height: 18px;
-  border: 0;
-  border-radius: 0;
-  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  padding: 0 1px;
   background: transparent;
   font-size: 14px;
   font-family: sans-serif;
@@ -57,8 +57,9 @@
 }
 
 .mobx-seg-focused-logical {
-  outline: 1px dashed #2563eb;
-  outline-offset: 1px;
+  border-color: #2563eb;
+  background: rgba(219, 234, 254, 0.78);
+  box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.12);
 }
 
 .mobx-seg-el-active {

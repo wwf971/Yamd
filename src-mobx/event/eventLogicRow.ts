@@ -27,12 +27,7 @@ export async function eventRowFocus(
       },
     });
   }
-  return store.updateFocusState(docId, {
-    compIdFocused: compId,
-    segIdFocused: '',
-    offsetFocused: 0,
-    reasonLast: reason,
-  });
+  return store.compIdFocus(docId, compId, reason);
 }
 
 export async function eventRowDispatch({
@@ -150,6 +145,12 @@ export function eventRowClick({
   sourceId: string;
   onEvent?: EventHandler;
 }) {
+  if (event.shiftKey) {
+    event.preventDefault();
+    event.stopPropagation();
+    store.focusExpandToParent(docId, compId, 'shiftClickExpand');
+    return;
+  }
   const selection = window.getSelection?.();
   if (
     selection

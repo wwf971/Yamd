@@ -5,9 +5,9 @@ import type { CompData, CompEvent, SelectionTrackPoint } from '../docStoreTypes'
 import {
   applyCaretByDirection,
   applyCaretByOffset,
-  applyCaretByPoint,
   getCaretClientX,
   getCaretOffset,
+  getCaretOffsetByPoint,
   isCaretOnFirstLine,
   isCaretOnLastLine,
 } from '../util/caretUtils';
@@ -62,6 +62,12 @@ const TextSeg = observer(React.forwardRef<any, TextSegProps>(({ data = {}, confi
   const offsetPendingRestoreRef = React.useRef<number | null>(null);
   const isComposingRef = React.useRef(false);
   const counterRenderRef = React.useRef(0);
+  const mouseDownStateRef = React.useRef<{
+    clientX: number;
+    clientY: number;
+    isSelectionActive: boolean;
+    isDomSelectionRange: boolean;
+  } | null>(null);
   const [isPointerDown, setIsPointerDown] = React.useState(false);
   counterRenderRef.current += 1;
   const counterBulletMeasureReq = Number(bulletPositionState?.counterBulletMeasureReq || 0);
@@ -96,12 +102,7 @@ const TextSeg = observer(React.forwardRef<any, TextSegProps>(({ data = {}, confi
   const updateFocusState = React.useCallback((reason: string, offset?: number) => {
     if (!contextDocStore || !compId) return;
     const offsetFocused = Number.isFinite(offset) ? Number(offset) : getCaretOffset(rootRef.current);
-    contextDocStore.store.updateFocusState(contextDocStore.docId, {
-      compIdFocused: compId,
-      segIdFocused: compId,
-      offsetFocused,
-      reasonLast: reason,
-    });
+    contextDocStore.store.segFocus(contextDocStore.docId, compId, offsetFocused, reason);
   }, [contextDocStore, compId]);
 
   const getPointCurrent = React.useCallback((offset: number): SelectionTrackPoint => ({
@@ -682,7 +683,21 @@ const TextSeg = observer(React.forwardRef<any, TextSegProps>(({ data = {}, confi
         isComposingRef.current = false;
         syncTextFromDom(event.currentTarget);
       }}
-      onMouseDown={() => {
+      onMouseDown={(event) => {
+        if (event.shiftKey) {
+          event.preventDefault();
+          event.stopPropagation();
+          mouseDownStateRef.current = null;
+          setIsPointerDown(false);
+          return;
+        }
+        const selection = window.getSelection();
+        mouseDownStateRef.current = {
+          clientX: event.clientX,
+          clientY: event.clientY,
+          isSelectionActive,
+          isDomSelectionRange: selection ? selection.isCollapsed !== true : false,
+        };
         setIsPointerDown(true);
       }}
       onMouseUp={() => {
@@ -697,16 +712,51 @@ const TextSeg = observer(React.forwardRef<any, TextSegProps>(({ data = {}, confi
       onClick={(event) => {
         const rootEl = rootRef.current;
         const selection = window.getSelection();
-        if (selection && !selection.isCollapsed) {
+        const mouseDownState = mouseDownStateRef.current;
+        mouseDownStateRef.current = null;
+        if (event.shiftKey) {
+          event.preventDefault();
+          event.stopPropagation();
+          setIsPointerDown(false);
+          contextDocStore?.store.focusExpandToParent(contextDocStore.docId, compId, 'shiftClickExpand');
+          return;
+        }
+        const distanceMouse = mouseDownState
+          ? Math.abs(event.clientX - mouseDownState.clientX) + Math.abs(event.clientY - mouseDownState.clientY)
+          : Number.POSITIVE_INFINITY;
+        const isClickCollapseSelection = distanceMouse <= 4
+          && mouseDownState?.isSelectionActive === true
+          && mouseDownState?.isDomSelectionRange === true;
+        if (selection && !selection.isCollapsed && !isClickCollapseSelection) {
           return;
         }
         setIsPointerDown(false);
+        const offset = rootEl
+          ? getCaretOffsetByPoint(rootEl, event.clientX, event.clientY)
+          : 0;
         if (rootEl) {
           rootEl.focus();
-          applyCaretByPoint(rootEl, event.clientX, event.clientY);
+          applyCaretByOffset(rootEl, offset);
         }
-        const offset = getCaretOffset(rootEl);
-        updateFocusState('clickSingle', offset);
+        if (contextDocStore && compId) {
+          contextDocStore.store.updateSelectionAndFocusState(
+            contextDocStore.docId,
+            {
+              isSelectionActive: false,
+              mode: 'caret',
+              pointAnchor: null,
+              pointFocus: null,
+            },
+            {
+              compIdFocused: compId,
+              segIdFocused: compId,
+              offsetFocused: offset,
+              reasonLast: 'clickSingle',
+            },
+          );
+        } else {
+          updateFocusState('clickSingle', offset);
+        }
         emitEvent('clickSingle', {
           offset,
           mousePos: {
@@ -714,6 +764,11 @@ const TextSeg = observer(React.forwardRef<any, TextSegProps>(({ data = {}, confi
             clientY: event.clientY,
           },
         });
+      }}
+      onDoubleClick={(event) => {
+        if (!event.shiftKey) return;
+        event.preventDefault();
+        event.stopPropagation();
       }}
       onKeyDown={handleKeyDown}
       onPaste={handlePaste}

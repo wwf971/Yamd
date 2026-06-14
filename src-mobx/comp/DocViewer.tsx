@@ -41,12 +41,7 @@ const DocViewer = observer(({ data = {} }: DocViewerProps) => {
     const rootEl = rootRef.current;
     const targetEl = event.target instanceof Element ? event.target : null;
     if (!rootEl || targetEl?.closest('[data-mobx-comp-id]') !== rootEl) return;
-    contextDocStore.store.updateFocusState(contextDocStore.docId, {
-      compIdFocused: compId,
-      segIdFocused: '',
-      offsetFocused: 0,
-      reasonLast: 'clickComponent',
-    });
+    contextDocStore.store.compIdFocus(contextDocStore.docId, compId, 'clickComponent');
   }, [contextDocStore, compId]);
 
   return (
