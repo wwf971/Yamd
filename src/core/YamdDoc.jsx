@@ -12,7 +12,6 @@ import { RenderUtilsContext, createRenderUtilsContextValue } from '@/core/Render
 import { findSegFromSelection, getFirstSegInTree, getLastSegInTree, findSegIdFromNode } from '@/components/TextUtils.js';
 
 
-
 /**
  * YamdDoc - Document container that manages global reference handling
  * Renders the root YamdNode and provides reference navigation functionality

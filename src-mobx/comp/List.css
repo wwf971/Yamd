@@ -1,15 +1,16 @@
 .mobx-list {
   position: relative;
-  margin-top: 2px;
-  border: 1px solid transparent;
+  margin-top: 0;
+  outline: 1px solid transparent;
   border-radius: 2px;
   background: transparent;
+  box-sizing: border-box;
 }
 
 .mobx-list-main {
   position: relative;
   display: block;
-  padding: 1px;
+  padding: 0;
   outline: none;
 }
 
@@ -18,7 +19,7 @@
 }
 
 .mobx-list-focused-logical {
-  border-color: #2563eb;
+  outline-color: #2563eb;
   background: rgba(219, 234, 254, 0.68);
   box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.12);
 }

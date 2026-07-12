@@ -1,7 +1,7 @@
 .mobx-text-seg {
   position: relative;
   min-height: 18px;
-  border: 1px solid transparent;
+  outline: 1px solid transparent;
   border-radius: 2px;
   padding: 0 1px;
   background: transparent;
@@ -58,7 +58,7 @@
 }
 
 .mobx-seg-focused-logical {
-  border-color: #2563eb;
+  outline-color: #2563eb;
   background: rgba(219, 234, 254, 0.78);
   box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.12);
 }

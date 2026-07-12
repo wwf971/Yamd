@@ -68,13 +68,18 @@ const App = () => {
       <PanelDual orientation="vertical" initialWidth={240}>
         <div className="yamd-test-sidebar">
           <ItemTree
-            items={testItems}
-            className="yamd-item-tree"
-            selectedItemKey={selectedItemKey}
-            titleText="Yamd Test Suite"
-            searchPlaceholder="Search tests..."
-            onItemSelect={(itemData) => {
-              const nextItemKey = String(itemData?.key || '').trim();
+            data={{
+              items: testItems,
+              selectedItemKey,
+            }}
+            config={{
+              className: 'yamd-item-tree',
+              titleText: 'Yamd Test Suite',
+              searchPlaceholder: 'Search tests...',
+            }}
+            onEvent={(eventType, eventData) => {
+              if (eventType !== 'itemSelect') return;
+              const nextItemKey = String(eventData.itemData?.key || '').trim();
               if (!nextItemKey) return;
               if (!testItemByKey[nextItemKey]) return;
               setSelectedItemKey(nextItemKey);

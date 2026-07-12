@@ -2,9 +2,10 @@
   position: relative;
   margin-top: 0;
   margin-left: 0;
-  border: 1px solid transparent;
+  outline: 1px solid transparent;
   border-radius: 2px;
   background: transparent;
+  box-sizing: border-box;
 }
 
 .mobx-row.is-root {
@@ -22,7 +23,7 @@
 }
 
 .mobx-row-focused-logical {
-  border-color: #2563eb;
+  outline-color: #2563eb;
   background: rgba(219, 234, 254, 0.74);
   box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.12);
 }
@@ -98,9 +99,11 @@
 
 .mobx-row-seg-list-drag-hovered::before {
   content: "";
-  display: inline-block;
+  position: absolute;
+  top: 1px;
+  bottom: 1px;
+  left: 0;
   width: 2px;
-  min-height: 1em;
   background: #16a34a;
-  vertical-align: -0.12em;
+  pointer-events: none;
 }
