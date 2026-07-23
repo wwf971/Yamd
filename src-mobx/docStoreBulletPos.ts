@@ -1,5 +1,6 @@
 import type { DocStore } from './docStore';
 import type { CompBulletPosState, DocRecord } from './docStoreTypes';
+import { docStoreIsSegment } from './docStoreSegment';
 
 const createCompBulletPosState = (): CompBulletPosState => ({
   isBulletMeasureEnabled: true,
@@ -80,7 +81,7 @@ export function docStorePickCompBulletProviderId(
   const docRecord = store.ensureDoc(docId);
   const compData = docRecord.compDataById[String(compId || '')];
   const compName = String(compData?.compName || '');
-  if (compName === 'TextSeg') {
+  if (docStoreIsSegment(docRecord, String(compData?.compId || ''))) {
     return compData.compId;
   }
   if (compName === 'List') {
@@ -102,6 +103,5 @@ function isCompName(docRecord: DocRecord, compId: string, compName: string) {
 }
 
 function isCompBulletPosProvider(docRecord: DocRecord, compId: string) {
-  const compName = String(docRecord.compDataById[compId]?.compName || '');
-  return compName === 'TextSeg';
+  return docStoreIsSegment(docRecord, compId);
 }

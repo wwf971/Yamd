@@ -1,5 +1,6 @@
 import React from 'react';
 import type { DocStore } from '../docStore';
+import { docStoreIsSegment } from '../docStoreSegment';
 
 type PointerState = {
   x: number;
@@ -87,8 +88,7 @@ export function useDocDragInteraction({
 }
 
 function focusLeafIfOutsideCurrentFocus(store: DocStore, docId: string, compId: string) {
-  const compData = store.getCompDataById(docId, compId);
-  if (String(compData?.compName || '') !== 'TextSeg') return;
+  if (!docStoreIsSegment(store.ensureDoc(docId), compId)) return;
   const focusState = store.getInteractionState(docId).focusState;
   const compIdFocused = String(focusState.compIdFocused || focusState.segIdFocused || '');
   if (!compIdFocused || compIdFocused === compId) return;

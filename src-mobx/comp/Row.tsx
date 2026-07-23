@@ -49,11 +49,9 @@ const Row = observer(React.forwardRef<any, RowProps>(({ data = {}, config = {}, 
   const compIdBasisBulletProvider = String(bulletProviderState?.compIdBasis || '');
   const posYBulletPreferredProvider = bulletProviderState?.posYBulletPreferred ?? null;
   const messageBulletMeasureProvider = String(bulletProviderState?.messageBulletMeasure || '');
-  const segIdList = childIdList.filter((childIdRaw) => {
-    const childId = String(childIdRaw || '');
-    const childCompData = getCompDataById(childId);
-    return String(childCompData?.compName || '') === 'TextSeg';
-  });
+  const segIdList = childIdList
+    .map((childIdRaw) => String(childIdRaw || ''))
+    .filter((childId) => Boolean(getCompDataById(childId)));
   const dragItemId = compId ? `row:${compId}` : '';
   const dragRuntimeState = contextDocStore && dragItemId
     ? contextDocStore.store.getDragItemRuntimeState(contextDocStore.docId, dragItemId)

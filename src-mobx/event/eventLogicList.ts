@@ -1,7 +1,7 @@
 import type React from 'react';
-import { runInAction } from 'mobx';
 import type { DocStore } from '../docStore';
 import type { CompData, CompEditResult, CompEvent, CompFocusTarget } from '../docStoreTypes';
+import { docStoreGetSegmentIdListInRow, docStoreGetSegmentText } from '../docStoreSegment';
 import { getCaretOffsetByPoint, getClampedMousePoint } from '../util/caretUtils';
 
 type EventHandler = (event: CompEvent) => Promise<any> | any;
@@ -188,12 +188,12 @@ async function eventListRowSplitAttempt({
     ...childIdList.slice(childIndex + 1),
   ];
   const rowDataLeft = createRowComp(rowId, childIdListLeft, rowData);
-  const rowDataRight = createRowComp(createCompId(store, docId, 'row'), childIdListRight, rowData);
+  const rowDataRight = createRowComp(store.createCompId(docId, 'row'), childIdListRight, rowData);
 
   const childIdListList = getChildIdList(listData);
   const isRowListChild = childIdListList.includes(rowId);
   if (isRowListChild) {
-    const result = runInAction(() => {
+    const result = store.runDocEdit(docId, 'rowSplit', () => {
       for (const compDataNext of editResult.compListNext) {
         store.replaceCompData(docId, compDataNext);
       }
@@ -219,7 +219,7 @@ async function eventListRowSplitAttempt({
       compDataListRight,
       focus: editResult.focus,
     });
-    const rowDataBefore = createRowComp(createCompId(store, docId, 'row'), [
+    const rowDataBefore = createRowComp(store.createCompId(docId, 'row'), [
       ...childIdList.slice(0, childIndex),
       ...splitForMainRow.compIdListLeft,
     ], rowData);
@@ -231,7 +231,7 @@ async function eventListRowSplitAttempt({
       ...listData,
       mainCompId: rowId,
     };
-    const result = runInAction(() => {
+    const result = store.runDocEdit(docId, 'rowSplit', () => {
       splitForMainRow.compDataListNext.forEach((compDataNext) => {
         store.replaceCompData(docId, compDataNext);
       });
@@ -248,7 +248,7 @@ async function eventListRowSplitAttempt({
     ...listData,
     childIdList: [rowDataRight.compId, ...childIdListList.filter((childId) => childId !== rowDataRight.compId)],
   };
-  runInAction(() => {
+  store.runDocEdit(docId, 'rowSplit', () => {
     for (const compDataNext of editResult.compListNext) {
       store.replaceCompData(docId, compDataNext);
     }
@@ -259,6 +259,7 @@ async function eventListRowSplitAttempt({
     if (editResult.focus) {
       store.applyFocusAfterEdit(docId, editResult.focus, 'rowSplitAttempt');
     }
+    return { code: 0, message: 'Root main row split.' };
   });
   return { code: 0, message: 'Root main row split.' };
 }
@@ -310,7 +311,55 @@ async function eventListRowMergePrevAttempt({
     .map((childId) => store.getCompDataById(docId, childId))
     .filter((compData): compData is CompData => Boolean(compData));
   const focus = editResult.focus;
-  if (mergeTarget.listIdAdoptChildren) {
+  return store.runDocEdit(docId, 'rowMergePrev', () => {
+    if (mergeTarget.listIdAdoptChildren) {
+      const replaceResult = store.replaceChildRange(
+        docId,
+        mergeTarget.rowIdPrev,
+        [compIdPrevLast],
+        [...editResult.compListNext, ...compDataListMoved],
+        { focus, reason: 'rowMergePrevAttempt' },
+      );
+      if (replaceResult.code !== 0) return replaceResult;
+
+      const entryDataCurrent = store.getCompDataById(docId, mergeTarget.entryId);
+      const childIdListAdopted = getChildIdList(entryDataCurrent);
+      const rowDataCurrent = store.getCompDataById(docId, mergeTarget.rowId);
+      if (rowDataCurrent) {
+        store.replaceCompData(docId, createRowComp(mergeTarget.rowId, compIdCurrentFirst ? [compIdCurrentFirst] : [], rowDataCurrent));
+      }
+      if (childIdListAdopted.length > 0) {
+        moveChildEntriesAfterRow(store, docId, mergeTarget.listIdAdoptChildren, mergeTarget.rowIdPrev, childIdListAdopted);
+      }
+      if (entryDataCurrent) {
+        store.replaceCompData(docId, { ...entryDataCurrent, childIdList: [], mainCompId: undefined });
+      }
+      const resultRemoveCurrent = store.replaceChildRange(docId, mergeTarget.listIdParent, [mergeTarget.entryId], [], {
+        focus,
+        reason: 'rowMergePrevAttempt',
+      });
+      store.removeCompSubtree(docId, mergeTarget.rowId);
+      return resultRemoveCurrent.code === 0 ? { code: 0, message: 'Row merged with previous sibling subtree.' } : resultRemoveCurrent;
+    }
+    if (mergeTarget.entryId !== mergeTarget.rowId && mergeTarget.isRowPrevParentMain !== true) {
+      editResult.compListNext.forEach((compDataNext) => {
+        store.replaceCompData(docId, compDataNext);
+      });
+      store.replaceCompData(docId, createRowComp(
+        mergeTarget.rowId,
+        [...editResult.compListNext.map((compData) => compData.compId), ...compDataListMoved.map((compData) => compData.compId)],
+        rowData,
+      ));
+      if (rowDataPrev) {
+        store.replaceCompData(docId, { ...rowDataPrev, childIdList: [] });
+      }
+      const resultRemovePrev = store.replaceChildRange(docId, mergeTarget.listIdParent, [mergeTarget.rowIdPrev], [], {
+        focus,
+        reason: 'rowMergePrevAttempt',
+      });
+      return resultRemovePrev.code === 0 ? { code: 0, message: 'Main row merged with previous row.' } : resultRemovePrev;
+    }
+
     const replaceResult = store.replaceChildRange(
       docId,
       mergeTarget.rowIdPrev,
@@ -320,68 +369,22 @@ async function eventListRowMergePrevAttempt({
     );
     if (replaceResult.code !== 0) return replaceResult;
 
-    const entryDataCurrent = store.getCompDataById(docId, mergeTarget.entryId);
-    const childIdListAdopted = getChildIdList(entryDataCurrent);
-    const rowDataCurrent = store.getCompDataById(docId, mergeTarget.rowId);
-    if (rowDataCurrent) {
-      store.replaceCompData(docId, createRowComp(mergeTarget.rowId, compIdCurrentFirst ? [compIdCurrentFirst] : [], rowDataCurrent));
+    const rowDataDetached = store.getCompDataById(docId, mergeTarget.rowId);
+    if (rowDataDetached) {
+      store.replaceCompData(docId, { ...rowDataDetached, childIdList: [compIdCurrentFirst] });
     }
-    if (childIdListAdopted.length > 0) {
-      moveChildEntriesAfterRow(store, docId, mergeTarget.listIdAdoptChildren, mergeTarget.rowIdPrev, childIdListAdopted);
+    const entryDataDetached = mergeTarget.entryId !== mergeTarget.rowId
+      ? store.getCompDataById(docId, mergeTarget.entryId)
+      : null;
+    if (entryDataDetached) {
+      store.replaceCompData(docId, { ...entryDataDetached, childIdList: [], mainCompId: undefined });
     }
-    if (entryDataCurrent) {
-      store.replaceCompData(docId, { ...entryDataCurrent, childIdList: [], mainCompId: undefined });
-    }
-    const resultRemoveCurrent = store.replaceChildRange(docId, mergeTarget.listIdParent, [mergeTarget.entryId], [], {
+    store.replaceChildRange(docId, mergeTarget.listIdParent, [mergeTarget.entryId], [], {
       focus,
       reason: 'rowMergePrevAttempt',
     });
-    store.removeCompSubtree(docId, mergeTarget.rowId);
-    return resultRemoveCurrent.code === 0 ? { code: 0, message: 'Row merged with previous sibling subtree.' } : resultRemoveCurrent;
-  }
-  if (mergeTarget.entryId !== mergeTarget.rowId && mergeTarget.isRowPrevParentMain !== true) {
-    editResult.compListNext.forEach((compDataNext) => {
-      store.replaceCompData(docId, compDataNext);
-    });
-    store.replaceCompData(docId, createRowComp(
-      mergeTarget.rowId,
-      [...editResult.compListNext.map((compData) => compData.compId), ...compDataListMoved.map((compData) => compData.compId)],
-      rowData,
-    ));
-    if (rowDataPrev) {
-      store.replaceCompData(docId, { ...rowDataPrev, childIdList: [] });
-    }
-    const resultRemovePrev = store.replaceChildRange(docId, mergeTarget.listIdParent, [mergeTarget.rowIdPrev], [], {
-      focus,
-      reason: 'rowMergePrevAttempt',
-    });
-    return resultRemovePrev.code === 0 ? { code: 0, message: 'Main row merged with previous row.' } : resultRemovePrev;
-  }
-
-  const replaceResult = store.replaceChildRange(
-    docId,
-    mergeTarget.rowIdPrev,
-    [compIdPrevLast],
-    [...editResult.compListNext, ...compDataListMoved],
-    { focus, reason: 'rowMergePrevAttempt' },
-  );
-  if (replaceResult.code !== 0) return replaceResult;
-
-  const rowDataDetached = store.getCompDataById(docId, mergeTarget.rowId);
-  if (rowDataDetached) {
-    store.replaceCompData(docId, { ...rowDataDetached, childIdList: [compIdCurrentFirst] });
-  }
-  const entryDataDetached = mergeTarget.entryId !== mergeTarget.rowId
-    ? store.getCompDataById(docId, mergeTarget.entryId)
-    : null;
-  if (entryDataDetached) {
-    store.replaceCompData(docId, { ...entryDataDetached, childIdList: [], mainCompId: undefined });
-  }
-  store.replaceChildRange(docId, mergeTarget.listIdParent, [mergeTarget.entryId], [], {
-    focus,
-    reason: 'rowMergePrevAttempt',
+    return { code: 0, message: 'Row merged with previous row.' };
   });
-  return { code: 0, message: 'Row merged with previous row.' };
 }
 
 async function eventListRowDeleteAttempt({
@@ -416,17 +419,19 @@ async function eventListRowDeleteAttempt({
     return { code: -1, message: 'Cannot delete row.' };
   }
   const focus = pickFocusNearEntry(store, docId, entryInfo.listIdParent, entryInfo.entryId);
-  const rowDataDetached = store.getCompDataById(docId, rowId);
-  if (rowDataDetached) {
-    store.replaceCompData(docId, { ...rowDataDetached, childIdList: compIdChild ? [compIdChild] : [] });
-  }
-  const entryDataDetached = entryInfo.entryId !== rowId ? store.getCompDataById(docId, entryInfo.entryId) : null;
-  if (entryDataDetached) {
-    store.replaceCompData(docId, { ...entryDataDetached, childIdList: [], mainCompId: undefined });
-  }
-  return store.replaceChildRange(docId, entryInfo.listIdParent, [entryInfo.entryId], [], {
-    focus,
-    reason: 'rowDeleteAttempt',
+  return store.runDocEdit(docId, 'rowDelete', () => {
+    const rowDataDetached = store.getCompDataById(docId, rowId);
+    if (rowDataDetached) {
+      store.replaceCompData(docId, { ...rowDataDetached, childIdList: compIdChild ? [compIdChild] : [] });
+    }
+    const entryDataDetached = entryInfo.entryId !== rowId ? store.getCompDataById(docId, entryInfo.entryId) : null;
+    if (entryDataDetached) {
+      store.replaceCompData(docId, { ...entryDataDetached, childIdList: [], mainCompId: undefined });
+    }
+    return store.replaceChildRange(docId, entryInfo.listIdParent, [entryInfo.entryId], [], {
+      focus,
+      reason: 'rowDeleteAttempt',
+    });
   });
 }
 
@@ -527,33 +532,35 @@ async function eventListRowSelectionDeleteAttempt({
     compDataEnd,
     pointStart,
   });
-  compDataListEdge.forEach((compDataNext) => {
-    store.replaceCompData(docId, compDataNext);
-  });
+  return store.runDocEdit(docId, 'rowSelectionDelete', () => {
+    compDataListEdge.forEach((compDataNext) => {
+      store.replaceCompData(docId, compDataNext);
+    });
 
-  const childIdListMerged = [
-    ...childIdListStart.slice(0, childIndexStart),
-    ...compDataListEdge.map((compData) => compData.compId),
-    ...childIdListEnd.slice(childIndexEnd + 1),
-  ];
-  compIdListDelete.forEach((compIdDelete) => {
-    store.removeCompSubtree(docId, compIdDelete);
-  });
-  store.replaceCompData(docId, createRowComp(entryStart.rowId, childIdListMerged, rowDataStart));
+    const childIdListMerged = [
+      ...childIdListStart.slice(0, childIndexStart),
+      ...compDataListEdge.map((compData) => compData.compId),
+      ...childIdListEnd.slice(childIndexEnd + 1),
+    ];
+    compIdListDelete.forEach((compIdDelete) => {
+      store.removeCompSubtree(docId, compIdDelete);
+    });
+    store.replaceCompData(docId, createRowComp(entryStart.rowId, childIdListMerged, rowDataStart));
 
-  const entryIdListRemoved = rowEntryList
-    .slice(indexStart + 1, indexEnd + 1)
-    .map((entryInfo) => entryInfo.entryId);
-  if (entryIdListRemoved.length > 0) {
-    const resultRemoveRows = removeDirectRowEntries(store, docId, compId, entryIdListRemoved);
-    if (resultRemoveRows.code !== 0) return resultRemoveRows;
-  }
-  store.clearSelectionState(docId);
-  store.applyFocusAfterEdit(docId, {
-    compId: compDataListEdge[0]?.compId || compDataStart.compId,
-    point: { offset: Number(pointStart?.offset || 0) },
-  }, 'rowSelectionDeleteAttempt');
-  return { code: 0, message: 'Row selection deleted.' };
+    const entryIdListRemoved = rowEntryList
+      .slice(indexStart + 1, indexEnd + 1)
+      .map((entryInfo) => entryInfo.entryId);
+    if (entryIdListRemoved.length > 0) {
+      const resultRemoveRows = removeDirectRowEntries(store, docId, compId, entryIdListRemoved);
+      if (resultRemoveRows.code !== 0) return resultRemoveRows;
+    }
+    store.clearSelectionState(docId);
+    store.applyFocusAfterEdit(docId, {
+      compId: compDataListEdge[0]?.compId || compDataStart.compId,
+      point: { offset: Number(pointStart?.offset || 0) },
+    }, 'rowSelectionDeleteAttempt');
+    return { code: 0, message: 'Row selection deleted.' };
+  });
 }
 
 async function eventListRowNavigate({
@@ -939,7 +946,7 @@ function getPointCompId(point: any) {
 function createFocusTargetForComp(compData: CompData | null) {
   const compId = String(compData?.compId || '');
   if (!compId) return undefined;
-  const text = String(compData?.data?.text || '');
+  const text = docStoreGetSegmentText(compData);
   return {
     compId,
     point: { offset: text.length },
@@ -1017,14 +1024,6 @@ function createRowComp(rowId: string, childIdList: string[], rowDataTemplate: Co
     data: { ...(rowDataTemplate.data || {}) },
     config: { ...(rowDataTemplate.config || {}) },
   };
-}
-
-function createCompId(store: DocStore, docId: string, prefix: string) {
-  let compId = `${prefix}-${Math.random().toString(36).slice(2, 10)}`;
-  while (store.getCompDataById(docId, compId)) {
-    compId = `${prefix}-${Math.random().toString(36).slice(2, 10)}`;
-  }
-  return compId;
 }
 
 function collectRowIdsInList(store: DocStore, docId: string, listId: string) {
@@ -1105,7 +1104,7 @@ function pickSegTargetForListFocus(
     }
   }
   const segId = isFromEnd ? segIdList[segIdList.length - 1] : segIdList[0];
-  const text = String(store.getCompDataById(docId, segId)?.data?.text || '');
+  const text = docStoreGetSegmentText(store.getCompDataById(docId, segId));
   return {
     segId,
     offset: isFromEnd ? text.length : 0,
@@ -1135,11 +1134,7 @@ function pickNearestSegTargetByX(listEl: HTMLElement | null, segIdList: string[]
 }
 
 function getRowSegIdList(store: DocStore, docId: string, rowId: string) {
-  const rowData = store.getCompDataById(docId, rowId);
-  const childIdList = Array.isArray(rowData?.childIdList) ? rowData.childIdList : [];
-  return childIdList.map((childIdRaw) => String(childIdRaw || '')).filter((childId) => (
-    isCompName(store, docId, childId, 'TextSeg')
-  ));
+  return docStoreGetSegmentIdListInRow(store.ensureDoc(docId), rowId);
 }
 
 function isCompName(store: DocStore, docId: string, compId: string, compName: string) {

@@ -1,6 +1,7 @@
 import type React from 'react';
 import type { DocStore } from '../docStore';
 import type { CompData, CompEditResult, CompEvent, SelectionState } from '../docStoreTypes';
+import { docStoreGetSegmentText } from '../docStoreSegment';
 import { getCaretOffsetByPoint, getClampedMousePoint } from '../util/caretUtils';
 
 type EventHandler = (event: CompEvent) => Promise<any> | any;
@@ -295,7 +296,15 @@ async function eventRowChildSplitAttempt({
   if (!childIdList.includes(compIdChild)) {
     return { code: -1, message: `Child component not found in row. compId=${compIdChild}` };
   }
-  if (isRowEmptyTextOnly(store, docId, childIdList, compIdChild)) {
+  const resultEmpty = childIdList.length === 1
+    ? await store.sendEventToCompDirect(docId, compIdChild, {
+      type: 'selfIsEmptyQuery',
+      sourceId: compId,
+      targetId: docId,
+      data: {},
+    })
+    : null;
+  if (resultEmpty?.code === 0 && resultEmpty.data?.isEmpty === true) {
     const resultOutdent = await store.sendEventToParent(docId, compId, {
       type: 'rowOutdentAttempt',
       sourceId: compId,
@@ -681,15 +690,6 @@ function getPointCompId(point: any) {
   return String(point?.compId || point?.segId || '');
 }
 
-function isRowEmptyTextOnly(store: DocStore, docId: string, childIdList: string[], compIdChild: string) {
-  if (childIdList.length !== 1 || childIdList[0] !== compIdChild) {
-    return false;
-  }
-  const compData = store.getCompDataById(docId, compIdChild);
-  return String(compData?.compName || '') === 'TextSeg'
-    && String(compData?.data?.text || '') === '';
-}
-
 function pickChildIdFromEvent(event: CompEvent) {
   return String(event?.data?.compIdChild || event?.data?.segId || event.sourceId || '');
 }
@@ -697,7 +697,7 @@ function pickChildIdFromEvent(event: CompEvent) {
 function createFocusTargetForComp(compData: CompData | null) {
   const compId = String(compData?.compId || '');
   if (!compId) return undefined;
-  const text = String(compData?.data?.text || '');
+  const text = docStoreGetSegmentText(compData);
   return {
     compId,
     point: { offset: text.length },
@@ -747,7 +747,7 @@ function pickSegTargetForRowFocus(
     }
   }
   const segId = isFromEnd ? segIdList[segIdList.length - 1] : segIdList[0];
-  const text = String(store.getCompDataById(docId, segId)?.data?.text || '');
+  const text = docStoreGetSegmentText(store.getCompDataById(docId, segId));
   return {
     segId,
     offset: isFromEnd ? text.length : 0,

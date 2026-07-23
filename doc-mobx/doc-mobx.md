@@ -33,11 +33,15 @@ For split, indent, and outdent behavior, see `./comp_indent_split.md`.
 
 For delete and copy actions, see `./comp_delete_copy.md`.
 
+Accepted content and structure changes run through one document edit transaction. For the transaction boundary, history tree, and undo or redo API, see `../doc/history.md`.
+
 ## Bullet Position System
 
 For measured list bullet placement and connector line behavior, see `./comp_bullet.md`.
 
 ## Segment Level Components
+
+`TextSeg` is one segment implementation. Document-level processing identifies segments by their direct position inside a `Row` and uses segment query contracts for content-specific behavior.
 
 For `TextSeg`, see `./comp_text_seg.md`.
 

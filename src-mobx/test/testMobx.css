@@ -228,3 +228,124 @@
   white-space: pre-wrap;
   word-break: break-word;
 }
+
+.mobx-history-panel {
+  margin-top: 6px;
+  padding: 5px;
+  border: 1px solid #c8d1dc;
+  border-radius: 2px;
+  background: #ffffff;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.mobx-history-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 5px;
+}
+
+.mobx-history-title {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.mobx-history-actions,
+.mobx-history-branch-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+
+.mobx-history-btn {
+  min-height: 22px;
+  padding: 0 6px;
+  border: 1px solid #c8d1dc;
+  border-radius: 2px;
+  background: #edf2f7;
+  font-size: 11px;
+  font-family: sans-serif;
+  cursor: pointer;
+}
+
+.mobx-history-btn:disabled {
+  color: #9aa3ad;
+  cursor: default;
+}
+
+.mobx-history-status {
+  font-size: 11px;
+  color: #4b5563;
+}
+
+.mobx-history-tree {
+  max-height: 260px;
+  overflow: auto;
+  padding: 3px;
+  border: 1px solid #e0e5eb;
+  background: #f8fafc;
+}
+
+.mobx-history-node-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.mobx-history-node {
+  min-height: 22px;
+  padding: 2px 4px;
+  border: 1px solid #d7dce2;
+  border-radius: 2px;
+  background: #ffffff;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+}
+
+.mobx-history-node-current {
+  border-color: #3b82f6;
+  background: #eff6ff;
+}
+
+.mobx-history-node-preferred {
+  border-left: 3px solid #f59e0b;
+}
+
+.mobx-history-node-depth {
+  min-width: 14px;
+  color: #7b8490;
+  text-align: right;
+}
+
+.mobx-history-node-type {
+  min-width: 88px;
+  font-weight: 600;
+}
+
+.mobx-history-node-kind {
+  min-width: 62px;
+  color: #98a2b3;
+}
+
+.mobx-history-node-patch {
+  color: #667085;
+}
+
+.mobx-history-node-mark {
+  margin-left: auto;
+  color: #1d4ed8;
+  font-weight: 600;
+}
+
+.mobx-history-node-children {
+  margin-left: 10px;
+  padding-left: 4px;
+  border-left: 1px solid #cbd5e1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}

@@ -20,7 +20,7 @@ const testItems = [
     parentKey: 'group-html-tests',
     Comp: CrossElementSelectTest,
   },
-  { key: 'group-document-renderer', label: 'Document Renderer', description: '' },
+  { key: 'group-document-renderer', label: 'Doc Renderer', description: '' },
   {
     key: 'main-renderer',
     label: 'Main Renderer',
@@ -28,7 +28,7 @@ const testItems = [
     parentKey: 'group-document-renderer',
     Comp: TestRender,
   },
-  { key: 'group-document-editor', label: 'Document Editor', description: '' },
+  { key: 'group-document-editor', label: 'Doc Editor', description: '' },
   {
     key: 'main-editor',
     label: 'Main Editor',

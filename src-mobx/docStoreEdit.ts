@@ -7,6 +7,21 @@ import type {
   SelectionState,
   SelectionTrackPoint,
 } from './docStoreTypes';
+import { docStoreCreateCompId } from './docStoreCompData';
+import {
+  docStoreGetActiveEdit,
+  editPutCompData,
+  editRemoveComp,
+  editRemoveCompSubtree,
+  editSetChildIdList,
+  type DocEditContext,
+} from './docStoreEditContext';
+import {
+  docStoreCollectSegmentIds,
+  docStoreGetOwningRowId,
+  docStoreGetSegmentIdListInRow,
+  docStoreIsSegment,
+} from './docStoreSegment';
 
 type OutlineEntryInfo = {
   entryId: string;
@@ -18,15 +33,6 @@ type StructureEditResult = {
   code: number;
   message: string;
   data?: any;
-};
-
-const createEventId = (length = 12) => {
-  const chars = '0123456789abcdefghijklmnopqrstuvwxyz';
-  let result = '';
-  for (let index = 0; index < length; index += 1) {
-    result += chars[Math.floor(Math.random() * chars.length)];
-  }
-  return result;
 };
 
 export function docStoreApplyCompEditResult(
@@ -91,21 +97,22 @@ export function docStoreReplaceChildRange(
     return { code: -1, message: `Child range not found. parentId=${parentId}` };
   }
 
+  const contextEdit = docStoreGetActiveEdit(store, docId);
   const childIdSetNext = new Set(compDataListNext.map((compData) => String(compData.compId || '')));
   for (const childIdOld of childIdListOld) {
     if (!childIdSetNext.has(childIdOld)) {
-      removeCompSubtreeFromRecord(docRecord, childIdOld);
+      editRemoveCompSubtree(contextEdit, childIdOld);
     }
   }
   for (const compDataNext of compDataListNext) {
-    docRecord.compDataById[compDataNext.compId] = cloneCompData(compDataNext);
+    editPutCompData(contextEdit, compDataNext);
   }
   const childIdListNext = compDataListNext.map((compData) => String(compData.compId || '')).filter(Boolean);
-  parentData.childIdList = [
+  editSetChildIdList(contextEdit, String(parentId || ''), [
     ...childIdList.slice(0, indexStart),
     ...childIdListNext,
     ...childIdList.slice(indexStart + childIdListOld.length),
-  ];
+  ]);
   store.clearSelectionState(docId);
   if (options.focus) {
     docStoreApplyFocusAfterEdit(store, docId, options.focus, String(options.reason || 'compEdit'));
@@ -131,12 +138,13 @@ export function docStoreInsertChildAfter(
   if (childIndex < 0) {
     return { code: -1, message: `Reference child not found. compId=${childIdRef}` };
   }
-  docRecord.compDataById[compDataNext.compId] = cloneCompData(compDataNext);
-  parentData.childIdList = [
+  const contextEdit = docStoreGetActiveEdit(store, docId);
+  editPutCompData(contextEdit, compDataNext);
+  editSetChildIdList(contextEdit, String(parentId || ''), [
     ...childIdList.slice(0, childIndex + 1),
     compDataNext.compId,
     ...childIdList.slice(childIndex + 1).filter((id) => id !== compDataNext.compId),
-  ];
+  ]);
   store.clearSelectionState(docId);
   if (options.focus) {
     docStoreApplyFocusAfterEdit(store, docId, options.focus, String(options.reason || 'compInsert'));
@@ -145,17 +153,15 @@ export function docStoreInsertChildAfter(
 }
 
 export function docStoreRemoveCompSubtree(store: DocStore, docId: string, compId: string) {
-  const docRecord = store.ensureDoc(docId);
-  removeCompSubtreeFromRecord(docRecord, compId);
+  editRemoveCompSubtree(docStoreGetActiveEdit(store, docId), compId);
   return { code: 0, message: 'Component subtree removed.' };
 }
 
 export function docStoreReplaceCompData(store: DocStore, docId: string, compDataNext: CompData) {
-  const docRecord = store.ensureDoc(docId);
   if (!compDataNext?.compId) {
     return { code: -1, message: 'Replacement component id missing.' };
   }
-  docRecord.compDataById[compDataNext.compId] = cloneCompData(compDataNext);
+  editPutCompData(docStoreGetActiveEdit(store, docId), compDataNext);
   return { code: 0, message: 'Component data replaced.' };
 }
 
@@ -187,7 +193,7 @@ export function docStoreIndentEntryBySegId(store: DocStore, docId: string, segId
   if (!entryInfo) {
     return { code: -1, message: `Owning entry not found. segId=${segId}` };
   }
-  const result = indentEntryByEntryId(docRecord, entryInfo.entryId);
+  const result = indentEntryByEntryId(docStoreGetActiveEdit(store, docId), entryInfo.entryId);
   if (result.code !== 0) return result;
   finishStructureEdit(store, docId, segId, 'rowIndent', selectionStateBefore);
   return { code: 0, message: 'Entry indented.' };
@@ -205,7 +211,7 @@ export function docStoreIndentEntryByRowId(store: DocStore, docId: string, rowId
   if (!entryInfo) {
     return { code: -1, message: `Owning entry not found. rowId=${rowId}` };
   }
-  const result = indentEntryByEntryId(docRecord, entryInfo.entryId);
+  const result = indentEntryByEntryId(docStoreGetActiveEdit(store, docId), entryInfo.entryId);
   if (result.code !== 0) return result;
   finishStructureEdit(store, docId, compIdFocus || getFirstSegIdInRow(docRecord, rowId), 'rowIndent', selectionStateBefore);
   return { code: 0, message: 'Entry indented.' };
@@ -223,7 +229,7 @@ export function docStoreOutdentEntryBySegId(store: DocStore, docId: string, segI
   if (!entryInfo) {
     return { code: -1, message: `Owning entry not found. segId=${segId}` };
   }
-  const result = outdentEntryByEntryId(docRecord, entryInfo.entryId);
+  const result = outdentEntryByEntryId(docStoreGetActiveEdit(store, docId), entryInfo.entryId);
   if (result.code !== 0) return result;
   finishStructureEdit(store, docId, segId, 'rowOutdent', selectionStateBefore);
   return { code: 0, message: 'Entry outdented.' };
@@ -241,7 +247,7 @@ export function docStoreOutdentEntryByRowId(store: DocStore, docId: string, rowI
   if (!entryInfo) {
     return { code: -1, message: `Owning entry not found. rowId=${rowId}` };
   }
-  const result = outdentEntryByEntryId(docRecord, entryInfo.entryId);
+  const result = outdentEntryByEntryId(docStoreGetActiveEdit(store, docId), entryInfo.entryId);
   if (result.code !== 0) return result;
   finishStructureEdit(store, docId, compIdFocus || getFirstSegIdInRow(docRecord, rowId), 'rowOutdent', selectionStateBefore);
   return { code: 0, message: 'Entry outdented.' };
@@ -253,16 +259,14 @@ function indentSelectedEntries(
   entryInfoList: OutlineEntryInfo[],
   selectionStateBefore: SelectionState | null,
 ) {
-  const docRecord = store.ensureDoc(docId);
-  const docRecordNext = cloneDocRecordForStructureEdit(docRecord);
+  const contextEdit = docStoreGetActiveEdit(store, docId);
   for (const entryInfo of entryInfoList) {
-    const result = indentEntryByEntryId(docRecordNext, entryInfo.entryId, { isPreserveExistingChildren: true });
+    const result = indentEntryByEntryId(contextEdit, entryInfo.entryId, { isPreserveExistingChildren: true });
     if (result.code !== 0) {
       return result;
     }
   }
-  docRecord.compDataById = docRecordNext.compDataById;
-  const segIdFocused = pickSegIdForStructureFocus(docRecord, entryInfoList);
+  const segIdFocused = pickSegIdForStructureFocus(store.ensureDoc(docId), entryInfoList);
   finishStructureEdit(store, docId, segIdFocused, 'rowIndent', selectionStateBefore);
   return { code: 0, message: 'Selected entries indented.' };
 }
@@ -273,25 +277,24 @@ function outdentSelectedEntries(
   entryInfoList: OutlineEntryInfo[],
   selectionStateBefore: SelectionState | null,
 ) {
-  const docRecord = store.ensureDoc(docId);
-  const docRecordNext = cloneDocRecordForStructureEdit(docRecord);
+  const contextEdit = docStoreGetActiveEdit(store, docId);
   for (let index = entryInfoList.length - 1; index >= 0; index -= 1) {
-    const result = outdentEntryByEntryId(docRecordNext, entryInfoList[index].entryId);
+    const result = outdentEntryByEntryId(contextEdit, entryInfoList[index].entryId);
     if (result.code !== 0) {
       return result;
     }
   }
-  docRecord.compDataById = docRecordNext.compDataById;
-  const segIdFocused = pickSegIdForStructureFocus(docRecord, entryInfoList);
+  const segIdFocused = pickSegIdForStructureFocus(store.ensureDoc(docId), entryInfoList);
   finishStructureEdit(store, docId, segIdFocused, 'rowOutdent', selectionStateBefore);
   return { code: 0, message: 'Selected entries outdented.' };
 }
 
 function indentEntryByEntryId(
-  docRecord: DocRecord,
+  contextEdit: DocEditContext,
   entryId: string,
   options: { isPreserveExistingChildren?: boolean } = {},
 ): StructureEditResult {
+  const docRecord = contextEdit.store.ensureDoc(contextEdit.docId);
   const listIdParent = getOwningListIdForChildEntry(docRecord, entryId);
   const listParent = listIdParent ? docRecord.compDataById[listIdParent] : null;
   const childIdList = Array.isArray(listParent?.childIdList) ? listParent.childIdList.map((id) => String(id || '')) : [];
@@ -316,40 +319,41 @@ function indentEntryByEntryId(
 
   if (String(entryPrev.compName || '') === 'List') {
     if (!isPreserveExistingChildren && String(entryData.compName || '') === 'List') {
-      entryData.childIdList = [];
+      editSetChildIdList(contextEdit, entryId, []);
     }
-    listParent.childIdList = childIdList.filter((id) => id !== entryId);
-    entryPrev.childIdList = [
+    editSetChildIdList(contextEdit, listIdParent, childIdList.filter((id) => id !== entryId));
+    editSetChildIdList(contextEdit, entryIdPrev, [
       ...(Array.isArray(entryPrev.childIdList) ? entryPrev.childIdList.map((id) => String(id || '')) : []),
       entryId,
       ...childIdListFormer,
-    ];
+    ]);
     return { code: 0, message: 'Entry indented.' };
   }
 
   if (String(entryPrev.compName || '') === 'Row') {
     if (!isPreserveExistingChildren && String(entryData.compName || '') === 'List') {
-      entryData.childIdList = [];
+      editSetChildIdList(contextEdit, entryId, []);
     }
-    const listIdWrapped = createCompId(docRecord, 'list');
-    docRecord.compDataById[listIdWrapped] = {
+    const listIdWrapped = docStoreCreateCompId(docRecord, 'list');
+    editPutCompData(contextEdit, {
       compId: listIdWrapped,
       compName: 'List',
       mainCompId: entryIdPrev,
       childIdList: [entryId, ...childIdListFormer],
       data: {},
       config: {},
-    };
-    listParent.childIdList = childIdList
+    });
+    editSetChildIdList(contextEdit, listIdParent, childIdList
       .filter((id) => id !== entryId)
-      .map((id) => (id === entryIdPrev ? listIdWrapped : id));
+      .map((id) => (id === entryIdPrev ? listIdWrapped : id)));
     return { code: 0, message: 'Entry indented.' };
   }
 
   return { code: -1, message: `Previous entry cannot receive children. compId=${entryIdPrev}` };
 }
 
-function outdentEntryByEntryId(docRecord: DocRecord, entryId: string): StructureEditResult {
+function outdentEntryByEntryId(contextEdit: DocEditContext, entryId: string): StructureEditResult {
+  const docRecord = contextEdit.store.ensureDoc(contextEdit.docId);
   const listIdParent = getOwningListIdForChildEntry(docRecord, entryId);
   const listIdGrandparent = listIdParent ? getOwningListIdForChildEntry(docRecord, listIdParent) : '';
   const listParent = listIdParent ? docRecord.compDataById[listIdParent] : null;
@@ -361,24 +365,24 @@ function outdentEntryByEntryId(docRecord: DocRecord, entryId: string): Structure
   }
 
   const childIdListFollowing = childIdList.slice(entryIndex + 1);
-  listParent.childIdList = childIdList.slice(0, entryIndex);
+  editSetChildIdList(contextEdit, listIdParent, childIdList.slice(0, entryIndex));
   let entryIdMoved = entryId;
   const entryData = docRecord.compDataById[entryId];
   if (String(entryData?.compName || '') === 'List') {
-    entryData.childIdList = [
+    editSetChildIdList(contextEdit, entryId, [
       ...(Array.isArray(entryData.childIdList) ? entryData.childIdList.map((id) => String(id || '')) : []),
       ...childIdListFollowing,
-    ];
+    ]);
   } else if (childIdListFollowing.length > 0) {
-    entryIdMoved = createCompId(docRecord, 'list');
-    docRecord.compDataById[entryIdMoved] = {
+    entryIdMoved = docStoreCreateCompId(docRecord, 'list');
+    editPutCompData(contextEdit, {
       compId: entryIdMoved,
       compName: 'List',
       mainCompId: entryId,
       childIdList: childIdListFollowing,
       data: {},
       config: {},
-    };
+    });
   }
   const mainRowIdParent = String(listParent.mainCompId || '');
   const isParentListEmpty = Array.isArray(listParent.childIdList) && listParent.childIdList.length === 0;
@@ -389,15 +393,14 @@ function outdentEntryByEntryId(docRecord: DocRecord, entryId: string): Structure
     const childIdListGrandparent = Array.isArray(listGrandparent.childIdList)
       ? listGrandparent.childIdList.map((id) => String(id || ''))
       : [];
-    listGrandparent.childIdList = childIdListGrandparent.map((childId) => (
+    editSetChildIdList(contextEdit, listIdGrandparent, childIdListGrandparent.map((childId) => (
       childId === listIdParent ? mainRowIdParent : childId
-    ));
-    delete docRecord.compDataById[listIdParent];
-    docRecord.compOrder = docRecord.compOrder.filter((compId) => compId !== listIdParent);
-    insertChildAfter(docRecord, listIdGrandparent, mainRowIdParent, entryIdMoved);
+    )));
+    editRemoveComp(contextEdit, listIdParent);
+    insertChildAfter(contextEdit, listIdGrandparent, mainRowIdParent, entryIdMoved);
     return { code: 0, message: 'Entry outdented.' };
   }
-  insertChildAfter(docRecord, listIdGrandparent, listIdParent, entryIdMoved);
+  insertChildAfter(contextEdit, listIdGrandparent, listIdParent, entryIdMoved);
   return { code: 0, message: 'Entry outdented.' };
 }
 
@@ -430,7 +433,7 @@ function getSelectedRowIdListFromSelection(docRecord: DocRecord) {
     return [];
   }
 
-  const segIdList = collectTextSegIdsInDocOrder(docRecord);
+  const segIdList = docStoreCollectSegmentIds(docRecord);
   const indexAnchor = segIdList.indexOf(pointAnchor.segId);
   const indexFocus = segIdList.indexOf(pointFocus.segId);
   if (indexAnchor === -1 || indexFocus === -1) {
@@ -442,7 +445,7 @@ function getSelectedRowIdListFromSelection(docRecord: DocRecord) {
   const rowIdList: string[] = [];
   const rowIdSet = new Set<string>();
   for (let index = indexStart; index <= indexEnd; index += 1) {
-    const rowId = getOwningRowId(docRecord, segIdList[index]);
+    const rowId = docStoreGetOwningRowId(docRecord, segIdList[index]);
     if (!rowId || rowIdSet.has(rowId)) continue;
     rowIdSet.add(rowId);
     rowIdList.push(rowId);
@@ -458,7 +461,7 @@ function getSelectionRangeBySegOrder(docRecord: DocRecord) {
     return null;
   }
 
-  const segIdList = collectTextSegIdsInDocOrder(docRecord);
+  const segIdList = docStoreCollectSegmentIds(docRecord);
   const indexAnchor = segIdList.indexOf(pointAnchor.segId);
   const indexFocus = segIdList.indexOf(pointFocus.segId);
   if (indexAnchor === -1 || indexFocus === -1) {
@@ -476,11 +479,11 @@ function getSelectionRangeBySegOrder(docRecord: DocRecord) {
 }
 
 function collectSelectedRowIdsFromSegRange(docRecord: DocRecord, indexStart: number, indexEnd: number) {
-  const segIdList = collectTextSegIdsInDocOrder(docRecord);
+  const segIdList = docStoreCollectSegmentIds(docRecord);
   const rowIdList: string[] = [];
   const rowIdSet = new Set<string>();
   for (let index = indexStart; index <= indexEnd; index += 1) {
-    const rowId = getOwningRowId(docRecord, segIdList[index]);
+    const rowId = docStoreGetOwningRowId(docRecord, segIdList[index]);
     if (!rowId || rowIdSet.has(rowId)) continue;
     rowIdSet.add(rowId);
     rowIdList.push(rowId);
@@ -489,7 +492,7 @@ function collectSelectedRowIdsFromSegRange(docRecord: DocRecord, indexStart: num
 }
 
 function getOutlineEntryInfoBySegId(docRecord: DocRecord, segId: string) {
-  const rowId = getOwningRowId(docRecord, segId);
+  const rowId = docStoreGetOwningRowId(docRecord, segId);
   return rowId ? getOutlineEntryInfoByRowId(docRecord, rowId) : null;
 }
 
@@ -541,25 +544,9 @@ function isEntryDescendantOfEntry(docRecord: DocRecord, entryIdChild: string, en
   return false;
 }
 
-function cloneDocRecordForStructureEdit(docRecord: DocRecord): DocRecord {
-  return {
-    ...docRecord,
-    compDataById: Object.fromEntries(Object.entries(docRecord.compDataById || {}).map(([compId, compData]) => ([
-      compId,
-      {
-        ...compData,
-        childIdList: Array.isArray(compData.childIdList) ? compData.childIdList.map((id) => String(id || '')) : [],
-        mainCompId: compData.mainCompId ? String(compData.mainCompId) : undefined,
-        data: { ...(compData.data || {}) },
-        config: { ...(compData.config || {}) },
-      },
-    ]))),
-  };
-}
-
 function pickSegIdForStructureFocus(docRecord: DocRecord, entryInfoList: OutlineEntryInfo[]) {
   const segIdFocused = String(docRecord.interactionState.focusState.segIdFocused || '');
-  if (isCompName(docRecord, segIdFocused, 'TextSeg')) {
+  if (docStoreIsSegment(docRecord, segIdFocused)) {
     return segIdFocused;
   }
   for (const entryInfo of entryInfoList) {
@@ -740,7 +727,7 @@ function focusSegAfterStructureEdit(
   const docRecord = store.ensureDoc(docId);
   const segIdSafe = String(segId || '');
   const offsetFocused = store.getInteractionState(docId).focusState.offsetFocused;
-  if (!isCompName(docRecord, segIdSafe, 'TextSeg')) {
+  if (!docStoreIsSegment(docRecord, segIdSafe)) {
     return;
   }
   store.segFocus(docId, segIdSafe, offsetFocused, reason);
@@ -794,40 +781,6 @@ function findChildRangeIndex(childIdList: string[], childIdListOld: string[]) {
   return -1;
 }
 
-function cloneCompData(compData: CompData): CompData {
-  return {
-    ...compData,
-    childIdList: Array.isArray(compData.childIdList) ? compData.childIdList.map((id) => String(id || '')) : [],
-    mainCompId: compData.mainCompId ? String(compData.mainCompId) : undefined,
-    data: { ...(compData.data || {}) },
-    config: { ...(compData.config || {}) },
-  };
-}
-
-function removeCompSubtreeFromRecord(docRecord: DocRecord, compId: string) {
-  const compIdSafe = String(compId || '');
-  if (!compIdSafe) return;
-  const compData = docRecord.compDataById[compIdSafe];
-  if (!compData) return;
-  const childIdList = Array.isArray(compData.childIdList) ? compData.childIdList.map((id) => String(id || '')) : [];
-  for (const childId of childIdList) {
-    removeCompSubtreeFromRecord(docRecord, childId);
-  }
-  if (compData.mainCompId) {
-    removeCompSubtreeFromRecord(docRecord, String(compData.mainCompId));
-  }
-  delete docRecord.compDataById[compIdSafe];
-  docRecord.compOrder = docRecord.compOrder.filter((id) => id !== compIdSafe);
-}
-
-function createCompId(docRecord: DocRecord, prefix: string) {
-  let compId = `${prefix}-${createEventId(8)}`;
-  while (docRecord.compDataById[compId]) {
-    compId = `${prefix}-${createEventId(8)}`;
-  }
-  return compId;
-}
-
 function createRowComp(rowId: string, childIdList: string[], rowDataTemplate: CompData): CompData {
   return {
     compId: rowId,
@@ -852,33 +805,7 @@ function getOwningRowId(docRecord: DocRecord, segId: string) {
 }
 
 function getFirstSegIdInRow(docRecord: DocRecord, rowId: string) {
-  const rowData = docRecord.compDataById[rowId];
-  const childIdList = Array.isArray(rowData?.childIdList) ? rowData.childIdList.map((id) => String(id || '')) : [];
-  return childIdList.find((childId) => String(docRecord.compDataById[childId]?.compName || '') === 'TextSeg') || '';
-}
-
-function collectTextSegIdsInDocOrder(docRecord: DocRecord) {
-  const compIdRoot = String(docRecord.compIdRoot || '');
-  const segIdList: string[] = [];
-  collectTextSegIdsFromComp(docRecord, compIdRoot, segIdList);
-  return segIdList;
-}
-
-function collectTextSegIdsFromComp(docRecord: DocRecord, compId: string, segIdList: string[]) {
-  const compData = docRecord.compDataById[compId];
-  if (!compData) return;
-  if (String(compData.compName || '') === 'TextSeg') {
-    segIdList.push(compId);
-    return;
-  }
-  const mainCompId = String(compData.mainCompId || '');
-  if (mainCompId) {
-    collectTextSegIdsFromComp(docRecord, mainCompId, segIdList);
-  }
-  const childIdList = Array.isArray(compData.childIdList) ? compData.childIdList.map((id) => String(id || '')) : [];
-  for (const childId of childIdList) {
-    collectTextSegIdsFromComp(docRecord, childId, segIdList);
-  }
+  return docStoreGetSegmentIdListInRow(docRecord, rowId)[0] || '';
 }
 
 function getListIdByMainRowId(docRecord: DocRecord, rowId: string) {
@@ -940,19 +867,15 @@ function getPreviousRowMergeTarget(docRecord: DocRecord, rowId: string) {
   return { listIdParent: listIdParentOfList, entryId: listIdMain, rowIdPrev: entryIdPrev };
 }
 
-function insertChildAfter(docRecord: DocRecord, listId: string, childIdRef: string, childIdNext: string) {
+function insertChildAfter(contextEdit: DocEditContext, listId: string, childIdRef: string, childIdNext: string) {
+  const docRecord = contextEdit.store.ensureDoc(contextEdit.docId);
   const listData = docRecord.compDataById[listId];
   if (!listData) return;
   const childIdList = Array.isArray(listData.childIdList) ? listData.childIdList.map((id) => String(id || '')) : [];
-  const childIndex = childIdList.indexOf(childIdRef);
-  if (childIndex === -1) return;
-  if (childIdList.includes(childIdNext)) {
-    listData.childIdList = childIdList.filter((id) => id !== childIdNext);
-  }
-  const childIdListCurrent = Array.isArray(listData.childIdList) ? listData.childIdList.map((id) => String(id || '')) : [];
-  const childIndexCurrent = childIdListCurrent.indexOf(childIdRef);
-  childIdListCurrent.splice(childIndexCurrent + 1, 0, childIdNext);
-  listData.childIdList = childIdListCurrent;
+  if (childIdList.indexOf(childIdRef) === -1) return;
+  const childIdListNext = childIdList.filter((id) => id !== childIdNext);
+  childIdListNext.splice(childIdListNext.indexOf(childIdRef) + 1, 0, childIdNext);
+  editSetChildIdList(contextEdit, listId, childIdListNext);
 }
 
 function isCompName(docRecord: DocRecord, compId: string, compName: string) {

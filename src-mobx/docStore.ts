@@ -26,6 +26,30 @@ import {
   docStoreReplaceChildRange,
   docStoreReplaceCompData,
 } from './docStoreEdit';
+import { docStoreCreateCompId, idCreateRandom } from './docStoreCompData';
+import { docStoreRunEdit } from './docStoreEditTransaction';
+import {
+  createDocHistoryState,
+  docStoreCheckpointCompVersion,
+  docStoreGetHistoryBranchList,
+  docStorePruneHistory,
+  docStoreRedoEdit,
+  docStoreResetHistory,
+  docStoreSetRedoBranch,
+  docStoreUndoEdit,
+} from './docStoreHistory';
+import {
+  compVersionMaterialize,
+  registerCompDataDiffHandler as versionRegisterCompDataDiffHandler,
+} from './docStoreVersion';
+import {
+  docStoreGetActiveEdit,
+  docStoreGetActiveEditOrNull,
+  editUpdateCompConfig,
+  editUpdateCompData,
+  editUpdateDocText,
+} from './docStoreEditContext';
+import { docStoreGetOwningRowId, docStoreIsSegment } from './docStoreSegment';
 import {
   docStoreGetSelectionMarkdownText,
   docStoreGetSelectionMarkdownTextSync,
@@ -48,7 +72,10 @@ import {
 import type {
   CompBulletPosState,
   CompData,
+  CompDataDiffHandler,
   CompEditResult,
+  DocEditOptions,
+  DocEditState,
   CompEvent,
   CompEventResult,
   CompFocusTarget,
@@ -63,8 +90,21 @@ import type {
 } from './docStoreTypes';
 export type {
   CompBulletPosState,
+  CompChange,
   CompData,
+  CompDataDiffHandler,
   CompEditResult,
+  CompFieldChange,
+  CompVersion,
+  CompVersionDiff,
+  CompVersionStore,
+  DocChange,
+  DocEditChangeSet,
+  DocEditKind,
+  DocEditOptions,
+  DocEditState,
+  DocHistoryNode,
+  DocHistoryState,
   CompEvent,
   CompEventResult,
   CompFocusTarget,
@@ -119,9 +159,12 @@ export class DocStore {
 
   compElementByDocId: Record<string, Record<string, HTMLElement>> = {};
 
+  editTransactionByDocId: Record<string, unknown> = {};
+
   constructor() {
     makeAutoObservable(this, {
       compElementByDocId: false,
+      editTransactionByDocId: false,
     }, { autoBind: true });
   }
 
@@ -150,6 +193,12 @@ export class DocStore {
       compIdRoot: null,
       compById: {},
       compOrder: [],
+      editState: {
+        isApplying: false,
+        versionEdit: 0,
+        typeEditLast: '',
+      },
+      historyState: createDocHistoryState(),
       interactionState: createInteractionState(),
     };
 
@@ -167,6 +216,77 @@ export class DocStore {
 
   getInteractionState(docId: string) {
     return this.ensureDoc(docId).interactionState;
+  }
+
+  getEditState(docId: string): DocEditState {
+    return this.ensureDoc(docId).editState;
+  }
+
+  runDocEdit<T extends { code: number; message?: string; data?: any }>(
+    docId: string,
+    options: string | DocEditOptions,
+    applyEdit: () => T,
+  ) {
+    return docStoreRunEdit(this, docId, options, applyEdit);
+  }
+
+  getDocHistoryState(docId: string) {
+    return this.ensureDoc(docId).historyState;
+  }
+
+  getDocHistoryBranchList(docId: string) {
+    return docStoreGetHistoryBranchList(this, docId);
+  }
+
+  getIsUndoAvailable(docId: string) {
+    return this.ensureDoc(docId).historyState.isUndoAvailable;
+  }
+
+  getIsRedoAvailable(docId: string) {
+    return this.ensureDoc(docId).historyState.isRedoAvailable;
+  }
+
+  undoDocEdit(docId: string) {
+    return docStoreUndoEdit(this, docId);
+  }
+
+  redoDocEdit(docId: string, nodeIdChild = '') {
+    return docStoreRedoEdit(this, docId, nodeIdChild);
+  }
+
+  setRedoBranch(docId: string, nodeIdChild: string) {
+    return docStoreSetRedoBranch(this, docId, nodeIdChild);
+  }
+
+  clearDocHistory(docId: string) {
+    return docStoreResetHistory(this, docId);
+  }
+
+  pruneDocHistory(docId: string, limitNodeKeep = 0) {
+    return docStorePruneHistory(this, docId, limitNodeKeep);
+  }
+
+  registerCompDataDiffHandler(compName: string, handler: CompDataDiffHandler) {
+    versionRegisterCompDataDiffHandler(compName, handler);
+  }
+
+  getCompVersion(docId: string, versionId: string) {
+    const versionStore = this.ensureDoc(docId).historyState.versionStore;
+    return versionStore.versionById[String(versionId || '')] || null;
+  }
+
+  getCompVersionIdList(docId: string, compId: string) {
+    const versionStore = this.ensureDoc(docId).historyState.versionStore;
+    return versionStore.versionIdListByCompId[String(compId || '')] || [];
+  }
+
+  getCompDataAtVersion(docId: string, versionId: string) {
+    const versionStore = this.ensureDoc(docId).historyState.versionStore;
+    return compVersionMaterialize(versionStore, String(versionId || ''));
+  }
+
+  checkpointCompVersion(docId: string, versionId: string) {
+    return docStoreCheckpointCompVersion(this, docId, String(versionId || ''));
   }
 
   getCompRuntimeState(docId: string, compId: string) {
@@ -246,7 +366,7 @@ export class DocStore {
   }
 
   completeDragMove(docId: string) {
-    return docStoreCompleteDragMoveFromState(this, docId);
+    return this.runDocEdit(docId, 'dragMove', () => docStoreCompleteDragMoveFromState(this, docId));
   }
 
   suppressNextFocusClick(docId: string) {
@@ -318,7 +438,7 @@ export class DocStore {
     if (compDataBase.config?.isRoot === true) {
       const compDataFallback = docRecord.compDataById[compIdFallbackSafe];
       if (compDataFallback && compIdFallbackSafe && compIdFallbackSafe !== compIdBase) {
-        if (String(compDataFallback.compName || '') === 'TextSeg') {
+        if (docStoreIsSegment(docRecord, compIdFallbackSafe)) {
           return this.segFocus(docId, compIdFallbackSafe, focusState.offsetFocused, reason);
         }
         return this.compIdFocus(docId, compIdFallbackSafe, reason);
@@ -329,7 +449,7 @@ export class DocStore {
     if (!compIdParent) {
       const compDataFallback = docRecord.compDataById[compIdFallbackSafe];
       if (compDataFallback && compIdFallbackSafe && compIdFallbackSafe !== compIdBase) {
-        if (String(compDataFallback.compName || '') === 'TextSeg') {
+        if (docStoreIsSegment(docRecord, compIdFallbackSafe)) {
           return this.segFocus(docId, compIdFallbackSafe, focusState.offsetFocused, reason);
         }
         return this.compIdFocus(docId, compIdFallbackSafe, reason);
@@ -352,10 +472,10 @@ export class DocStore {
       return this.isCompName(docRecord, mainCompId, 'Row') ? mainCompId : '';
     }
     if (segIdFocused) {
-      return getOwningRowId(docRecord, segIdFocused);
+      return docStoreGetOwningRowId(docRecord, segIdFocused);
     }
     if (compIdFocused) {
-      return getOwningRowId(docRecord, compIdFocused);
+      return docStoreGetOwningRowId(docRecord, compIdFocused);
     }
     return '';
   }
@@ -472,30 +592,44 @@ export class DocStore {
   }
 
   updateText(docId: string, textNext: string) {
-    const docRecord = this.ensureDoc(docId);
-    if (!docRecord.config.isEditable) {
-      return { code: -1, message: 'Editing is disabled.' };
-    }
-    docRecord.data.text = String(textNext ?? '');
-    this.syncTextBasicCompData(docId);
-    return { code: 0, message: 'Text updated.' };
+    return this.runDocEdit(docId, 'textUpdate', () => {
+      const docRecord = this.ensureDoc(docId);
+      if (!docRecord.config.isEditable) {
+        return { code: -1, message: 'Editing is disabled.' };
+      }
+      editUpdateDocText(docStoreGetActiveEdit(this, docId), textNext);
+      this.syncTextBasicCompData(docId);
+      return { code: 0, message: 'Text updated.' };
+    });
   }
 
   updateCompDataByPatch(docId: string, compId: string, dataPatch: Record<string, any>) {
-    const docRecord = this.ensureDoc(docId);
-    const compData = docRecord.compDataById[compId];
-    if (!compData) {
-      return { code: -1, message: `Component data not found. compId=${compId}` };
-    }
-    compData.data = {
-      ...compData.data,
-      ...(dataPatch || {}),
-    };
-    if (String(compData.compName || '') === 'TextBasic' && Object.prototype.hasOwnProperty.call(dataPatch || {}, 'text')) {
-      return this.updateText(docId, String(dataPatch?.text ?? ''));
-    }
-    this.syncTextBasicCompData(docId);
-    return { code: 0, message: 'Component data updated.' };
+    const compDataCurrent = this.ensureDoc(docId).compDataById[compId];
+    const fieldNameText = String(compDataCurrent?.config?.fieldNameText || 'text');
+    const fieldNameList = Object.keys(dataPatch || {});
+    const isTextInput = fieldNameList.length === 1 && fieldNameList[0] === fieldNameText;
+    return this.runDocEdit(docId, isTextInput
+      ? {
+        typeEdit: 'textInput',
+        groupKey: `text:${compId}`,
+        timeGroupMs: 800,
+      }
+      : 'compDataUpdate', () => {
+      const docRecord = this.ensureDoc(docId);
+      const compData = docRecord.compDataById[compId];
+      if (!compData) {
+        return { code: -1, message: `Component data not found. compId=${compId}` };
+      }
+      const resultUpdate = editUpdateCompData(docStoreGetActiveEdit(this, docId), compId, dataPatch || {});
+      if (resultUpdate.code !== 0) {
+        return resultUpdate;
+      }
+      if (String(compData.compName || '') === 'TextBasic' && Object.prototype.hasOwnProperty.call(dataPatch || {}, 'text')) {
+        return this.updateText(docId, String(dataPatch?.text ?? ''));
+      }
+      this.syncTextBasicCompData(docId);
+      return { code: 0, message: 'Component data updated.' };
+    });
   }
 
   initCompData(
@@ -508,14 +642,19 @@ export class DocStore {
       compId,
       {
         ...compData,
+        versionId: idCreateRandom(8),
         childIdList: Array.isArray(compData.childIdList) ? [...compData.childIdList] : [],
         data: { ...(compData.data || {}) },
         config: { ...(compData.config || {}) },
       },
     ])));
     docRecord.compIdRoot = compIdRoot;
+    docRecord.editState.isApplying = false;
+    docRecord.editState.versionEdit = 0;
+    docRecord.editState.typeEditLast = '';
     this.syncTextBasicCompData(docId);
     this.syncRuntimeState(docId);
+    this.clearDocHistory(docId);
   }
 
   getCompData(docId: string, compId: string) {
@@ -529,6 +668,10 @@ export class DocStore {
 
   getCompDataByIdMap(docId: string) {
     return this.ensureDoc(docId).compDataById;
+  }
+
+  createCompId(docId: string, prefix: string) {
+    return docStoreCreateCompId(this.ensureDoc(docId), prefix);
   }
 
   getParentCompId(docId: string, compId: string) {
@@ -558,7 +701,7 @@ export class DocStore {
   }
 
   applyCompEditResult(docId: string, parentId: string, editResult: CompEditResult, reason: string) {
-    return docStoreApplyCompEditResult(this, docId, parentId, editResult, reason);
+    return this.runDocEdit(docId, reason, () => docStoreApplyCompEditResult(this, docId, parentId, editResult, reason));
   }
 
   replaceChildRange(
@@ -568,7 +711,9 @@ export class DocStore {
     compDataListNext: CompData[],
     options: { focus?: CompFocusTarget; reason?: string } = {},
   ) {
-    return docStoreReplaceChildRange(this, docId, parentId, childIdListOld, compDataListNext, options);
+    return this.runDocEdit(docId, String(options.reason || 'childRangeReplace'), () => (
+      docStoreReplaceChildRange(this, docId, parentId, childIdListOld, compDataListNext, options)
+    ));
   }
 
   insertChildAfter(
@@ -578,15 +723,17 @@ export class DocStore {
     compDataNext: CompData,
     options: { focus?: CompFocusTarget; reason?: string } = {},
   ) {
-    return docStoreInsertChildAfter(this, docId, parentId, childIdRef, compDataNext, options);
+    return this.runDocEdit(docId, String(options.reason || 'childInsert'), () => (
+      docStoreInsertChildAfter(this, docId, parentId, childIdRef, compDataNext, options)
+    ));
   }
 
   removeCompSubtree(docId: string, compId: string) {
-    return docStoreRemoveCompSubtree(this, docId, compId);
+    return this.runDocEdit(docId, 'compSubtreeRemove', () => docStoreRemoveCompSubtree(this, docId, compId));
   }
 
   replaceCompData(docId: string, compDataNext: CompData) {
-    return docStoreReplaceCompData(this, docId, compDataNext);
+    return this.runDocEdit(docId, 'compDataReplace', () => docStoreReplaceCompData(this, docId, compDataNext));
   }
 
   applyFocusAfterEdit(docId: string, focusNext: CompFocusTarget, reason: string) {
@@ -594,19 +741,19 @@ export class DocStore {
   }
 
   indentEntryBySegId(docId: string, segId: string) {
-    return docStoreIndentEntryBySegId(this, docId, segId);
+    return this.runDocEdit(docId, 'rowIndent', () => docStoreIndentEntryBySegId(this, docId, segId));
   }
 
   indentEntryByRowId(docId: string, rowId: string, compIdFocus = '') {
-    return docStoreIndentEntryByRowId(this, docId, rowId, compIdFocus);
+    return this.runDocEdit(docId, 'rowIndent', () => docStoreIndentEntryByRowId(this, docId, rowId, compIdFocus));
   }
 
   outdentEntryBySegId(docId: string, segId: string) {
-    return docStoreOutdentEntryBySegId(this, docId, segId);
+    return this.runDocEdit(docId, 'rowOutdent', () => docStoreOutdentEntryBySegId(this, docId, segId));
   }
 
   outdentEntryByRowId(docId: string, rowId: string, compIdFocus = '') {
-    return docStoreOutdentEntryByRowId(this, docId, rowId, compIdFocus);
+    return this.runDocEdit(docId, 'rowOutdent', () => docStoreOutdentEntryByRowId(this, docId, rowId, compIdFocus));
   }
 
   pasteText(
@@ -616,7 +763,9 @@ export class DocStore {
     textPaste: string,
     point: any,
   ) {
-    return docStorePasteText(this, docId, rowId, segId, textPaste, point);
+    return this.runDocEdit(docId, 'childPaste', () => (
+      docStorePasteText(this, docId, rowId, segId, textPaste, point)
+    ));
   }
 
   getDocYamlRaw(docId: string) {
@@ -794,21 +943,44 @@ export class DocStore {
     const docRecord = this.ensureDoc(docId);
     const dataDoc = docRecord.data;
     const configDoc = docRecord.config;
+    const contextEdit = docStoreGetActiveEditOrNull(this, docId);
     const compIdList = Object.keys(docRecord.compDataById || {});
     for (const compId of compIdList) {
       const compData = docRecord.compDataById[compId];
       if (String(compData?.compName || '') !== 'TextBasic') {
         continue;
       }
-      compData.data = {
-        ...compData.data,
+      const isDataSame = compData.data?.text === dataDoc.text
+        && compData.data?.sourceId === compData.compId
+        && compData.data?.targetId === docId;
+      const isConfigSame = compData.config?.isEditable === configDoc.isEditable;
+      if (isDataSame && isConfigSame) {
+        continue;
+      }
+      const dataPatch = {
         text: dataDoc.text,
         sourceId: compData.compId,
         targetId: docId,
       };
+      const configPatch = {
+        isEditable: configDoc.isEditable,
+      };
+      if (contextEdit) {
+        if (!isDataSame) {
+          editUpdateCompData(contextEdit, compId, dataPatch);
+        }
+        if (!isConfigSame) {
+          editUpdateCompConfig(contextEdit, compId, configPatch);
+        }
+        continue;
+      }
+      compData.data = {
+        ...compData.data,
+        ...dataPatch,
+      };
       compData.config = {
         ...compData.config,
-        isEditable: configDoc.isEditable,
+        ...configPatch,
       };
     }
   }
@@ -956,19 +1128,6 @@ function createAncestorIdSet(parentIdByCompId: Record<string, string>, compIdLis
     }
   }
   return ancestorIdSet;
-}
-
-function getOwningRowId(docRecord: DocRecord, compIdChild: string) {
-  const compIdList = Object.keys(docRecord.compDataById || {});
-  for (const compId of compIdList) {
-    const compData = docRecord.compDataById[compId];
-    if (String(compData?.compName || '') !== 'Row') continue;
-    const childIdList = Array.isArray(compData.childIdList) ? compData.childIdList.map((id) => String(id || '')) : [];
-    if (childIdList.includes(compIdChild)) {
-      return compId;
-    }
-  }
-  return '';
 }
 
 function applyRuntimeStateNext(runtimeStateCurrent: CompRuntimeState, runtimeStateNext: CompRuntimeState) {

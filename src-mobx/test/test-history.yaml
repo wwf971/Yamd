@@ -1,0 +1,74 @@
+docName: test-edit-history
+dataDocInitial: {}
+configDocInitial:
+  isEditable: true
+compIdRoot: history-doc-viewer
+compById:
+  history-doc-viewer:
+    compName: DocViewer
+    childIdList:
+      - history-event-tester
+    data: {}
+    config:
+      maxHeight: 180
+  history-event-tester:
+    compName: EventTester
+    childIdList:
+      - history-list-root
+    data: {}
+    config: {}
+  history-list-root:
+    compName: List
+    childIdList:
+      - history-list-entry
+      - history-row-second
+    data:
+      bulletType: circle
+    config:
+      isRoot: true
+  history-list-entry:
+    compName: List
+    mainCompId: history-row-main
+    childIdList:
+      - history-row-child
+    data: {}
+    config: {}
+  history-row-main:
+    compName: Row
+    childIdList:
+      - history-seg-main
+    data: {}
+    config: {}
+  history-seg-main:
+    compName: TextSeg
+    childIdList: []
+    data:
+      text: Edit this text, split it, or move its row.
+    config:
+      isEditable: true
+  history-row-child:
+    compName: Row
+    childIdList:
+      - history-seg-child
+    data: {}
+    config: {}
+  history-seg-child:
+    compName: TextSeg
+    childIdList: []
+    data:
+      text: Nested editable row.
+    config:
+      isEditable: true
+  history-row-second:
+    compName: Row
+    childIdList:
+      - history-seg-second
+    data: {}
+    config: {}
+  history-seg-second:
+    compName: TextSeg
+    childIdList: []
+    data:
+      text: Create a branch by undoing and editing again.
+    config:
+      isEditable: true

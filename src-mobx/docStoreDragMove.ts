@@ -1,5 +1,18 @@
 import type { DocStore } from './docStore';
 import type { CompData, DocRecord, DragDropInfo } from './docStoreTypes';
+import { docStoreCreateCompId } from './docStoreCompData';
+import {
+  docStoreGetActiveEdit,
+  editPutCompData,
+  editSetChildIdList,
+  editSetMainCompId,
+  type DocEditContext,
+} from './docStoreEditContext';
+import {
+  docStoreGetOwningRowId,
+  docStoreGetSegmentIdListInRow,
+  docStoreIsSegment,
+} from './docStoreSegment';
 
 type DragSubject = {
   itemKindDragged: 'segment' | 'row' | 'list' | '';
@@ -16,7 +29,7 @@ export function docStoreGetDragSubjectFromFocus(
   const compIdFocused = String(focusState.compIdFocused || focusState.segIdFocused || compIdFallback || '');
   const compDataFocused = docRecord.compDataById[compIdFocused];
   const compName = String(compDataFocused?.compName || '');
-  if (compName === 'TextSeg') {
+  if (docStoreIsSegment(docRecord, compIdFocused)) {
     return { itemKindDragged: 'segment', compIdDragged: compIdFocused };
   }
   if (compName === 'Row') {
@@ -100,7 +113,7 @@ function getSegmentDropInfoFromPoint(docRecord: DocRecord, elTarget: Element, cl
   const rowData = docRecord.compDataById[rowId];
   if (!elRowSegList || String(rowData?.compName || '') !== 'Row') return null;
 
-  const segIdList = getTextSegIdList(rowData, docRecord);
+  const segIdList = docStoreGetSegmentIdListInRow(docRecord, rowId);
   let indexTarget = segIdList.length;
   let segIdTarget = '';
   let side = 'after';
@@ -229,13 +242,13 @@ function getOutlineDropInfoFromPoint(docRecord: DocRecord, elTarget: Element, cl
 
 function getIsSegmentDropAllowed(docRecord: DocRecord, segId: string, dropInfo: DragDropInfo) {
   if (dropInfo.kind !== 'segment') return false;
-  if (!isCompName(docRecord, segId, 'TextSeg')) return false;
+  if (!docStoreIsSegment(docRecord, segId)) return false;
   const rowIdTarget = String(dropInfo.drop?.rowId || '');
   const rowTarget = docRecord.compDataById[rowIdTarget];
   if (String(rowTarget?.compName || '') !== 'Row') return false;
-  const rowIdSource = getOwningRowId(docRecord, segId);
+  const rowIdSource = docStoreGetOwningRowId(docRecord, segId);
   if (!rowIdSource) return false;
-  const segIdListTarget = getTextSegIdList(rowTarget, docRecord);
+  const segIdListTarget = docStoreGetSegmentIdListInRow(docRecord, rowIdTarget);
   const indexTarget = clampIndex(Number(dropInfo.drop?.indexTarget || 0), segIdListTarget.length);
   const indexSource = rowIdSource === rowIdTarget ? segIdListTarget.indexOf(segId) : -1;
   return !(rowIdSource === rowIdTarget && (indexTarget === indexSource || indexTarget === indexSource + 1));
@@ -275,7 +288,7 @@ function getIsListDropAllowed(docRecord: DocRecord, listId: string, dropInfo: Dr
 
 function moveSegmentByDrop(store: DocStore, docId: string, segId: string, dropInfo: DragDropInfo) {
   const docRecord = store.ensureDoc(docId);
-  const rowIdSource = getOwningRowId(docRecord, segId);
+  const rowIdSource = docStoreGetOwningRowId(docRecord, segId);
   const rowIdTarget = String(dropInfo.drop?.rowId || '');
   const rowSource = docRecord.compDataById[rowIdSource];
   const rowTarget = docRecord.compDataById[rowIdTarget];
@@ -291,8 +304,11 @@ function moveSegmentByDrop(store: DocStore, docId: string, segId: string, dropIn
     indexTarget -= 1;
   }
   childIdListTarget.splice(indexTarget, 0, segId);
-  rowSource.childIdList = childIdListSource;
-  rowTarget.childIdList = childIdListTarget;
+  const contextEdit = docStoreGetActiveEdit(store, docId);
+  editSetChildIdList(contextEdit, rowIdSource, childIdListSource);
+  if (rowSource !== rowTarget) {
+    editSetChildIdList(contextEdit, rowIdTarget, childIdListTarget);
+  }
   store.clearSelectionState(docId);
   store.segFocus(docId, segId, store.getInteractionState(docId).focusState.offsetFocused, 'dragMove');
   return { code: 0, message: 'Segment moved.' };
@@ -300,9 +316,10 @@ function moveSegmentByDrop(store: DocStore, docId: string, segId: string, dropIn
 
 function moveRowByDrop(store: DocStore, docId: string, rowId: string, dropInfo: DragDropInfo) {
   const docRecord = store.ensureDoc(docId);
+  const contextEdit = docStoreGetActiveEdit(store, docId);
   const listIdSource = getOwningListIdForChildEntry(docRecord, rowId);
   const indexSource = listIdSource ? getChildIndex(docRecord, listIdSource, rowId) : -1;
-  if (!removeRowFromCurrentPlace(docRecord, rowId)) {
+  if (!removeRowFromCurrentPlace(contextEdit, rowId)) {
     return { code: -1, message: 'Row source not found.' };
   }
   if (dropInfo.kind === 'mainRow') {
@@ -310,10 +327,10 @@ function moveRowByDrop(store: DocStore, docId: string, rowId: string, dropInfo: 
     const listTarget = docRecord.compDataById[listIdTarget];
     if (String(listTarget?.compName || '') !== 'List') return { code: -1, message: 'Target list missing.' };
     const rowIdMainPrevious = String(listTarget.mainCompId || '');
-    listTarget.mainCompId = rowId;
+    editSetMainCompId(contextEdit, listIdTarget, rowId);
     if (rowIdMainPrevious && rowIdMainPrevious !== rowId) {
       const childIdList = getChildIdList(listTarget).filter((childId) => childId !== rowIdMainPrevious);
-      listTarget.childIdList = [rowIdMainPrevious, ...childIdList];
+      editSetChildIdList(contextEdit, listIdTarget, [rowIdMainPrevious, ...childIdList]);
     }
   } else {
     const listIdTarget = String(dropInfo.drop?.listId || '');
@@ -321,8 +338,8 @@ function moveRowByDrop(store: DocStore, docId: string, rowId: string, dropInfo: 
     if (listIdSource === listIdTarget && indexSource >= 0 && indexSource < indexTarget) {
       indexTarget -= 1;
     }
-    if (!moveRowAfterListWithChildren(docRecord, rowId, dropInfo, listIdTarget, indexTarget)) {
-      insertEntryIntoList(docRecord, rowId, listIdTarget, indexTarget);
+    if (!moveRowAfterListWithChildren(contextEdit, rowId, dropInfo, listIdTarget, indexTarget)) {
+      insertEntryIntoList(contextEdit, rowId, listIdTarget, indexTarget);
     }
   }
   store.clearSelectionState(docId);
@@ -332,6 +349,7 @@ function moveRowByDrop(store: DocStore, docId: string, rowId: string, dropInfo: 
 
 function moveListByDrop(store: DocStore, docId: string, listId: string, dropInfo: DragDropInfo) {
   const docRecord = store.ensureDoc(docId);
+  const contextEdit = docStoreGetActiveEdit(store, docId);
   const parentIdSource = getOwningListIdForChildEntry(docRecord, listId);
   if (!parentIdSource) return { code: -1, message: 'List source not found.' };
   const indexSource = getChildIndex(docRecord, parentIdSource, listId);
@@ -340,47 +358,50 @@ function moveListByDrop(store: DocStore, docId: string, listId: string, dropInfo
   if (parentIdSource === listIdTarget && indexSource >= 0 && indexSource < indexTarget) {
     indexTarget -= 1;
   }
-  removeEntryFromList(docRecord, parentIdSource, listId);
-  insertEntryIntoList(docRecord, listId, listIdTarget, indexTarget);
+  removeEntryFromList(contextEdit, parentIdSource, listId);
+  insertEntryIntoList(contextEdit, listId, listIdTarget, indexTarget);
   store.clearSelectionState(docId);
   store.compIdFocus(docId, listId, 'dragMove');
   return { code: 0, message: 'List moved.' };
 }
 
-function removeRowFromCurrentPlace(docRecord: DocRecord, rowId: string) {
+function removeRowFromCurrentPlace(contextEdit: DocEditContext, rowId: string) {
+  const docRecord = contextEdit.store.ensureDoc(contextEdit.docId);
   let isRemoved = false;
   for (const compData of Object.values(docRecord.compDataById)) {
     if (String(compData.compName || '') !== 'List') continue;
     if (String(compData.mainCompId || '') === rowId) {
-      compData.mainCompId = '';
+      editSetMainCompId(contextEdit, compData.compId, '');
       isRemoved = true;
     }
     const childIdList = getChildIdList(compData);
     if (childIdList.includes(rowId)) {
-      compData.childIdList = childIdList.filter((childId) => childId !== rowId);
+      editSetChildIdList(contextEdit, compData.compId, childIdList.filter((childId) => childId !== rowId));
       isRemoved = true;
     }
   }
   return isRemoved;
 }
 
-function insertEntryIntoList(docRecord: DocRecord, entryId: string, listId: string, indexTargetRaw: number) {
+function insertEntryIntoList(contextEdit: DocEditContext, entryId: string, listId: string, indexTargetRaw: number) {
+  const docRecord = contextEdit.store.ensureDoc(contextEdit.docId);
   const listData = docRecord.compDataById[listId];
   if (String(listData?.compName || '') !== 'List') return false;
   const childIdList = getChildIdList(listData).filter((childId) => childId !== entryId);
   const indexTarget = clampIndex(indexTargetRaw, childIdList.length);
   childIdList.splice(indexTarget, 0, entryId);
-  listData.childIdList = childIdList;
+  editSetChildIdList(contextEdit, listId, childIdList);
   return true;
 }
 
 function moveRowAfterListWithChildren(
-  docRecord: DocRecord,
+  contextEdit: DocEditContext,
   rowId: string,
   dropInfo: DragDropInfo,
   listIdTarget: string,
   indexTarget: number,
 ) {
+  const docRecord = contextEdit.store.ensureDoc(contextEdit.docId);
   if (dropInfo.kind !== 'outline' || dropInfo.drop?.side !== 'after') return false;
   const listIdTargetEntry = getListIdFromDragTargetId(dropInfo.targetId);
   const listDataTargetEntry = docRecord.compDataById[listIdTargetEntry];
@@ -390,23 +411,24 @@ function moveRowAfterListWithChildren(
   const childIdListMoved = getChildIdList(listDataTargetEntry).filter((childId) => childId !== rowId);
   if (childIdListMoved.length === 0) return false;
 
-  const listIdWrapped = createCompId(docRecord, 'list');
-  docRecord.compDataById[listIdWrapped] = {
+  const listIdWrapped = docStoreCreateCompId(docRecord, 'list');
+  editPutCompData(contextEdit, {
     compId: listIdWrapped,
     compName: 'List',
     mainCompId: rowId,
     childIdList: childIdListMoved,
     data: {},
     config: {},
-  };
-  listDataTargetEntry.childIdList = [];
-  return insertEntryIntoList(docRecord, listIdWrapped, listIdTarget, indexTarget);
+  });
+  editSetChildIdList(contextEdit, listIdTargetEntry, []);
+  return insertEntryIntoList(contextEdit, listIdWrapped, listIdTarget, indexTarget);
 }
 
-function removeEntryFromList(docRecord: DocRecord, listId: string, entryId: string) {
+function removeEntryFromList(contextEdit: DocEditContext, listId: string, entryId: string) {
+  const docRecord = contextEdit.store.ensureDoc(contextEdit.docId);
   const listData = docRecord.compDataById[listId];
   if (!listData) return;
-  listData.childIdList = getChildIdList(listData).filter((childId) => childId !== entryId);
+  editSetChildIdList(contextEdit, listId, getChildIdList(listData).filter((childId) => childId !== entryId));
 }
 
 function getOutlineEntryInfoByRowId(docRecord: DocRecord, rowId: string) {
@@ -426,16 +448,6 @@ function getOutlineEntryInfoByListId(docRecord: DocRecord, listId: string) {
   const rowId = String(docRecord.compDataById[listId]?.mainCompId || '');
   const parentListId = getOwningListIdForChildEntry(docRecord, listId);
   return parentListId ? { entryId: listId, rowId, parentListId } : null;
-}
-
-function getOwningRowId(docRecord: DocRecord, compIdChild: string) {
-  for (const compData of Object.values(docRecord.compDataById)) {
-    if (String(compData.compName || '') !== 'Row') continue;
-    if (getChildIdList(compData).includes(compIdChild)) {
-      return compData.compId;
-    }
-  }
-  return '';
 }
 
 function getOwningListIdForChildEntry(docRecord: DocRecord, entryId: string) {
@@ -459,10 +471,6 @@ function getListIdByMainRowId(docRecord: DocRecord, rowId: string) {
 
 function getChildIndex(docRecord: DocRecord, listId: string, entryId: string) {
   return getChildIdList(docRecord.compDataById[listId]).indexOf(entryId);
-}
-
-function getTextSegIdList(rowData: CompData, docRecord: DocRecord) {
-  return getChildIdList(rowData).filter((childId) => isCompName(docRecord, childId, 'TextSeg'));
 }
 
 function getChildIdList(compData: CompData | null | undefined) {
@@ -506,14 +514,6 @@ function isCompDescendantOrSelf(docRecord: DocRecord, compIdAncestor: string, co
 
 function clampIndex(indexRaw: number, length: number) {
   return Math.min(length, Math.max(0, Number.isFinite(indexRaw) ? Math.trunc(indexRaw) : 0));
-}
-
-function createCompId(docRecord: DocRecord, prefix: string) {
-  let compId = '';
-  do {
-    compId = `${prefix}-${Math.random().toString(36).slice(2, 10)}`;
-  } while (docRecord.compDataById[compId]);
-  return compId;
 }
 
 function cssEscape(value: string) {

@@ -21,6 +21,7 @@ import TEST_LIST_ROW_YAML_RAW from './test-list-row.yaml?raw';
 import TEST_LIST_BULLET_TYPES_YAML_RAW from './test-list-bullet-types.yaml?raw';
 import TEST_LIST_RENDER_DEBUG_YAML_RAW from './test-list-render-debug.yaml?raw';
 import TEST_FOCUS_FEATURE_YAML_RAW from './test-focus-feature.yaml?raw';
+import TEST_HISTORY_YAML_RAW from './test-history.yaml?raw';
 import './testMobx.css';
 
 const compByNameForTest = {
@@ -32,7 +33,7 @@ const compByNameForTest = {
   TextSeg,
 };
 
-const TestItemDoc = observer(function TestItemDoc({ yamlRaw }) {
+const TestItemDoc = observer(function TestItemDoc({ yamlRaw, isHistoryVisible = false }) {
   const docTemplate = React.useMemo(() => parseTestDocTemplate(yamlRaw), [yamlRaw]);
   const docIdRef = React.useRef('');
   const compRefById = React.useRef({});
@@ -173,6 +174,21 @@ const TestItemDoc = observer(function TestItemDoc({ yamlRaw }) {
     };
 
     const handleKeyDown = (event) => {
+      const targetEl = event.target instanceof Node ? event.target : null;
+      const isEventInDoc = Boolean(targetEl && rootEl.contains(targetEl));
+      const isEditModifier = event.ctrlKey || event.metaKey;
+      const keyLower = String(event.key || '').toLowerCase();
+      if (isEventInDoc && isEditModifier && (keyLower === 'z' || keyLower === 'y')) {
+        const isRedo = keyLower === 'y' || (keyLower === 'z' && event.shiftKey);
+        const result = isRedo
+          ? storeDocTest.redoDocEdit(docId)
+          : storeDocTest.undoDocEdit(docId);
+        if (result.code === 0) {
+          event.preventDefault();
+          event.stopPropagation();
+        }
+        return;
+      }
       if (event.key === 'Control' || event.key === 'Meta' || event.ctrlKey || event.metaKey) {
         isCopyModifierDownRef.current = true;
       }
@@ -316,7 +332,123 @@ const TestItemDoc = observer(function TestItemDoc({ yamlRaw }) {
             />
           </DocCompRenderProvider>
         </DocStoreProvider>
+        {isHistoryVisible ? (
+          <HistoryPanel store={storeDocTest} docId={docId} />
+        ) : null}
       </div>
+    </div>
+  );
+});
+
+const HistoryPanel = observer(function HistoryPanel({ store, docId }) {
+  const historyState = store.getDocHistoryState(docId);
+  const nodeRoot = historyState.nodeById[historyState.nodeIdRoot];
+  const nodeCurrent = historyState.nodeById[historyState.nodeIdCurrent];
+  const branchList = store.getDocHistoryBranchList(docId);
+  return (
+    <div className="mobx-history-panel">
+      <div className="mobx-history-header">
+        <div className="mobx-history-title">Edit history tree</div>
+        <div className="mobx-history-actions">
+          <button
+            type="button"
+            className="mobx-history-btn"
+            disabled={!historyState.isUndoAvailable}
+            onClick={() => store.undoDocEdit(docId)}
+          >
+            Undo
+          </button>
+          <button
+            type="button"
+            className="mobx-history-btn"
+            disabled={!historyState.isRedoAvailable}
+            onClick={() => store.redoDocEdit(docId)}
+          >
+            Redo
+          </button>
+          <button
+            type="button"
+            className="mobx-history-btn"
+            onClick={() => store.pruneDocHistory(docId, 5)}
+          >
+            Prune to 5
+          </button>
+          <button
+            type="button"
+            className="mobx-history-btn"
+            onClick={() => store.clearDocHistory(docId)}
+          >
+            Reset history
+          </button>
+        </div>
+      </div>
+      <div className="mobx-history-status">
+        Current: {nodeCurrent?.typeEdit || 'root'},
+        nodes: {Object.keys(historyState.nodeById).length},
+        versions: {Object.keys(historyState.versionStore.versionById).length}
+      </div>
+      {branchList.length > 1 ? (
+        <div className="mobx-history-branch-actions">
+          {branchList.map((nodeBranch) => (
+            <button
+              key={nodeBranch.nodeId}
+              type="button"
+              className="mobx-history-btn"
+              onClick={() => store.redoDocEdit(docId, nodeBranch.nodeId)}
+            >
+              Redo {nodeBranch.typeEdit}
+            </button>
+          ))}
+        </div>
+      ) : null}
+      <div className="mobx-history-tree">
+        {nodeRoot ? (
+          <HistoryNodeView
+            historyState={historyState}
+            nodeId={nodeRoot.nodeId}
+            depth={0}
+          />
+        ) : null}
+      </div>
+    </div>
+  );
+});
+
+const HistoryNodeView = observer(function HistoryNodeView({ historyState, nodeId, depth }) {
+  const node = historyState.nodeById[nodeId];
+  if (!node) return null;
+  const isCurrent = historyState.nodeIdCurrent === nodeId;
+  const isPreferred = node.nodeIdParent
+    && historyState.nodeIdRedoPreferredByNodeId[node.nodeIdParent] === nodeId;
+  const className = [
+    'mobx-history-node',
+    isCurrent ? 'mobx-history-node-current' : '',
+    isPreferred ? 'mobx-history-node-preferred' : '',
+  ].filter(Boolean).join(' ');
+  return (
+    <div className="mobx-history-node-group">
+      <div className={className}>
+        <div className="mobx-history-node-depth">{depth}</div>
+        <div className="mobx-history-node-type">{node.typeEdit}</div>
+        <div className="mobx-history-node-kind">{node.kindEdit}</div>
+        <div className="mobx-history-node-patch">
+          {node.changeSet.compChangeList.length} comps
+          {node.changeSet.docChange ? ' +doc' : ''}
+        </div>
+        {isCurrent ? <div className="mobx-history-node-mark">Current</div> : null}
+      </div>
+      {node.nodeIdChildList.length > 0 ? (
+        <div className="mobx-history-node-children">
+          {node.nodeIdChildList.map((nodeIdChild) => (
+            <HistoryNodeView
+              key={nodeIdChild}
+              historyState={historyState}
+              nodeId={nodeIdChild}
+              depth={depth + 1}
+            />
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 });
@@ -401,8 +533,15 @@ const TestListRowYaml = () => <TestItemDoc yamlRaw={TEST_LIST_ROW_YAML_RAW} />;
 const TestListBulletTypesYaml = () => <TestItemDoc yamlRaw={TEST_LIST_BULLET_TYPES_YAML_RAW} />;
 const TestListRenderDebugYaml = () => <TestItemDoc yamlRaw={TEST_LIST_RENDER_DEBUG_YAML_RAW} />;
 const TestFocusFeatureYaml = () => <TestItemDoc yamlRaw={TEST_FOCUS_FEATURE_YAML_RAW} />;
+const TestHistoryYaml = () => <TestItemDoc yamlRaw={TEST_HISTORY_YAML_RAW} isHistoryVisible />;
 
 export const mobxYamlTestItems = [
+  {
+    key: 'mobx-edit-history',
+    label: 'Edit history',
+    description: 'Undo, redo, branch preservation, and history tree display.',
+    Comp: TestHistoryYaml,
+  },
   {
     key: 'mobx-text-basic',
     label: 'TextBasic Live',

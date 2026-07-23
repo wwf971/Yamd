@@ -25,6 +25,100 @@ export type CompEditResult = {
   focus?: CompFocusTarget;
 };
 
+export type DocEditState = {
+  isApplying: boolean;
+  versionEdit: number;
+  typeEditLast: string;
+};
+
+export type DocEditOptions = {
+  typeEdit: string;
+  groupKey?: string;
+  timeGroupMs?: number;
+};
+
+export type CompFieldChange = {
+  fieldName: string;
+  isFieldRemoved?: boolean;
+  value?: any;
+};
+
+export type CompVersionDiff = {
+  dataDiff?: any;
+  fieldChangeListData?: CompFieldChange[];
+  fieldChangeListConfig?: CompFieldChange[];
+  childIdList?: string[];
+  mainCompId?: string;
+};
+
+export type CompVersion = {
+  versionId: string;
+  compId: string;
+  compName: string;
+  kind: 'full' | 'diff';
+  timeCreated: number;
+  lengthChain: number;
+  compData?: CompData;
+  versionIdBase?: string;
+  diff?: CompVersionDiff;
+};
+
+export type CompVersionStore = {
+  versionById: Record<string, CompVersion>;
+  versionIdListByCompId: Record<string, string[]>;
+};
+
+export type CompDataDiffHandler = {
+  createDataDiff: (dataBefore: any, dataAfter: any) => any | null;
+  applyDataDiff: (dataBase: any, dataDiff: any) => any;
+};
+
+export type CompChange = {
+  compId: string;
+  versionBefore: string;
+  versionAfter: string;
+};
+
+export type DocChange = {
+  compIdRootBefore?: string | null;
+  compIdRootAfter?: string | null;
+  textDocBefore?: string;
+  textDocAfter?: string;
+};
+
+export type DocEditChangeSet = {
+  compChangeList: CompChange[];
+  docChange: DocChange | null;
+};
+
+export type DocEditKind = 'compData' | 'structure';
+
+export type DocHistoryNode = {
+  nodeId: string;
+  nodeIdParent: string | null;
+  nodeIdChildList: string[];
+  typeEdit: string;
+  kindEdit: DocEditKind;
+  timeCreated: number;
+  changeSet: DocEditChangeSet;
+  focusBefore?: CompFocusTarget;
+  focusAfter?: CompFocusTarget;
+  groupKey?: string;
+};
+
+export type DocHistoryState = {
+  nodeById: Record<string, DocHistoryNode>;
+  nodeIdRoot: string;
+  nodeIdCurrent: string;
+  nodeIdRedoPreferredByNodeId: Record<string, string>;
+  versionStore: CompVersionStore;
+  isApplying: boolean;
+  isUndoAvailable: boolean;
+  isRedoAvailable: boolean;
+  versionHistory: number;
+  limitNode: number;
+};
+
 export type TextDocData = {
   docId: string;
   docName: string;
@@ -39,6 +133,7 @@ export type TextDocConfig = {
 export type CompData = {
   compId: string;
   compName: string;
+  versionId?: string;
   childIdList: string[];
   mainCompId?: string;
   data: any;
@@ -144,5 +239,7 @@ export type DocRecord = {
   compIdRoot: string | null;
   compById: Record<string, CompRegistryEntry>;
   compOrder: string[];
+  editState: DocEditState;
+  historyState: DocHistoryState;
   interactionState: DocInteractionState;
 };

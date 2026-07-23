@@ -7,6 +7,24 @@ import type {
   SelectionState,
   SelectionTrackPoint,
 } from './docStoreTypes';
+import { docStoreCreateCompId } from './docStoreCompData';
+import {
+  docStoreGetActiveEdit,
+  editPutCompData,
+  editRemoveCompSubtree,
+  editSetChildIdList,
+  editUpdateCompData,
+  type DocEditContext,
+} from './docStoreEditContext';
+import {
+  docStoreCloneSegmentWithText,
+  docStoreCollectSegmentIds,
+  docStoreGetOwningRowId,
+  docStoreGetSegmentIdListInRow,
+  docStoreGetSegmentText,
+  docStoreGetSegmentTextFieldName,
+  docStoreSetSegmentText,
+} from './docStoreSegment';
 
 type OutlineEntryInfo = {
   entryId: string;
@@ -32,22 +50,13 @@ type PasteCompBuildResult = {
   textLast: string;
 };
 
-const createEventId = (length = 12) => {
-  const chars = '0123456789abcdefghijklmnopqrstuvwxyz';
-  let result = '';
-  for (let index = 0; index < length; index += 1) {
-    result += chars[Math.floor(Math.random() * chars.length)];
-  }
-  return result;
-};
-
 export function docStoreGetSelectionText(store: DocStore, docId: string) {
   const docRecord = store.ensureDoc(docId);
   const selectionState = docRecord.interactionState.selectionState;
   const pointA = selectionState.pointAnchor;
   const pointB = selectionState.pointFocus;
   if (!pointA || !pointB) return '';
-  const segIdList = collectTextSegIdsInDocOrder(docRecord);
+  const segIdList = docStoreCollectSegmentIds(docRecord);
   const indexA = segIdList.indexOf(pointA.segId);
   const indexB = segIdList.indexOf(pointB.segId);
   if (indexA === -1 || indexB === -1) return '';
@@ -60,11 +69,11 @@ export function docStoreGetSelectionText(store: DocStore, docId: string) {
   let rowIdLast = '';
   for (let index = indexStart; index <= indexEnd; index += 1) {
     const segIdCurrent = segIdList[index];
-    const rowIdCurrent = getOwningRowId(docRecord, segIdCurrent);
+    const rowIdCurrent = docStoreGetOwningRowId(docRecord, segIdCurrent);
     if (rowIdLast && rowIdCurrent && rowIdCurrent !== rowIdLast) {
       textPartList.push('\n');
     }
-    const textCurrent = String(docRecord.compDataById[segIdCurrent]?.data?.text || '');
+    const textCurrent = docStoreGetSegmentText(docRecord.compDataById[segIdCurrent]);
     const offsetStart = segIdCurrent === pointStart.segId ? pointStart.offset : 0;
     const offsetEnd = segIdCurrent === pointEnd.segId ? pointEnd.offset : textCurrent.length;
     textPartList.push(textCurrent.slice(
@@ -135,18 +144,21 @@ export function docStorePasteText(
   const segIdSafe = String(segId || '');
   const rowData = docRecord.compDataById[rowIdSafe];
   const segData = docRecord.compDataById[segIdSafe];
-  if (String(rowData?.compName || '') !== 'Row' || String(segData?.compName || '') !== 'TextSeg') {
+  if (
+    String(rowData?.compName || '') !== 'Row'
+    || !docStoreGetSegmentIdListInRow(docRecord, rowIdSafe).includes(segIdSafe)
+  ) {
     return { code: -1, message: 'Paste target is invalid.' };
   }
   if (segData.config?.isEditable !== true) {
-    return { code: -1, message: 'TextSeg is not editable.' };
+    return { code: -1, message: 'Segment is not editable.' };
   }
   const childIdListRow = getChildIdList(rowData);
   if (!childIdListRow.includes(segIdSafe)) {
     return { code: -1, message: `Segment is not in row. segId=${segIdSafe}` };
   }
 
-  const textCurrent = String(segData.data?.text || '');
+  const textCurrent = docStoreGetSegmentText(segData);
   const offsetPaste = Math.min(textCurrent.length, Math.max(0, Number(pointRaw?.offset || 0)));
   const itemListPaste = parsePasteListText(String(textPasteRaw ?? ''));
   if (!itemListPaste) {
@@ -167,10 +179,7 @@ export function docStorePasteText(
 
   const segDataLast = buildResult.compDataList.find((compData) => compData.compId === buildResult.segIdLast);
   if (segDataLast) {
-    segDataLast.data = {
-      ...(segDataLast.data || {}),
-      text: `${String(segDataLast.data?.text || '')}${textRight}`,
-    };
+    docStoreSetSegmentText(segDataLast, `${docStoreGetSegmentText(segDataLast)}${textRight}`);
   }
 
   const focusNext = {
@@ -182,38 +191,38 @@ export function docStorePasteText(
     return replaceEntryWithPasteEntries(store, docId, entryInfo, buildResult, focusNext);
   }
 
-  segData.data = {
-    ...(segData.data || {}),
-    text: textLeft,
-  };
-  addCompDataListToRecord(docRecord, buildResult.compDataList);
+  const contextEdit = docStoreGetActiveEdit(store, docId);
+  editUpdateCompData(contextEdit, segIdSafe, {
+    [docStoreGetSegmentTextFieldName(segData)]: textLeft,
+  });
+  addCompDataListToRecord(contextEdit, buildResult.compDataList);
   const entryData = docRecord.compDataById[entryInfo.entryId];
   if (String(entryData?.compName || '') === 'List') {
-    entryData.childIdList = [
+    editSetChildIdList(contextEdit, entryInfo.entryId, [
       ...buildResult.entryIdList,
       ...getChildIdList(entryData),
-    ];
+    ]);
   } else if (String(entryData?.compName || '') === 'Row') {
-    const listIdWrapped = createCompId(docRecord, 'list');
-    docRecord.compDataById[listIdWrapped] = {
+    const listIdWrapped = docStoreCreateCompId(docRecord, 'list');
+    editPutCompData(contextEdit, {
       compId: listIdWrapped,
       compName: 'List',
       mainCompId: rowIdSafe,
       childIdList: [...buildResult.entryIdList],
       data: {},
       config: {},
-    };
+    });
     const listDataParent = docRecord.compDataById[entryInfo.parentListId];
     if (String(listDataParent?.compName || '') !== 'List') {
       return { code: -1, message: 'Parent list not found.' };
     }
-    listDataParent.childIdList = getChildIdList(listDataParent)
-      .map((childId) => (childId === entryInfo.entryId ? listIdWrapped : childId));
+    editSetChildIdList(contextEdit, entryInfo.parentListId, getChildIdList(listDataParent)
+      .map((childId) => (childId === entryInfo.entryId ? listIdWrapped : childId)));
   } else {
     return { code: -1, message: 'Paste target entry is invalid.' };
   }
   store.clearSelectionState(docId);
-  applyFocusAfterCopyPaste(store, docId, focusNext, 'childPasteAttempt');
+  store.applyFocusAfterEdit(docId, focusNext, 'childPasteAttempt');
   return { code: 0, message: 'Text pasted.' };
 }
 
@@ -225,7 +234,7 @@ function getSelectionRangeBySegOrder(docRecord: DocRecord) {
     return null;
   }
 
-  const segIdList = collectTextSegIdsInDocOrder(docRecord);
+  const segIdList = docStoreCollectSegmentIds(docRecord);
   const indexAnchor = segIdList.indexOf(pointAnchor.segId);
   const indexFocus = segIdList.indexOf(pointFocus.segId);
   if (indexAnchor === -1 || indexFocus === -1) {
@@ -243,11 +252,11 @@ function getSelectionRangeBySegOrder(docRecord: DocRecord) {
 }
 
 function collectSelectedRowIdsFromSegRange(docRecord: DocRecord, indexStart: number, indexEnd: number) {
-  const segIdList = collectTextSegIdsInDocOrder(docRecord);
+  const segIdList = docStoreCollectSegmentIds(docRecord);
   const rowIdList: string[] = [];
   const rowIdSet = new Set<string>();
   for (let index = indexStart; index <= indexEnd; index += 1) {
-    const rowId = getOwningRowId(docRecord, segIdList[index]);
+    const rowId = docStoreGetOwningRowId(docRecord, segIdList[index]);
     if (!rowId || rowIdSet.has(rowId)) continue;
     rowIdSet.add(rowId);
     rowIdList.push(rowId);
@@ -330,7 +339,7 @@ async function getCompClipboardText(
 }
 
 function getCompClipboardTextFallback(compData: CompData, offsetStartRaw: number | undefined, offsetEndRaw: number | undefined) {
-  const text = String(compData.data?.text || '');
+  const text = docStoreGetSegmentText(compData);
   const offsetStart = Number.isFinite(Number(offsetStartRaw))
     ? Math.min(text.length, Math.max(0, Number(offsetStartRaw)))
     : 0;
@@ -414,22 +423,21 @@ function pastePlainTextAtSeg(
 ) {
   const docRecord = store.ensureDoc(docId);
   const segData = docRecord.compDataById[segId];
-  if (!segData || String(segData.compName || '') !== 'TextSeg') {
-    return { code: -1, message: 'TextSeg not found.' };
+  if (!segData || !docStoreGetOwningRowId(docRecord, segId)) {
+    return { code: -1, message: 'Segment not found.' };
   }
   if (segData.config?.isEditable !== true) {
-    return { code: -1, message: 'TextSeg is not editable.' };
+    return { code: -1, message: 'Segment is not editable.' };
   }
-  const textCurrent = String(segData.data?.text || '');
+  const textCurrent = docStoreGetSegmentText(segData);
   const textInserted = String(textPasteRaw || '').replace(/[\r\n]+/g, '');
   const offsetSafe = Math.min(textCurrent.length, Math.max(0, Number(offsetPaste || 0)));
   const textNext = `${textCurrent.slice(0, offsetSafe)}${textInserted}${textCurrent.slice(offsetSafe)}`;
-  segData.data = {
-    ...(segData.data || {}),
-    text: textNext,
-  };
+  editUpdateCompData(docStoreGetActiveEdit(store, docId), segId, {
+    [docStoreGetSegmentTextFieldName(segData)]: textNext,
+  });
   store.clearSelectionState(docId);
-  applyFocusAfterCopyPaste(store, docId, {
+  store.applyFocusAfterEdit(docId, {
     compId: segId,
     point: { offset: offsetSafe + textInserted.length },
   }, 'childPasteAttempt');
@@ -469,20 +477,10 @@ function createPasteEntryCompData(
   rowDataTemplate: CompData,
   compIdSetReserved: Set<string>,
 ): PasteCompBuildResult {
-  const segId = createCompIdReserved(docRecord, 'seg', compIdSetReserved);
-  const rowId = createCompIdReserved(docRecord, 'row', compIdSetReserved);
+  const segId = docStoreCreateCompId(docRecord, 'seg', compIdSetReserved);
+  const rowId = docStoreCreateCompId(docRecord, 'row', compIdSetReserved);
   const textItem = String(item.text || '');
-  const segDataNext: CompData = {
-    compId: segId,
-    compName: 'TextSeg',
-    childIdList: [],
-    data: {
-      ...(segDataTemplate.data || {}),
-      sourceId: segId,
-      text: textItem,
-    },
-    config: { ...(segDataTemplate.config || {}) },
-  };
+  const segDataNext = docStoreCloneSegmentWithText(segDataTemplate, segId, textItem);
   const rowDataNext = createRowComp(rowId, [segId], rowDataTemplate);
   const compDataList: CompData[] = [segDataNext, rowDataNext];
   let entryId = rowId;
@@ -490,7 +488,7 @@ function createPasteEntryCompData(
   let textLast = textItem;
   if (item.childList.length > 0) {
     const childResult = createPasteCompBuildResult(docRecord, item.childList, segDataTemplate, rowDataTemplate, compIdSetReserved);
-    const listId = createCompIdReserved(docRecord, 'list', compIdSetReserved);
+    const listId = docStoreCreateCompId(docRecord, 'list', compIdSetReserved);
     compDataList.push(...childResult.compDataList, {
       compId: listId,
       compName: 'List',
@@ -528,40 +526,17 @@ function replaceEntryWithPasteEntries(
   if (entryIndex < 0) {
     return { code: -1, message: 'Entry not found in parent list.' };
   }
-  removeCompSubtreeFromRecord(docRecord, entryInfo.entryId);
-  addCompDataListToRecord(docRecord, buildResult.compDataList);
-  listDataParent.childIdList = [
+  const contextEdit = docStoreGetActiveEdit(store, docId);
+  editRemoveCompSubtree(contextEdit, entryInfo.entryId);
+  addCompDataListToRecord(contextEdit, buildResult.compDataList);
+  editSetChildIdList(contextEdit, entryInfo.parentListId, [
     ...childIdListParent.slice(0, entryIndex),
     ...buildResult.entryIdList,
     ...childIdListParent.slice(entryIndex + 1),
-  ];
+  ]);
   store.clearSelectionState(docId);
-  applyFocusAfterCopyPaste(store, docId, focusNext, 'childPasteAttempt');
+  store.applyFocusAfterEdit(docId, focusNext, 'childPasteAttempt');
   return { code: 0, message: 'Text pasted.' };
-}
-
-function collectTextSegIdsInDocOrder(docRecord: DocRecord) {
-  const compIdRoot = String(docRecord.compIdRoot || '');
-  const segIdList: string[] = [];
-  collectTextSegIdsFromComp(docRecord, compIdRoot, segIdList);
-  return segIdList;
-}
-
-function collectTextSegIdsFromComp(docRecord: DocRecord, compId: string, segIdList: string[]) {
-  const compData = docRecord.compDataById[compId];
-  if (!compData) return;
-  if (String(compData.compName || '') === 'TextSeg') {
-    segIdList.push(compId);
-    return;
-  }
-  const mainCompId = String(compData.mainCompId || '');
-  if (mainCompId) {
-    collectTextSegIdsFromComp(docRecord, mainCompId, segIdList);
-  }
-  const childIdList = getChildIdList(compData);
-  for (const childId of childIdList) {
-    collectTextSegIdsFromComp(docRecord, childId, segIdList);
-  }
 }
 
 function collectRowClipboardInfoList(docRecord: DocRecord) {
@@ -589,7 +564,7 @@ function collectRowClipboardInfoFromComp(
     rowInfoList.push({
       rowId: compIdSafe,
       depth,
-      segIdList: getSegIdListInRow(docRecord, compIdSafe),
+    segIdList: docStoreGetSegmentIdListInRow(docRecord, compIdSafe),
     });
     return;
   }
@@ -641,25 +616,6 @@ function getOutlineEntryInfoByRowId(docRecord: DocRecord, rowId: string): Outlin
   };
 }
 
-function getOwningRowId(docRecord: DocRecord, segId: string) {
-  const compIdList = Object.keys(docRecord.compDataById || {});
-  for (const compId of compIdList) {
-    const compData = docRecord.compDataById[compId];
-    if (String(compData?.compName || '') !== 'Row') continue;
-    const childIdList = getChildIdList(compData);
-    if (childIdList.includes(segId)) {
-      return compId;
-    }
-  }
-  return '';
-}
-
-function getSegIdListInRow(docRecord: DocRecord, rowId: string) {
-  const rowData = docRecord.compDataById[rowId];
-  const childIdList = getChildIdList(rowData);
-  return childIdList.filter((childId) => String(docRecord.compDataById[childId]?.compName || '') === 'TextSeg');
-}
-
 function getListIdByMainRowId(docRecord: DocRecord, rowId: string) {
   const compIdList = Object.keys(docRecord.compDataById || {});
   for (const compId of compIdList) {
@@ -685,59 +641,9 @@ function getOwningListIdForChildEntry(docRecord: DocRecord, entryId: string) {
   return '';
 }
 
-function applyFocusAfterCopyPaste(
-  store: DocStore,
-  docId: string,
-  focusNext: CompFocusTarget,
-  reason: string,
-) {
-  const compId = String(focusNext?.compId || '');
-  if (!compId) {
-    return { code: -1, message: 'Focus component id missing.' };
-  }
-  const offsetFocused = Number(focusNext?.point?.offset || 0);
-  store.segFocus(docId, compId, offsetFocused, reason);
-  compFocusAfterRender(store, docId, compId, offsetFocused);
-  return { code: 0, message: 'Focus applied after edit.' };
-}
-
-function compFocusAfterRender(store: DocStore, docId: string, segId: string, offset: number) {
-  const schedule = typeof window !== 'undefined' ? window.setTimeout : setTimeout;
-  schedule(() => {
-    const focusApply = () => {
-      if (!isFocusRequestCurrent(store, docId, segId, offset)) {
-        return;
-      }
-      const selection = typeof window !== 'undefined' ? window.getSelection?.() : null;
-      selection?.removeAllRanges();
-      void store.sendEventToComp(docId, segId, {
-        type: 'focus',
-        sourceId: segId,
-        targetId: docId,
-        data: {
-          segId,
-          offset,
-        },
-      });
-    };
-    if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
-      window.requestAnimationFrame(focusApply);
-      return;
-    }
-    focusApply();
-  }, 0);
-}
-
-function isFocusRequestCurrent(store: DocStore, docId: string, segId: string, offset: number) {
-  const focusState = store.getInteractionState(docId).focusState;
-  return focusState.segIdFocused === segId
-    && focusState.compIdFocused === segId
-    && focusState.offsetFocused === offset;
-}
-
-function addCompDataListToRecord(docRecord: DocRecord, compDataList: CompData[]) {
+function addCompDataListToRecord(contextEdit: DocEditContext, compDataList: CompData[]) {
   for (const compData of compDataList) {
-    docRecord.compDataById[compData.compId] = cloneCompData(compData);
+    editPutCompData(contextEdit, compData);
   }
 }
 
@@ -749,49 +655,6 @@ function createRowComp(rowId: string, childIdList: string[], rowDataTemplate: Co
     data: { ...(rowDataTemplate.data || {}) },
     config: { ...(rowDataTemplate.config || {}) },
   };
-}
-
-function createCompId(docRecord: DocRecord, prefix: string) {
-  let compId = `${prefix}-${createEventId(8)}`;
-  while (docRecord.compDataById[compId]) {
-    compId = `${prefix}-${createEventId(8)}`;
-  }
-  return compId;
-}
-
-function createCompIdReserved(docRecord: DocRecord, prefix: string, compIdSetReserved: Set<string>) {
-  let compId = createCompId(docRecord, prefix);
-  while (compIdSetReserved.has(compId)) {
-    compId = createCompId(docRecord, prefix);
-  }
-  compIdSetReserved.add(compId);
-  return compId;
-}
-
-function cloneCompData(compData: CompData): CompData {
-  return {
-    ...compData,
-    childIdList: getChildIdList(compData),
-    mainCompId: compData.mainCompId ? String(compData.mainCompId) : undefined,
-    data: { ...(compData.data || {}) },
-    config: { ...(compData.config || {}) },
-  };
-}
-
-function removeCompSubtreeFromRecord(docRecord: DocRecord, compId: string) {
-  const compIdSafe = String(compId || '');
-  if (!compIdSafe) return;
-  const compData = docRecord.compDataById[compIdSafe];
-  if (!compData) return;
-  const childIdList = getChildIdList(compData);
-  for (const childId of childIdList) {
-    removeCompSubtreeFromRecord(docRecord, childId);
-  }
-  if (compData.mainCompId) {
-    removeCompSubtreeFromRecord(docRecord, String(compData.mainCompId));
-  }
-  delete docRecord.compDataById[compIdSafe];
-  docRecord.compOrder = docRecord.compOrder.filter((id) => id !== compIdSafe);
 }
 
 function getChildIdList(compData: any) {
