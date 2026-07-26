@@ -8,6 +8,7 @@
   font-size: 14px;
   font-family: sans-serif;
   color: #1f2937;
+  caret-color: transparent;
   display: inline;
   text-align: left;
   white-space: normal;
@@ -26,10 +27,12 @@
   height: 1em;
   margin: 0;
   padding: 0;
+  border: 0;
   position: relative;
   vertical-align: -0.12em;
   pointer-events: none;
   user-select: none;
+  animation: mobx-text-seg-caret-blink 1.2s step-end infinite;
 }
 
 .mobx-text-seg-caret::after {
@@ -40,7 +43,26 @@
   width: 1px;
   height: 1em;
   background: #111827;
-  animation: mobx-text-seg-caret-blink 1s step-end infinite;
+}
+
+/* Dom caret mode: the caret is a pseudo-element on the root, positioned by
+   measured css variables. It must not be a real child node, because the
+   browser mutates contentEditable children directly and React would crash
+   reconciling them. Keep the bar 1px solid #111827; scaling it down or using
+   a light color makes it nearly invisible. */
+.mobx-text-seg.mobx-text-seg-caret-dom::after {
+  content: "";
+  position: absolute;
+  left: var(--mobx-caret-left, 1px);
+  top: var(--mobx-caret-top, 0);
+  width: 1px;
+  height: var(--mobx-caret-height, 1em);
+  margin: 0;
+  padding: 0;
+  background: #111827;
+  pointer-events: none;
+  user-select: none;
+  animation: mobx-text-seg-caret-blink 1.2s step-end infinite;
 }
 
 @keyframes mobx-text-seg-caret-blink {
@@ -51,6 +73,7 @@
 
 .mobx-text-seg[contenteditable="true"] {
   background: rgba(248, 250, 252, 0.9);
+  caret-color: transparent;
 }
 
 .mobx-text-seg.is-active {

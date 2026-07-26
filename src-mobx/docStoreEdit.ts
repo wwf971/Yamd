@@ -588,6 +588,18 @@ function cloneActiveSelectionState(docRecord: DocRecord): SelectionState | null 
   };
 }
 
+// Re-apply a recorded range selection: store state, logical focus on the
+// selection focus point, and DOM selection after render. Shared by structure
+// edits and history undo/redo.
+export function docStoreRestoreSelectionState(
+  store: DocStore,
+  docId: string,
+  selectionStateNext: SelectionState,
+  reason: string,
+) {
+  restoreSelectionStateAfterStructureEdit(store, docId, selectionStateNext, reason);
+}
+
 function restoreSelectionStateAfterStructureEdit(
   store: DocStore,
   docId: string,

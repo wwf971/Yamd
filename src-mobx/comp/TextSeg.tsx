@@ -138,15 +138,22 @@ const TextSeg = observer(React.forwardRef<any, TextSegProps>(({ data = {}, confi
     && isPointerDown === false
     && !isSelectionActive;
   const isLogicalCaretMode = !isDomCaretMode;
-  const isLogicalCaretVisible = isLogicalCaretMode
-    && isPointerDown === false
+  // Always plot the custom caret when focused. Dom caret mode still uses
+  // contentEditable for input, but the native caret is hidden via CSS.
+  const isLogicalCaretVisible = isPointerDown === false
     && isFocusedLogical
     && !isSelectionActive;
+  // In dom caret mode the browser mutates the contentEditable children, so
+  // React must render exactly one plain text child. The caret is drawn as a
+  // css pseudo-element on the root instead of an inline span there.
+  const isCaretSpanRendered = isLogicalCaretVisible && isLogicalCaretMode;
+  const isCaretPseudoRendered = isLogicalCaretVisible && isDomCaretMode;
   const offsetLogicalCaret = isLogicalCaretVisible
     ? Math.min(text.length, Math.max(0, Number(interactionState?.focusState.offsetFocused || 0)))
     : -1;
   const className = [
     'mobx-text-seg',
+    isCaretPseudoRendered ? 'mobx-text-seg-caret-dom' : '',
     isActive ? 'is-active' : '',
     isFocusedLogical ? 'mobx-seg-focused-logical' : '',
     isElActive ? 'mobx-seg-el-active' : '',
@@ -361,6 +368,23 @@ const TextSeg = observer(React.forwardRef<any, TextSegProps>(({ data = {}, confi
     const offsetFocused = Number(interactionState?.focusState.offsetFocused || 0);
     applyCaretByOffset(rootEl, offsetFocused);
   }, [isDomCaretMode, isSelectionActive, interactionState?.focusState.offsetFocused]);
+
+  // Position the pseudo-element caret in dom caret mode. Runs after the
+  // native caret effects above, so measurement sees the final layout.
+  React.useLayoutEffect(() => {
+    const rootEl = rootRef.current;
+    if (!rootEl) return;
+    if (!isCaretPseudoRendered) {
+      rootEl.style.removeProperty('--mobx-caret-left');
+      rootEl.style.removeProperty('--mobx-caret-top');
+      rootEl.style.removeProperty('--mobx-caret-height');
+      return;
+    }
+    const posCaret = calcCaretOverlayPos(rootEl, offsetLogicalCaret);
+    rootEl.style.setProperty('--mobx-caret-left', `${posCaret.left}px`);
+    rootEl.style.setProperty('--mobx-caret-top', `${posCaret.top}px`);
+    rootEl.style.setProperty('--mobx-caret-height', `${posCaret.height}px`);
+  }, [isCaretPseudoRendered, offsetLogicalCaret, text]);
 
   const handlePaste = React.useCallback((event: React.ClipboardEvent<HTMLSpanElement>) => {
     if (!isEditable) return;
@@ -871,7 +895,7 @@ const TextSeg = observer(React.forwardRef<any, TextSegProps>(({ data = {}, confi
       onKeyDown={handleKeyDown}
       onPaste={handlePaste}
     >
-      {isLogicalCaretVisible ? (
+      {isCaretSpanRendered ? (
         <>
           {text.slice(0, offsetLogicalCaret)}
           <span className="mobx-text-seg-caret" aria-hidden="true" />
@@ -883,6 +907,47 @@ const TextSeg = observer(React.forwardRef<any, TextSegProps>(({ data = {}, confi
 }));
 
 export default TextSeg;
+
+// Measure the caret position for a text offset, relative to the root
+// element, without touching the DOM selection. Used by the pseudo-element
+// caret in dom caret mode.
+function calcCaretOverlayPos(rootEl: HTMLElement, offset: number) {
+  const rootRect = rootEl.getBoundingClientRect();
+  const posFallback = { left: 1, top: 0, height: rootRect.height || 16 };
+  const walker = document.createTreeWalker(rootEl, NodeFilter.SHOW_TEXT);
+  let offsetRemain = Math.max(0, Number(offset || 0));
+  let nodeText: Text | null = null;
+  let offsetLocal = 0;
+  let nodeCurrent = walker.nextNode() as Text | null;
+  while (nodeCurrent) {
+    const lengthNode = nodeCurrent.textContent?.length || 0;
+    if (offsetRemain <= lengthNode) {
+      nodeText = nodeCurrent;
+      offsetLocal = offsetRemain;
+      break;
+    }
+    offsetRemain -= lengthNode;
+    nodeText = nodeCurrent;
+    offsetLocal = lengthNode;
+    nodeCurrent = walker.nextNode() as Text | null;
+  }
+  if (!nodeText) {
+    return posFallback;
+  }
+  const range = document.createRange();
+  range.setStart(nodeText, Math.min(offsetLocal, nodeText.textContent?.length || 0));
+  range.collapse(true);
+  const rectList = range.getClientRects();
+  const rect = rectList.length > 0 ? rectList[0] : range.getBoundingClientRect();
+  if (!rect || (rect.width === 0 && rect.height === 0)) {
+    return posFallback;
+  }
+  return {
+    left: rect.left - rootRect.left,
+    top: rect.top - rootRect.top,
+    height: rect.height || rootRect.height || 16,
+  };
+}
 
 function calcTextSegBulletPosition(textEl: HTMLElement | null, basisEl: HTMLElement | null) {
   if (!textEl) {

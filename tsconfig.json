@@ -4,7 +4,7 @@
     "module": "ESNext",
     "lib": ["ES2020", "DOM", "DOM.Iterable"],
     "jsx": "react-jsx",
-    "moduleResolution": "node",
+    "moduleResolution": "bundler",
     "esModuleInterop": true,
     "skipLibCheck": true,
     "strict": false,
@@ -16,13 +16,11 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
-    "baseUrl": ".",
     "paths": {
-      "@/*": ["src/*"],
-      "@wwf971/react-comp-misc": ["../react-comp-misc/src/index.js"]
+      "@/*": ["./src/*"],
+      "@wwf971/react-comp-misc": ["./../react-comp-misc/src/index.js"]
     }
   },
-  "include": ["src/**/*", "src-mobx/**/*", "main.jsx"],
+  "include": ["src/**/*", "src-mobx/**/*", "main.jsx", "vite-env.d.ts"],
   "exclude": ["node_modules", "build"]
 }
-

@@ -418,6 +418,9 @@ async function eventListRowDeleteAttempt({
   if (!entryInfo) {
     return { code: -1, message: 'Cannot delete row.' };
   }
+  if (getIsProtectedRootFirstMainRowForDelete(store, docId, entryInfo)) {
+    return { code: -1, message: 'Cannot delete the first root main row.' };
+  }
   const focus = pickFocusNearEntry(store, docId, entryInfo.listIdParent, entryInfo.entryId);
   return store.runDocEdit(docId, 'rowDelete', () => {
     const rowDataDetached = store.getCompDataById(docId, rowId);
@@ -747,6 +750,26 @@ function getEntryInfoForRow(store: DocStore, docId: string, listId: string, rowI
     entryId: listId,
     rowId,
   };
+}
+
+function getIsProtectedRootFirstMainRowForDelete(
+  store: DocStore,
+  docId: string,
+  entryInfo: { listIdParent: string; entryId: string; rowId: string },
+) {
+  if (entryInfo.entryId === entryInfo.rowId) return false;
+  const docRecord = store.ensureDoc(docId);
+  const listParent = store.getCompDataById(docId, entryInfo.listIdParent);
+  if (!listParent || String(listParent.compName || '') !== 'List') return false;
+  const compIdParentOfList = String(store.getParentCompId(docId, entryInfo.listIdParent) || '');
+  const isRootList = listParent.config?.isRoot === true
+    || docRecord.compIdRoot === entryInfo.listIdParent
+    || docRecord.compIdRoot === compIdParentOfList;
+  if (!isRootList) return false;
+  const childIdListRoot = getChildIdList(listParent);
+  if (childIdListRoot[0] !== entryInfo.entryId) return false;
+  const entryData = store.getCompDataById(docId, entryInfo.entryId);
+  return String(entryData?.mainCompId || '') === entryInfo.rowId;
 }
 
 function pickFocusNearEntry(store: DocStore, docId: string, listId: string, entryId: string): CompFocusTarget | undefined {

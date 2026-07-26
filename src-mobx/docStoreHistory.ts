@@ -1,5 +1,6 @@
 import type { DocStore } from './docStore';
 import { idCreateRandom } from './docStoreCompData';
+import { docStoreRestoreSelectionState } from './docStoreEdit';
 import { docStoreIsSegment } from './docStoreSegment';
 import {
   compVersionCheckpoint,
@@ -17,6 +18,7 @@ import type {
   DocHistoryState,
   DocRecord,
   FocusState,
+  SelectionState,
 } from './docStoreTypes';
 
 export function createDocHistoryState(limitNode = 200): DocHistoryState {
@@ -52,6 +54,8 @@ export function docStoreRecordHistory(
   options: DocEditOptions,
   focusBefore?: CompFocusTarget,
   focusAfter?: CompFocusTarget,
+  selectionBefore?: SelectionState | null,
+  selectionAfter?: SelectionState | null,
 ) {
   const docRecord = store.ensureDoc(docId);
   const historyState = docRecord.historyState;
@@ -75,6 +79,7 @@ export function docStoreRecordHistory(
   if (isGroupAllowed && nodeCurrent) {
     composeChangeSetInto(nodeCurrent.changeSet, commitResult.changeSet);
     nodeCurrent.focusAfter = cloneFocusTarget(focusAfter);
+    nodeCurrent.selectionAfter = cloneSelectionState(selectionAfter);
     nodeCurrent.timeCreated = timeCreated;
     historyState.versionHistory += 1;
     syncHistoryAvailability(historyState);
@@ -92,6 +97,8 @@ export function docStoreRecordHistory(
     changeSet: commitResult.changeSet,
     focusBefore: cloneFocusTarget(focusBefore),
     focusAfter: cloneFocusTarget(focusAfter),
+    selectionBefore: cloneSelectionState(selectionBefore),
+    selectionAfter: cloneSelectionState(selectionAfter),
     groupKey: options.groupKey ? String(options.groupKey) : undefined,
   };
   historyState.nodeById[nodeId] = nodeNext;
@@ -124,8 +131,10 @@ export function docStoreUndoEdit(store: DocStore, docId: string) {
     historyState.nodeIdCurrent = nodeIdParent;
     historyState.nodeIdRedoPreferredByNodeId[nodeIdParent] = nodeCurrent.nodeId;
     historyState.versionHistory += 1;
-    store.clearSelectionState(docId);
-    restoreFocus(store, docId, nodeCurrent.focusBefore, 'historyUndo');
+    if (!restoreSelection(store, docId, nodeCurrent.selectionBefore, 'historyUndo')) {
+      store.clearSelectionState(docId);
+      restoreFocus(store, docId, nodeCurrent.focusBefore, 'historyUndo');
+    }
     syncHistoryAvailability(historyState);
   } finally {
     historyState.isApplying = false;
@@ -159,8 +168,10 @@ export function docStoreRedoEdit(store: DocStore, docId: string, nodeIdChild = '
     historyState.nodeIdCurrent = nodeNext.nodeId;
     historyState.nodeIdRedoPreferredByNodeId[nodeCurrent.nodeId] = nodeNext.nodeId;
     historyState.versionHistory += 1;
-    store.clearSelectionState(docId);
-    restoreFocus(store, docId, nodeNext.focusAfter, 'historyRedo');
+    if (!restoreSelection(store, docId, nodeNext.selectionAfter, 'historyRedo')) {
+      store.clearSelectionState(docId);
+      restoreFocus(store, docId, nodeNext.focusAfter, 'historyRedo');
+    }
     syncHistoryAvailability(historyState);
   } finally {
     historyState.isApplying = false;
@@ -225,6 +236,24 @@ export function docStoreCheckpointCompVersion(store: DocStore, docId: string, ve
     historyState.versionHistory += 1;
   }
   return result;
+}
+
+// Clone an active range selection as a history hint. Caret-only or inactive
+// selection records nothing; focus hints cover that case.
+export function selectionStateFromState(selectionState: SelectionState): SelectionState | null {
+  if (
+    selectionState.isSelectionActive !== true
+    || !selectionState.pointAnchor
+    || !selectionState.pointFocus
+  ) {
+    return null;
+  }
+  return {
+    isSelectionActive: true,
+    mode: 'range',
+    pointAnchor: { ...selectionState.pointAnchor },
+    pointFocus: { ...selectionState.pointFocus },
+  };
 }
 
 export function focusTargetFromState(focusState: FocusState): CompFocusTarget | undefined {
@@ -342,6 +371,27 @@ function composeChangeSetInto(changeSetTarget: DocEditChangeSet, changeSetNext: 
     }
     docChangeTarget.compIdRootAfter = docChangeNext.compIdRootAfter;
   }
+}
+
+// Restore a recorded range selection after a history apply. Returns false
+// when the hint is absent or its segments no longer exist, so the caller
+// falls back to focus restore.
+function restoreSelection(
+  store: DocStore,
+  docId: string,
+  selectionState: SelectionState | null | undefined,
+  reason: string,
+) {
+  if (!selectionState || selectionState.isSelectionActive !== true) return false;
+  const pointAnchor = selectionState.pointAnchor;
+  const pointFocus = selectionState.pointFocus;
+  if (!pointAnchor?.segId || !pointFocus?.segId) return false;
+  const docRecord = store.ensureDoc(docId);
+  if (!docRecord.compDataById[pointAnchor.segId] || !docRecord.compDataById[pointFocus.segId]) {
+    return false;
+  }
+  docStoreRestoreSelectionState(store, docId, selectionState, reason);
+  return true;
 }
 
 function restoreFocus(
@@ -485,4 +535,14 @@ function createAncestorSet(historyState: DocHistoryState) {
 
 function cloneFocusTarget(focusTarget: CompFocusTarget | undefined) {
   return focusTarget ? JSON.parse(JSON.stringify(focusTarget)) : undefined;
+}
+
+function cloneSelectionState(selectionState: SelectionState | null | undefined): SelectionState | null {
+  if (!selectionState) return null;
+  return {
+    isSelectionActive: selectionState.isSelectionActive === true,
+    mode: selectionState.mode === 'range' ? 'range' : 'caret',
+    pointAnchor: selectionState.pointAnchor ? { ...selectionState.pointAnchor } : null,
+    pointFocus: selectionState.pointFocus ? { ...selectionState.pointFocus } : null,
+  };
 }

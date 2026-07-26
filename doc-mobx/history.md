@@ -49,7 +49,7 @@ History does not record these operational states as document changes:
 - bullet measurement
 - component registry and DOM element references
 
-A history node can carry focus restore hints for the state before and after an edit. These hints control the caret after undo or redo, but changing focus alone never creates a history node. Undo and redo clear an active range selection before restoring focus.
+A history node can carry focus and range selection restore hints for the state before and after an edit. These hints control the caret and selection after undo or redo, but changing focus or selection alone never creates a history node. Undo restores `selectionBefore` and redo restores `selectionAfter` when the referenced segments still exist; otherwise they clear the selection and fall back to the focus hint.
 
 ## Tree model
 
@@ -206,8 +206,8 @@ check current node has parent
      every versionBefore materializable (fail applies nothing)
   -> write materialized versionBefore states, delete created comps
   -> move nodeIdCurrent to parent
-  -> clear selection
-  -> restore focusBefore after render
+  -> restore selectionBefore when valid,
+     else clear selection and restore focusBefore after render
   -> clear history isApplying
 ```
 
@@ -219,8 +219,8 @@ choose explicit child or preferred child
   -> validate against versionBefore, materialize versionAfter
   -> apply, move nodeIdCurrent to child
   -> remember preferred child
-  -> clear selection
-  -> restore focusAfter after render
+  -> restore selectionAfter when valid,
+     else clear selection and restore focusAfter after render
   -> clear history isApplying
 ```
 

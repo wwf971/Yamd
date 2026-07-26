@@ -537,12 +537,6 @@ const TestHistoryYaml = () => <TestItemDoc yamlRaw={TEST_HISTORY_YAML_RAW} isHis
 
 export const mobxYamlTestItems = [
   {
-    key: 'mobx-edit-history',
-    label: 'Edit history',
-    description: 'Undo, redo, branch preservation, and history tree display.',
-    Comp: TestHistoryYaml,
-  },
-  {
     key: 'mobx-text-basic',
     label: 'TextBasic Live',
     description: 'YAML viewer + EventTester + TextBasic.',
@@ -599,6 +593,12 @@ export const mobxYamlTestItems = [
     description: 'List test with TextSeg render counters enabled.',
     parentKey: 'mobx-list',
     Comp: TestListRenderDebugYaml,
+  },
+  {
+    key: 'mobx-edit-history',
+    label: 'Edit history',
+    description: 'Undo, redo, branch preservation, and history tree display.',
+    Comp: TestHistoryYaml,
   },
 ];
 

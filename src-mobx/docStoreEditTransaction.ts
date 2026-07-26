@@ -1,5 +1,5 @@
 import type { DocStore } from './docStore';
-import { docStoreRecordHistory, focusTargetFromState } from './docStoreHistory';
+import { docStoreRecordHistory, focusTargetFromState, selectionStateFromState } from './docStoreHistory';
 import {
   createDocEditContext,
   docStoreCommitEdit,
@@ -37,6 +37,7 @@ export function docStoreRunEdit<T extends EditResult>(
 
   const context = createDocEditContext(store, docId, options.typeEdit);
   const focusBefore = focusTargetFromState(docRecord.interactionState.focusState);
+  const selectionBefore = selectionStateFromState(docRecord.interactionState.selectionState);
   store.editTransactionByDocId[docId] = context;
   docRecord.editState.isApplying = true;
   try {
@@ -50,7 +51,8 @@ export function docStoreRunEdit<T extends EditResult>(
       docRecord.editState.versionEdit += 1;
       docRecord.editState.typeEditLast = context.typeEdit;
       const focusAfter = focusTargetFromState(docRecord.interactionState.focusState);
-      docStoreRecordHistory(store, docId, commitResult, options, focusBefore, focusAfter);
+      const selectionAfter = selectionStateFromState(docRecord.interactionState.selectionState);
+      docStoreRecordHistory(store, docId, commitResult, options, focusBefore, focusAfter, selectionBefore, selectionAfter);
     }
     return result;
   } catch (error) {

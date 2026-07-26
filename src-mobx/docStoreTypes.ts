@@ -103,6 +103,8 @@ export type DocHistoryNode = {
   changeSet: DocEditChangeSet;
   focusBefore?: CompFocusTarget;
   focusAfter?: CompFocusTarget;
+  selectionBefore?: SelectionState | null;
+  selectionAfter?: SelectionState | null;
   groupKey?: string;
 };
 

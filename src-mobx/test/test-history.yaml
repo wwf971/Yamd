@@ -7,16 +7,10 @@ compById:
   history-doc-viewer:
     compName: DocViewer
     childIdList:
-      - history-event-tester
+      - history-list-root
     data: {}
     config:
       maxHeight: 180
-  history-event-tester:
-    compName: EventTester
-    childIdList:
-      - history-list-root
-    data: {}
-    config: {}
   history-list-root:
     compName: List
     childIdList:
