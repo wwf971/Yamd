@@ -31,6 +31,7 @@ compById:
     compName: Row
     childIdList:
       - history-seg-main
+      - history-seg-main-second
     data: {}
     config: {}
   history-seg-main:
@@ -38,6 +39,13 @@ compById:
     childIdList: []
     data:
       text: Edit this text, split it, or move its row.
+    config:
+      isEditable: true
+  history-seg-main-second:
+    compName: TextSeg
+    childIdList: []
+    data:
+      text: Second segment in the same row.
     config:
       isEditable: true
   history-row-child:

@@ -50,6 +50,88 @@ type PasteCompBuildResult = {
   textLast: string;
 };
 
+export type DocCutState = {
+  textClipboard: string;
+  nodeIdAfter: string;
+  segIdFocusAfter: string;
+  offsetFocusAfter: number;
+  timeCreated: number;
+};
+
+export async function docStoreCutSelection(
+  store: DocStore,
+  docId: string,
+  textClipboard: string,
+) {
+  const docRecord = store.ensureDoc(docId);
+  const selectionState = docRecord.interactionState.selectionState;
+  const pointAnchor = selectionState.pointAnchor;
+  const pointFocus = selectionState.pointFocus;
+  if (selectionState.isSelectionActive !== true || !pointAnchor || !pointFocus) {
+    return { code: -1, message: 'No active selection to cut.' };
+  }
+  const segIdFocus = String(pointFocus.segId || pointFocus.compId || '');
+  if (!segIdFocus || !docRecord.compDataById[segIdFocus]) {
+    return { code: -1, message: 'Cut selection focus segment not found.' };
+  }
+  const nodeIdBefore = docRecord.historyState.nodeIdCurrent;
+
+  const result = await store.sendEventToParent(docId, segIdFocus, {
+    type: 'childSelectionDeleteAttempt',
+    sourceId: segIdFocus,
+    targetId: docId,
+    data: {
+      compIdChild: segIdFocus,
+      pointAnchor: { ...pointAnchor },
+      pointFocus: { ...pointFocus },
+    },
+  });
+  if (result.code !== 0) return result;
+  if (docRecord.historyState.nodeIdCurrent === nodeIdBefore) {
+    return { code: -1, message: 'Cut made no document change.' };
+  }
+
+  const focusState = docRecord.interactionState.focusState;
+  store.stateCutByDocId[docId] = {
+    textClipboard: normalizeClipboardText(textClipboard),
+    nodeIdAfter: docRecord.historyState.nodeIdCurrent,
+    segIdFocusAfter: String(focusState.segIdFocused || focusState.compIdFocused || ''),
+    offsetFocusAfter: Number(focusState.offsetFocused || 0),
+    timeCreated: Date.now(),
+  };
+  return { code: 0, message: 'Selection cut.' };
+}
+
+export function docStoreTryRestoreCutByPaste(
+  store: DocStore,
+  docId: string,
+  segId: string,
+  textPaste: string,
+  pointRaw: any,
+) {
+  const cutState = store.stateCutByDocId[docId];
+  if (!cutState) return null;
+  const docRecord = store.ensureDoc(docId);
+  const offsetPaste = Math.max(0, Number(pointRaw?.offset || 0));
+  const isMatchingCut = Date.now() - cutState.timeCreated <= 30000
+    && cutState.textClipboard === normalizeClipboardText(textPaste)
+    && cutState.nodeIdAfter === docRecord.historyState.nodeIdCurrent
+    && cutState.segIdFocusAfter === String(segId || '')
+    && cutState.offsetFocusAfter === offsetPaste
+    && docRecord.interactionState.selectionState.isSelectionActive !== true;
+  if (!isMatchingCut) return null;
+
+  delete store.stateCutByDocId[docId];
+  const result = store.undoDocEdit(docId);
+  return result.code === 0
+    ? { ...result, message: 'Cut content restored at its original position.' }
+    : result;
+}
+
+function normalizeClipboardText(text: unknown) {
+  return String(text || '').replace(/\r\n|\r/g, '\n');
+}
+
 export function docStoreGetSelectionText(store: DocStore, docId: string) {
   const docRecord = store.ensureDoc(docId);
   const selectionState = docRecord.interactionState.selectionState;

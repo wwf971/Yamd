@@ -51,10 +51,13 @@ import {
 } from './docStoreEditContext';
 import { docStoreGetOwningRowId, docStoreIsSegment } from './docStoreSegment';
 import {
+  type DocCutState,
+  docStoreCutSelection,
   docStoreGetSelectionMarkdownText,
   docStoreGetSelectionMarkdownTextSync,
   docStoreGetSelectionText,
   docStorePasteText,
+  docStoreTryRestoreCutByPaste,
 } from './docStoreEditCopyPaste';
 import {
   createDragState,
@@ -161,10 +164,13 @@ export class DocStore {
 
   editTransactionByDocId: Record<string, unknown> = {};
 
+  stateCutByDocId: Record<string, DocCutState> = {};
+
   constructor() {
     makeAutoObservable(this, {
       compElementByDocId: false,
       editTransactionByDocId: false,
+      stateCutByDocId: false,
     }, { autoBind: true });
   }
 
@@ -700,6 +706,10 @@ export class DocStore {
     return docStoreGetSelectionMarkdownTextSync(this, docId);
   }
 
+  cutSelection(docId: string, textClipboard: string) {
+    return docStoreCutSelection(this, docId, textClipboard);
+  }
+
   applyCompEditResult(docId: string, parentId: string, editResult: CompEditResult, reason: string) {
     return this.runDocEdit(docId, reason, () => docStoreApplyCompEditResult(this, docId, parentId, editResult, reason));
   }
@@ -763,6 +773,8 @@ export class DocStore {
     textPaste: string,
     point: any,
   ) {
+    const resultRestoreCut = docStoreTryRestoreCutByPaste(this, docId, segId, textPaste, point);
+    if (resultRestoreCut) return resultRestoreCut;
     return this.runDocEdit(docId, 'childPaste', () => (
       docStorePasteText(this, docId, rowId, segId, textPaste, point)
     ));

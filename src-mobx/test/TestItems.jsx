@@ -168,6 +168,18 @@ const TestItemDoc = observer(function TestItemDoc({ yamlRaw, isHistoryVisible = 
       }).catch(() => undefined);
     };
 
+    const handleCut = (event) => {
+      const targetEl = event.target instanceof Node ? event.target : null;
+      if (!targetEl || !rootEl.contains(targetEl)) return;
+      const selectionStateCurrent = storeDocTest.getInteractionState(docId).selectionState;
+      if (selectionStateCurrent.isSelectionActive !== true) return;
+      const textSelected = storeDocTest.getSelectionMarkdownTextSync(docId);
+      if (!textSelected) return;
+      event.preventDefault();
+      event.clipboardData?.setData('text/plain', textSelected);
+      void storeDocTest.cutSelection(docId, textSelected);
+    };
+
     const handleKeyDown = (event) => {
       const targetEl = event.target instanceof Node ? event.target : null;
       const isEventInDoc = Boolean(targetEl && rootEl.contains(targetEl));
@@ -199,6 +211,7 @@ const TestItemDoc = observer(function TestItemDoc({ yamlRaw, isHistoryVisible = 
 
     rootEl.addEventListener('focusin', handleFocusIn);
     rootEl.addEventListener('copy', handleCopy);
+    rootEl.addEventListener('cut', handleCut);
     document.addEventListener('keydown', handleKeyDown, true);
     document.addEventListener('keyup', handleKeyUp, true);
     document.addEventListener('selectionchange', handleSelectionChange);
@@ -206,6 +219,7 @@ const TestItemDoc = observer(function TestItemDoc({ yamlRaw, isHistoryVisible = 
     return () => {
       rootEl.removeEventListener('focusin', handleFocusIn);
       rootEl.removeEventListener('copy', handleCopy);
+      rootEl.removeEventListener('cut', handleCut);
       document.removeEventListener('keydown', handleKeyDown, true);
       document.removeEventListener('keyup', handleKeyUp, true);
       document.removeEventListener('selectionchange', handleSelectionChange);
@@ -592,7 +606,7 @@ export const mobxYamlTestItems = [
   {
     key: 'mobx-edit-history',
     label: 'Edit history',
-    description: 'Undo, redo, branch preservation, and history tree display.',
+    description: 'Undo, redo, branches, and same-segment, cross-segment, or cross-row cut followed by paste/undo.',
     Comp: TestHistoryYaml,
   },
 ];

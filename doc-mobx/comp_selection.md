@@ -6,7 +6,7 @@ For logical focus behavior, see `./comp_focus.md`.
 
 For event routing, see `./event_comp.md`.
 
-For range delete and copy behavior, see `./comp_delete_copy.md`.
+For range delete, copy, and cut behavior, see `./comp_delete_copy_cut.md`.
 
 ## Core Idea
 
@@ -140,4 +140,4 @@ Delete starts from the focused segment receiving Backspace or Delete, then row/l
 
 Copy reads the tracked range and formats selected rows as markdown text.
 
-For details, see `./comp_delete_copy.md`.
+For details, see `./comp_delete_copy_cut.md`.

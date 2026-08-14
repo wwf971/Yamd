@@ -31,7 +31,7 @@ For DOM text selection tracking, see `./comp_selection.md`.
 
 For split, indent, and outdent behavior, see `./comp_indent_split.md`.
 
-For delete and copy actions, see `./comp_delete_copy.md`.
+For delete, copy, and cut actions, see `./comp_delete_copy_cut.md`.
 
 Accepted content and structure changes run through one document edit transaction. For the transaction boundary, history tree, and undo or redo API, see `./history.md`.
 
