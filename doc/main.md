@@ -46,7 +46,7 @@ DOM event
 
 Focus and selection can change with an edit, but they are not document content. Selection and navigation alone do not create edit history.
 
-For history tree semantics and undo or redo APIs, refer to [Edit history](./history.md).
+For history tree semantics and undo or redo APIs, refer to [Edit history](../doc-mobx/history.md).
 
 ## Other implementation guides
 
@@ -54,3 +54,4 @@ For history tree semantics and undo or redo APIs, refer to [Edit history](./hist
 - [Custom components](./custom-comp.md)
 - [Indent event](./event-indent.md)
 - [Focus event](./event-focus.md)
+- [MobX custom component design](../doc-mobx/yamd_comp_design.md)

@@ -332,6 +332,29 @@ Multi-row indent:
 - all selected entries move under that previous sibling
 - order inside the moved block is preserved
 - if the previous sibling is a `Row`, wrap it as a `List`
+- each selected entry follows the same one-level rule as a single-entry indent
+- when a selected `List` moves down, its existing children stay at their current level and become following siblings of that entry
+
+For example, after selecting `bbb` through `ccc`(|xxx| means the content xxx is selected):
+
+```text
+- aaa
+- |bbb
+- ccc|
+  - ddd
+
+```
+
+Tab produces:
+
+```text
+- aaa
+  - |bbb
+  - ccc|
+  - ddd
+```
+
+It must not keep `ddd` nested below `ccc`; selecting multiple entries must not change the established single-entry indent behavior.
 
 Multi-row outdent:
 
@@ -373,6 +396,7 @@ The helper names can change, but the behavior should stay store-owned.
 - Tab indents the focused row/list entry under its previous sibling.
 - Shift+Tab outdents the focused row/list entry after its parent list.
 - DOM range selection can drive multi-row indent and outdent for contiguous entries in one parent list.
+- multi-row indent keeps descendants of a selected entry at their previous level, matching single-entry indent.
 - deleting the last content in an editable leaf removes that leaf and restores focus leftward.
 - focus state remains consistent with `./comp_focus.md`.
 - selection state remains consistent with `./comp_selection.md`.

@@ -40,7 +40,7 @@ type DocEditChangeSet = {
 
 `versionId` is session state. It is excluded from `getDocYamlRaw()` output, and loading a document assigns fresh ids.
 
-History does not record these operational states as document changes:
+History does not record these ui states as document changes:
 
 - logical focus
 - DOM active element

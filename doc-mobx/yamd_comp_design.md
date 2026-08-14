@@ -73,6 +73,156 @@ registerCompDataDiffHandler(compName, {
 - Do not let the browser own DOM that React manages. If the component uses `contentEditable`, the browser mutates children directly; React must render exactly one plain text child there, and any decoration (caret, badge) must be a pseudo-element or live outside the edited element. Violating this crashes React on unmount (`removeChild` NotFoundError).
 - Never use browser-native undo. Document changes go through the store; the shell routes Ctrl or Command with Z to `undoDocEdit`.
 
+## Segment component contract
+
+A component is a segment when its id appears directly in `Row.childIdList`. Row, List, selection, and history logic recognize that structural position; they do not require `compName: 'TextSeg'`.
+
+### Registration and imports
+
+The component renderer maps `CompData.compName` to a React component. The current test shell assembles this map in `src-mobx/test/TestItems.jsx`:
+
+```ts
+const compByName = {
+  ...compByNameDefault,
+  List,
+  Row,
+  ExampleSeg,
+};
+```
+
+The shell registers each mounted component with `DocStore.registerComp()`. A segment should use `forwardRef` and expose `dispatchEvent(event)` so store-to-component focus commands and edit queries can reach it.
+
+Until there is a public MobX entry point, an in-repository segment imports the pieces it needs directly:
+
+```ts
+import { observer } from 'mobx-react-lite';
+import { useDocStoreContext } from '../DocStoreContext';
+import type { CompData, CompEvent, SelectionTrackPoint } from '../docStoreTypes';
+import { registerCompDataDiffHandler } from '../docStoreVersion'; // optional
+import { useDocDragInteraction } from '../util/useDocDragInteraction'; // optional
+```
+
+The renderer passes `{ compId }` to the component. Resolve the live record from context instead of treating the initial prop as a persistent copy:
+
+```ts
+const contextDocStore = useDocStoreContext();
+const compData = contextDocStore?.store.getCompDataById(contextDocStore.docId, compId);
+const dataComp = compData?.data || data || {};
+const configComp = compData?.config || config || {};
+```
+
+### DOM identity, focus, and selection
+
+The segment root exposes these attributes:
+
+```tsx
+<span
+  data-mobx-comp-id={compId}
+  data-mobx-comp-name="ExampleSeg"
+  data-mobx-seg-id={compId}
+>
+  {content}
+</span>
+```
+
+- `data-mobx-comp-id` maps DOM activity to component runtime state.
+- `data-mobx-seg-id` is used by Row navigation, DOM selection reading, selection restoration, and segment drag lookup.
+- `data-mobx-comp-name` should match `compName` for inspection.
+
+On browser focus, call `updateElActiveState()` and `segFocus()`. Handle inbound `focus` and `clickSingle` events by focusing the element and applying the supplied offset or direction. When arrow movement crosses the component boundary, emit `segNavigate` and let Row or List choose the next segment.
+
+Selection offsets are calculated from the segment root's `textContent`. A text-selectable segment must keep visible text and its logical linear offset model aligned. A compound widget that cannot expose one linear text offset needs a component-specific selection adapter; the current implementation does not provide one.
+
+### Events emitted by an editable segment
+
+Use `onEvent` for operations that cross the segment boundary:
+
+```text
+segNavigate                    arrow movement leaves the segment
+childSplitAttempt              Enter splits the segment or row
+childMergePrevAttempt          Backspace/Delete at the left boundary
+childDeleteAttempt             content editing makes the segment removable
+childSelectionDeleteAttempt    Backspace/Delete acts on an active range
+childPasteAttempt              native paste supplies text and a point
+rowIndentAttempt               Tab
+rowOutdentAttempt              Shift+Tab
+```
+
+Include `compIdChild` and the current `{ offset }` point for structure attempts. Selection deletion and paste also include the tracked anchor and focus points. Ordinary content input calls `updateCompDataByPatch()`; it does not need to emit a separate structure event.
+
+### Queries handled by an editable segment
+
+Queries arrive through `dispatchEvent()`. They are read-only preparations: the segment returns a result, then Row, List, or the store applies it in one edit transaction.
+
+```text
+selfSplitQuery                 return replacement components and focus target
+selfMergeQuery                 merge compatible segment data or reject
+selfDeleteQuery                return deleteSelf or reject
+selfIsEmptyQuery               return { isEmpty }
+selfSelectionDeleteQuery       remove a range inside one segment
+selfSelectionEdgeDeleteQuery   keep content before or after one endpoint
+selfClipboardTextQuery         return text for optional start/end offsets
+```
+
+Structure-changing queries return the common `CompEditResult` shape:
+
+```ts
+{
+  op: 'replaceSelf' | 'replaceRange' | 'deleteSelf' | 'noop',
+  compIdListOriginal: string[],
+  compListNext: CompData[],
+  focus?: { compId: string, point?: { offset: number } },
+}
+```
+
+Reject incompatible merge pairs rather than assuming every segment contains text. Return `noop` for an accepted operation with no data range to change.
+
+### Copy and paste text contract
+
+The generic synchronous copy and paste paths use `config.fieldNameText || 'text'`. Set `fieldNameText` when the segment stores its plain-text representation under another data field:
+
+```ts
+config: {
+  isEditable: true,
+  fieldNameText: 'value',
+}
+```
+
+The asynchronous markdown copy path first asks `selfClipboardTextQuery` and falls back to the configured text field. Plain-text paste writes that field. Markdown-list paste clones the target segment type and Row configuration, then supplies each item through the same field.
+
+An opaque component without a meaningful plain-text representation can still render and participate in structural operations, but the current clipboard system needs an adapter before copy and paste are complete for that component.
+
+### Optional drag and bullet behavior
+
+For segment dragging, use `useDocDragInteraction()` and expose `data-mobx-drag-item-id="segment:<compId>"`.
+
+List bullet measurement delegates through Row to a segment provider. A custom first segment should report a compatible bullet position through the store APIs or accept fallback positioning. This behavior is not yet extracted into a reusable segment hook.
+
+### Current integration boundary
+
+Custom segments are practical inside this repository, but the integration surface is not yet a stable external component SDK:
+
+- event names and result data are string-based instead of discriminated TypeScript unions
+- the complete registry and document shell are assembled in `src-mobx/test/TestItems.jsx`
+- List and Row consume `DocCompRenderContext` from the test folder
+- there is no public barrel export for MobX component-development APIs
+- compound selection and non-text clipboard adapters are not defined
+
+Before publishing third-party segment packages, move the render context and shell out of the test folder, define typed event/query contracts, and expose a supported MobX entry point.
+
+### Verification
+
+Add an in-repository segment to `compByNameForTest`, place it directly under a Row in an existing or temporary test document, and verify:
+
+- click, focus commands, and arrow navigation
+- same-segment and cross-segment selection offsets
+- split, merge, empty deletion, and range deletion
+- Tab and Shift+Tab with preserved focus or selection
+- synchronous and asynchronous copy and both paste forms
+- undo and redo of content, structure, focus, and selection
+- read-only rejection without partial mutation
+- drag and bullet alignment when those optional features are supported
+
 ## Components with internal history
 
 Some wrapped components (an Excalidraw canvas, a code editor, a spreadsheet) ship their own comprehensive edit log and internal undo/redo. Two histories over the same content cannot both be authoritative.

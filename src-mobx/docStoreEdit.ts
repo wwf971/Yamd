@@ -261,7 +261,10 @@ function indentSelectedEntries(
 ) {
   const contextEdit = docStoreGetActiveEdit(store, docId);
   for (const entryInfo of entryInfoList) {
-    const result = indentEntryByEntryId(contextEdit, entryInfo.entryId, { isPreserveExistingChildren: true });
+    // Keep multi-entry indent consistent with indenting each selected entry
+    // individually. A selected List moves down one level while its existing
+    // children stay at their current level and become following siblings.
+    const result = indentEntryByEntryId(contextEdit, entryInfo.entryId);
     if (result.code !== 0) {
       return result;
     }
@@ -292,7 +295,6 @@ function outdentSelectedEntries(
 function indentEntryByEntryId(
   contextEdit: DocEditContext,
   entryId: string,
-  options: { isPreserveExistingChildren?: boolean } = {},
 ): StructureEditResult {
   const docRecord = contextEdit.store.ensureDoc(contextEdit.docId);
   const listIdParent = getOwningListIdForChildEntry(docRecord, entryId);
@@ -310,15 +312,13 @@ function indentEntryByEntryId(
     return { code: -1, message: 'Cannot indent entry.' };
   }
 
-  const isPreserveExistingChildren = options.isPreserveExistingChildren === true;
-  const childIdListFormer = !isPreserveExistingChildren
-    && String(entryData.compName || '') === 'List'
+  const childIdListFormer = String(entryData.compName || '') === 'List'
     && Array.isArray(entryData.childIdList)
     ? entryData.childIdList.map((id) => String(id || ''))
     : [];
 
   if (String(entryPrev.compName || '') === 'List') {
-    if (!isPreserveExistingChildren && String(entryData.compName || '') === 'List') {
+    if (String(entryData.compName || '') === 'List') {
       editSetChildIdList(contextEdit, entryId, []);
     }
     editSetChildIdList(contextEdit, listIdParent, childIdList.filter((id) => id !== entryId));
@@ -331,7 +331,7 @@ function indentEntryByEntryId(
   }
 
   if (String(entryPrev.compName || '') === 'Row') {
-    if (!isPreserveExistingChildren && String(entryData.compName || '') === 'List') {
+    if (String(entryData.compName || '') === 'List') {
       editSetChildIdList(contextEdit, entryId, []);
     }
     const listIdWrapped = docStoreCreateCompId(docRecord, 'list');

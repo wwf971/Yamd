@@ -189,7 +189,7 @@ Suggested class mapping:
 - `isElActive` -> segment active element class
 - `config.isDebug` -> segment debug class
 
-This keeps operational states in store and keeps debug behavior explicit and controllable.
+This keeps ui component states in store and keeps debug behavior explicit and controllable.
 
 ## Minimal Acceptance Checklist
 
