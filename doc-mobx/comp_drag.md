@@ -504,7 +504,7 @@ register row/list entry metadata, attach drag item attributes, attach pointer ha
 src-mobx/comp/List.tsx
 register list entry metadata, attach drag item attributes, attach pointer handler
 
-src-mobx/comp/TextSeg.tsx
+src-mobx/comp/seg-text/TextSeg.tsx
 keep shift pointer default prevented so text selection does not change
 
 src-mobx/comp/Row.css and src-mobx/comp/List.css

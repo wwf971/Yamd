@@ -2,13 +2,12 @@ import React from 'react';
 import yaml from 'js-yaml';
 import { reaction } from 'mobx';
 import { observer } from 'mobx-react-lite';
-import { compByNameDefault, getCompByName } from '../docMobx';
+import {
+  compByNameDefault,
+  getCompByName,
+} from '../CompCommon';
 import { DocStoreProvider } from '../DocStoreContext';
 import { DocStore } from '../docStore';
-import DocViewer from '../comp/DocViewer';
-import List from '../comp/List';
-import Row from '../comp/Row';
-import TextSeg from '../comp/TextSeg';
 import { selectionStateReadFromDom } from '../event/eventLogicRow';
 import { useDocUnfocusBoundary } from '../util/useDocUnfocusBoundary';
 import EventTester from './EventTester';
@@ -27,10 +26,6 @@ import './testMobx.css';
 const compByNameForTest = {
   ...compByNameDefault,
   EventTester,
-  DocViewer,
-  List,
-  Row,
-  TextSeg,
 };
 
 const TestItemDoc = observer(function TestItemDoc({ yamlRaw, isHistoryVisible = false }) {

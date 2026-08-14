@@ -1,6 +1,6 @@
 import React from 'react';
 import { observer } from 'mobx-react-lite';
-import TextBasic from './comp/TextBasic';
+import { compByNameDefault, getCompByName, TextBasic } from './CompCommon';
 import { DocStoreProvider } from './DocStoreContext';
 import { DocStore, createDocStore } from './docStore';
 import type { CompEvent } from './docStoreTypes';
@@ -9,13 +9,7 @@ import './docMobx.css';
 
 export const compIdDocRoot = 'comp-doc-root';
 export const compIdTextBasicMain = 'comp-text-basic-main';
-export const compByNameDefault = {
-  TextBasic,
-};
-
-export function getCompByName(compName: string, compByName: Record<string, any> = compByNameDefault) {
-  return compByName[String(compName || '')] || null;
-}
+export { compByNameDefault, getCompByName } from './CompCommon';
 
 export function renderCompByCompData({
   compData,

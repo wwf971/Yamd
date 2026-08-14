@@ -79,13 +79,13 @@ A component is a segment when its id appears directly in `Row.childIdList`. Row,
 
 ### Registration and imports
 
-The component renderer maps `CompData.compName` to a React component. The current test shell assembles this map in `src-mobx/test/TestItems.jsx`:
+The component renderer maps `CompData.compName` to a React component. Standard components, `compByNameDefault`, and `getCompByName` are exported through the stable `src-mobx/CompCommon.ts` entry point. Consumers should import from that module instead of depending on component implementation paths.
+
+The current test shell only extends the standard map with test-only components:
 
 ```ts
 const compByName = {
   ...compByNameDefault,
-  List,
-  Row,
   ExampleSeg,
 };
 ```

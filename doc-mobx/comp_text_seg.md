@@ -173,6 +173,8 @@ In DOM caret mode:
 - text input updates `data.text`
 - caret offset is restored after controlled re-render
 
+Firefox does not reliably extend native selection outside the `contentEditable` editing host where a drag begins. When pointer drag starts in a focused editable segment, `TextSeg` prevents the native drag and constructs the DOM range from pointer coordinates. This manual path is limited to the active editing segment; clicks and drags that start from ordinary text keep their native behavior. The resulting DOM range still flows through the normal `selectionchange` listener and document selection state.
+
 ### Logical Caret Mode
 
 Logical caret mode is used for readonly text and for focused non-editing display.
@@ -184,6 +186,25 @@ In logical caret mode:
 - left/right key movement updates `focusState.offsetFocused`
 - up/down key movement either moves within the segment or emits navigation to `Row`/`List`
 - collapsed DOM selection is not allowed to overwrite `focusState.offsetFocused`
+
+After navigation crosses a segment or row boundary, some browsers can keep
+delivering held-arrow `keydown` events to the previous editing host even though
+the store focus and visible caret have moved. The stale-event guard restores
+DOM focus and forwards arrow events to the store-focused segment. It must not
+forward text-editing keys, because synthetic keyboard events cannot reproduce
+native editing safely.
+
+Firefox can also move logical focus between segments without leaving a usable
+native caret in the destination editing host. Plain left- and right-arrow
+movement therefore reads the current store offset and moves the DOM caret
+explicitly. Reading the store directly is required because another keydown can
+arrive before the newly focused `TextSeg` has rerendered.
+
+Each horizontal caret move resets the CSS caret animation to time zero, whose
+initial frame is visible. This keeps the caret continuously visible while an
+arrow key is held and restarts normal blinking after movement stops. Focus
+transitions reset the animation as well because crossing a segment boundary
+creates the same user-visible caret movement.
 
 The browser DOM selection is still used for range selection and copy behavior.
 
@@ -224,6 +245,7 @@ Planned events:
 - logical focus style follows store runtime state
 - `doc.ElActive` style follows browser active element tracking
 - DOM selection can be mapped to this segment through `data-mobx-seg-id`
+- range selection can start inside an already focused editable segment and extend within or across segments
 - editable caret offset survives store re-render during editing
 - readonly caret offset is driven by `focusState.offsetFocused`
 - collapsed readonly DOM selection does not overwrite logical caret state
