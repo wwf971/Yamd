@@ -2,6 +2,7 @@ import type React from 'react';
 import type { DocStore } from '../docStore';
 import type { CompData, CompEditResult, CompEvent, CompFocusTarget } from '../docStoreTypes';
 import { docStoreGetSegmentIdListInRow, docStoreGetSegmentText } from '../docStoreSegment';
+import { docStoreIsSegRowExclusive } from '../docStoreSegTrait';
 import { getCaretOffsetByPoint, getClampedMousePoint } from '../util/caretUtils';
 
 type EventHandler = (event: CompEvent) => Promise<any> | any;
@@ -290,6 +291,31 @@ async function eventListRowMergePrevAttempt({
     return { code: -1, message: 'Rows are not mergeable.' };
   }
 
+  const isRowCurrentExclusive = childIdList
+    .some((childId) => docStoreIsSegRowExclusive(store.getCompDataById(docId, childId)));
+  if (isRowCurrentExclusive) {
+    return { code: -1, message: 'Row with a row-exclusive segment does not merge into the previous row.' };
+  }
+  const isRowPrevExclusive = childIdListPrev
+    .some((childId) => docStoreIsSegRowExclusive(store.getCompDataById(docId, childId)));
+  if (isRowPrevExclusive) {
+    // The previous row does not accept incoming segments. The natural
+    // fallback mirrors what merging an empty row normally achieves: delete
+    // the empty row, and focus lands at the end of the previous row.
+    const resultEmpty = childIdList.length === 1
+      ? await store.sendEventToCompDirect(docId, compIdCurrentFirst, {
+        type: 'selfIsEmptyQuery',
+        sourceId: compId,
+        targetId: docId,
+        data: {},
+      })
+      : null;
+    if (resultEmpty?.code === 0 && resultEmpty.data?.isEmpty === true) {
+      return eventListRowDeleteAttempt({ event, store, docId, compId });
+    }
+    return { code: -1, message: 'Previous row contains a row-exclusive segment and does not accept merged segments.' };
+  }
+
   const compDataOther = store.getCompDataById(docId, compIdPrevLast);
   const result = await store.sendEventToCompDirect(docId, compIdCurrentFirst, {
     type: 'selfMergeQuery',
@@ -526,6 +552,42 @@ async function eventListRowSelectionDeleteAttempt({
   const compIdListDelete = Array.isArray(resultValidate.data?.compIdListDelete)
     ? resultValidate.data.compIdListDelete.map((compIdDelete: any) => String(compIdDelete || '')).filter(Boolean)
     : [];
+
+  const isRowMergeBlockedByExclusive = [...childIdListStart, ...childIdListEnd]
+    .some((childId) => docStoreIsSegRowExclusive(store.getCompDataById(docId, childId)));
+  if (isRowMergeBlockedByExclusive) {
+    // A row-exclusive segment cannot share a row with other segments, so the
+    // start row and the end row are not merged. Each keeps its own trimmed
+    // edge segment; only the rows fully inside the selection are removed.
+    return store.runDocEdit(docId, 'rowSelectionDelete', () => {
+      store.replaceCompData(docId, compDataStart);
+      store.replaceCompData(docId, compDataEnd);
+      compIdListDelete.forEach((compIdDelete) => {
+        store.removeCompSubtree(docId, compIdDelete);
+      });
+      store.replaceCompData(docId, createRowComp(entryStart.rowId, [
+        ...childIdListStart.slice(0, childIndexStart),
+        compDataStart.compId,
+      ], rowDataStart));
+      store.replaceCompData(docId, createRowComp(entryEnd.rowId, [
+        compDataEnd.compId,
+        ...childIdListEnd.slice(childIndexEnd + 1),
+      ], rowDataEnd));
+      const entryIdListRemoved = rowEntryList
+        .slice(indexStart + 1, indexEnd)
+        .map((entryInfo) => entryInfo.entryId);
+      if (entryIdListRemoved.length > 0) {
+        const resultRemoveRows = removeDirectRowEntries(store, docId, compId, entryIdListRemoved);
+        if (resultRemoveRows.code !== 0) return resultRemoveRows;
+      }
+      store.clearSelectionState(docId);
+      store.applyFocusAfterEdit(docId, {
+        compId: compDataStart.compId,
+        point: { offset: Number(pointStart?.offset || 0) },
+      }, 'rowSelectionDeleteAttempt');
+      return { code: 0, message: 'Row selection deleted keeping rows separate.' };
+    });
+  }
 
   const compDataListEdge = await createMergedSelectionEdgeList({
     store,

@@ -21,6 +21,7 @@ import TEST_LIST_BULLET_TYPES_YAML_RAW from './test-list-bullet-types.yaml?raw';
 import TEST_LIST_RENDER_DEBUG_YAML_RAW from './test-list-render-debug.yaml?raw';
 import TEST_FOCUS_FEATURE_YAML_RAW from './test-focus-feature.yaml?raw';
 import TEST_HISTORY_YAML_RAW from './test-history.yaml?raw';
+import TEST_TEXT_BLOCK_SEG_YAML_RAW from './test-text-block-seg.yaml?raw';
 import './testMobx.css';
 
 const compByNameForTest = {
@@ -543,6 +544,7 @@ const TestListBulletTypesYaml = () => <TestItemDoc yamlRaw={TEST_LIST_BULLET_TYP
 const TestListRenderDebugYaml = () => <TestItemDoc yamlRaw={TEST_LIST_RENDER_DEBUG_YAML_RAW} />;
 const TestFocusFeatureYaml = () => <TestItemDoc yamlRaw={TEST_FOCUS_FEATURE_YAML_RAW} />;
 const TestHistoryYaml = () => <TestItemDoc yamlRaw={TEST_HISTORY_YAML_RAW} isHistoryVisible />;
+const TestTextBlockSegYaml = () => <TestItemDoc yamlRaw={TEST_TEXT_BLOCK_SEG_YAML_RAW} />;
 
 export const mobxYamlTestItems = [
   {
@@ -602,6 +604,12 @@ export const mobxYamlTestItems = [
     description: 'List test with TextSeg render counters enabled.',
     parentKey: 'mobx-list',
     Comp: TestListRenderDebugYaml,
+  },
+  {
+    key: 'mobx-text-block-seg',
+    label: 'TextBlockSeg.tsx',
+    description: 'Row-exclusive multi-line text block segment with style config.',
+    Comp: TestTextBlockSegYaml,
   },
   {
     key: 'mobx-edit-history',

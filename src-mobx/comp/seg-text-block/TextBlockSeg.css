@@ -1,0 +1,44 @@
+.mobx-text-block-seg {
+  position: relative;
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 20px;
+  margin: 1px 0;
+  padding: 3px 6px;
+  border-radius: 2px;
+  outline: 1px solid transparent;
+  background: #f2f2f2;
+  color: #1f2937;
+  font-size: 13px;
+  font-family: sans-serif;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  user-select: text;
+  cursor: text;
+  caret-color: #111827;
+}
+
+/* Focus and selection states must not replace the block background, so the
+   grey block area (or a configured color) stays recognizable. */
+.mobx-text-block-seg.mobx-seg-focused-logical {
+  outline-color: #2563eb;
+  background: #f2f2f2;
+  box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.18);
+}
+
+.mobx-text-block-seg.mobx-seg-el-active {
+  text-decoration: none;
+  outline-color: #1d4ed8;
+}
+
+.mobx-text-block-seg.mobx-seg-selection-within {
+  background: #f2f2f2;
+  box-shadow: 0 0 0 1px rgba(251, 191, 36, 0.5);
+}
+
+.mobx-text-block-seg.mobx-drag-item-drop-denied {
+  background: rgba(239, 68, 68, 0.1);
+}

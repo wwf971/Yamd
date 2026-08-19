@@ -1,0 +1,112 @@
+docName: test-text-block-seg
+dataDocInitial: {}
+configDocInitial:
+  isEditable: true
+compIdRoot: doc-viewer-text-block
+compById:
+  doc-viewer-text-block:
+    compName: DocViewer
+    childIdList:
+      - event-tester-text-block
+    data: {}
+    config:
+      maxHeight: 380
+  event-tester-text-block:
+    compName: EventTester
+    childIdList:
+      - list-text-block-root
+    data: {}
+    config: {}
+  list-text-block-root:
+    compName: List
+    childIdList:
+      - row-text-block-intro
+      - row-text-block-default
+      - list-text-block-entry
+      - row-text-block-outro
+    data:
+      bulletType: circle
+    config:
+      isRoot: true
+  row-text-block-intro:
+    compName: Row
+    childIdList:
+      - seg-text-block-intro
+    data: {}
+    config: {}
+  seg-text-block-intro:
+    compName: TextSeg
+    childIdList: []
+    data:
+      text: text row above the block. Enter in the block types a newline, Ctrl/Cmd+Enter splits the block into two block rows.
+    config:
+      isEditable: true
+  row-text-block-default:
+    compName: Row
+    childIdList:
+      - seg-block-default
+    data: {}
+    config: {}
+  seg-block-default:
+    compName: TextBlockSeg
+    childIdList: []
+    data:
+      text: |-
+        default styled text block.
+        it keeps multiple lines of plain text.
+        backspace inside an empty block deletes the block row.
+    config:
+      isEditable: true
+  list-text-block-entry:
+    compName: List
+    mainCompId: row-text-block-styled
+    childIdList:
+      - row-text-block-nested
+    data: {}
+    config: {}
+  row-text-block-styled:
+    compName: Row
+    childIdList:
+      - seg-block-styled
+    data: {}
+    config: {}
+  seg-block-styled:
+    compName: TextBlockSeg
+    childIdList: []
+    data:
+      text: |-
+        styled block via config.style:
+        dark background, light text, monospace font.
+    config:
+      isEditable: true
+      style:
+        colorBackground: '#1e293b'
+        colorText: '#e2e8f0'
+        fontSize: 13
+        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace'
+  row-text-block-nested:
+    compName: Row
+    childIdList:
+      - seg-text-block-nested
+    data: {}
+    config: {}
+  seg-text-block-nested:
+    compName: TextSeg
+    childIdList: []
+    data:
+      text: nested text row under the styled block. Backspace at its start is rejected by the exclusive block row above.
+    config:
+      isEditable: true
+  row-text-block-outro:
+    compName: Row
+    childIdList:
+      - seg-text-block-outro
+    data: {}
+    config: {}
+  seg-text-block-outro:
+    compName: TextSeg
+    childIdList: []
+    data:
+      text: text row below. dragging this segment into a block row is denied.
+    config:
+      isEditable: true

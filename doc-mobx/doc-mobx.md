@@ -45,6 +45,10 @@ For measured list bullet placement and connector line behavior, see `./comp_bull
 
 For the component data, history, and rendering rules shared by custom components, see `./yamd_comp_design.md`.
 
+For row-exclusive segments (a segment that must be the only segment of its Row), see `./comp_seg_exclusive.md`.
+
 For `TextSeg`, see `./comp_text_seg.md`.
+
+For `TextBlockSeg`, see `./comp_text_block_seg.md`.
 
 For `TextBasic`, see `./comp_text_basic.md`.

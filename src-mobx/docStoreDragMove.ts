@@ -13,6 +13,7 @@ import {
   docStoreGetSegmentIdListInRow,
   docStoreIsSegment,
 } from './docStoreSegment';
+import { docStoreIsSegRowExclusive } from './docStoreSegTrait';
 
 type DragSubject = {
   itemKindDragged: 'segment' | 'row' | 'list' | '';
@@ -249,6 +250,17 @@ function getIsSegmentDropAllowed(docRecord: DocRecord, segId: string, dropInfo: 
   const rowIdSource = docStoreGetOwningRowId(docRecord, segId);
   if (!rowIdSource) return false;
   const segIdListTarget = docStoreGetSegmentIdListInRow(docRecord, rowIdTarget);
+  // A row-exclusive segment cannot move next to other segments, and no
+  // segment can move into a row occupied by a row-exclusive segment.
+  const segIdListTargetOther = segIdListTarget.filter((segIdCurrent) => segIdCurrent !== segId);
+  if (docStoreIsSegRowExclusive(docRecord.compDataById[segId]) && segIdListTargetOther.length > 0) {
+    return false;
+  }
+  const isTargetRowOccupiedExclusive = segIdListTargetOther
+    .some((segIdCurrent) => docStoreIsSegRowExclusive(docRecord.compDataById[segIdCurrent]));
+  if (isTargetRowOccupiedExclusive) {
+    return false;
+  }
   const indexTarget = clampIndex(Number(dropInfo.drop?.indexTarget || 0), segIdListTarget.length);
   const indexSource = rowIdSource === rowIdTarget ? segIdListTarget.indexOf(segId) : -1;
   return !(rowIdSource === rowIdTarget && (indexTarget === indexSource || indexTarget === indexSource + 1));

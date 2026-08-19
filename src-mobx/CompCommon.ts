@@ -5,6 +5,7 @@ import List from './comp/List';
 import Row from './comp/Row';
 import TextBasic from './comp/TextBasic';
 import TextSeg from './comp/seg-text/TextSeg';
+import TextBlockSeg from './comp/seg-text-block/TextBlockSeg';
 
 export {
   DocViewer,
@@ -12,6 +13,7 @@ export {
   Row,
   TextBasic,
   TextSeg,
+  TextBlockSeg,
 };
 
 export const compByNameDefault: Record<string, any> = {
@@ -20,6 +22,7 @@ export const compByNameDefault: Record<string, any> = {
   Row,
   TextBasic,
   TextSeg,
+  TextBlockSeg,
 };
 
 export function getCompByName(

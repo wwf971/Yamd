@@ -92,6 +92,10 @@ const compByName = {
 
 The shell registers each mounted component with `DocStore.registerComp()`. A segment should use `forwardRef` and expose `dispatchEvent(event)` so store-to-component focus commands and edit queries can reach it.
 
+### Segment traits
+
+A segment component can declare static structural capabilities for its `compName` through `registerSegTrait` in `src-mobx/docStoreSegTrait.ts`, registered at module load like a diff handler. Doc-level logic reads traits through `docStoreGetSegTrait` / `docStoreIsSegRowExclusive` instead of checking component names. The first trait is `isRowExclusive`: the segment must be the only segment of its Row, and structure operations refuse to place other segments next to it. See `comp_seg_exclusive.md` for the full mechanism; `TextBlockSeg` is the reference implementation.
+
 Until there is a public MobX entry point, an in-repository segment imports the pieces it needs directly:
 
 ```ts
