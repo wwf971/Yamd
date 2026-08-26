@@ -24,6 +24,9 @@ compById:
       - row-text-block-default
       - list-text-block-entry
       - row-text-block-outro
+      - row-paste-case-help
+      - row-paste-case-chunk
+      - row-paste-case-list
     data:
       bulletType: circle
     config:
@@ -108,5 +111,64 @@ compById:
     childIdList: []
     data:
       text: text row below. dragging this segment into a block row is denied.
+    config:
+      isEditable: true
+  row-paste-case-help:
+    compName: Row
+    childIdList:
+      - seg-paste-case-help
+    data: {}
+    config: {}
+  seg-paste-case-help:
+    compName: TextSeg
+    childIdList: []
+    data:
+      text: 'paste test data below: press the copy button of a block, then paste into a text row to rebuild blocks from the fenced parts.'
+    config:
+      isEditable: true
+  row-paste-case-chunk:
+    compName: Row
+    childIdList:
+      - seg-paste-case-chunk
+    data: {}
+    config: {}
+  seg-paste-case-chunk:
+    compName: TextBlockSeg
+    childIdList: []
+    data:
+      text: |-
+        111
+        ```
+        first pasted block
+        with two lines
+        ```
+        222
+        ```
+        second pasted block
+        ```
+        333
+    config:
+      isEditable: true
+  row-paste-case-list:
+    compName: Row
+    childIdList:
+      - seg-paste-case-list
+    data: {}
+    config: {}
+  seg-paste-case-list:
+    compName: TextBlockSeg
+    childIdList: []
+    data:
+      text: |-
+        - aa
+          -
+            ```
+            block under an empty list item
+            ```
+          - bb
+            ```
+            block as child of bb
+            ```
+        - cc
     config:
       isEditable: true

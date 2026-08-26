@@ -7,6 +7,12 @@ import { getCaretOffsetByPoint, getClampedMousePoint } from '../util/caretUtils'
 
 type EventHandler = (event: CompEvent) => Promise<any> | any;
 
+type RowOrderEntry = {
+  rowId: string;
+  entryId: string;
+  listIdParent: string;
+};
+
 export async function eventListFocus(
   store: DocStore,
   docId: string,
@@ -464,6 +470,23 @@ async function eventListRowDeleteAttempt({
   });
 }
 
+// Delete a selection that spans multiple rows, possibly at different nesting
+// depths. All checks run as queries before one runDocEdit, so a rejection
+// leaves the document untouched (no rollback needed). The delete behaves as
+// if each part were deleted on its own:
+// - the start row keeps its text before the selection
+// - rows fully inside the selection are removed with their entries
+// - the end row keeps its text after the selection and normally merges into
+//   the start row
+// Rejections keep the document structure valid:
+// - a fully selected row whose entry still contains surviving rows (the end
+//   row is nested below it) cannot be removed, those rows would lose their
+//   parent
+// - merging removes the end row, so an end row that has child rows below it
+//   is rejected the same way
+// When an edge row holds a row-exclusive segment (a text block), the rows are
+// not merged: each keeps its trimmed edge, and an edge row that ends up empty
+// with no surviving children is removed entirely.
 async function eventListRowSelectionDeleteAttempt({
   event,
   store,
@@ -477,7 +500,7 @@ async function eventListRowSelectionDeleteAttempt({
 }) {
   const pointAnchor = event?.data?.pointAnchor;
   const pointFocus = event?.data?.pointFocus;
-  const rowEntryList = collectDirectRowEntries(store, docId, compId);
+  const rowEntryList = collectRowEntriesInOrderDeep(store, docId, compId);
   const selectionRange = normalizeRowSelectionRange(store, docId, rowEntryList, pointAnchor, pointFocus);
   if (!selectionRange) {
     return store.sendEventToParent(docId, compId, event);
@@ -536,13 +559,16 @@ async function eventListRowSelectionDeleteAttempt({
     return { code: -1, message: 'Cross-row end edit result invalid.' };
   }
 
+  const resultPlanMiddle = createMiddleEntryRemovePlan(store, docId, rowEntryList, indexStart, indexEnd);
+  if (resultPlanMiddle.code !== 0) return resultPlanMiddle;
+  const entryRemoveListMiddle: Array<{ entryId: string; listIdParent: string }> = resultPlanMiddle.data.entryRemoveList;
+  const rowIdListMiddle: string[] = resultPlanMiddle.data.rowIdListMiddle;
+
   const resultValidate = await validateSelectedChildrenForDelete({
     store,
     docId,
     compId,
-    rowEntryList,
-    indexStart,
-    indexEnd,
+    rowIdListMiddle,
     childIdListStart,
     childIdListEnd,
     childIndexStart,
@@ -558,35 +584,65 @@ async function eventListRowSelectionDeleteAttempt({
   if (isRowMergeBlockedByExclusive) {
     // A row-exclusive segment cannot share a row with other segments, so the
     // start row and the end row are not merged. Each keeps its own trimmed
-    // edge segment; only the rows fully inside the selection are removed.
+    // edge segment; an edge row trimmed to empty whose entry has no surviving
+    // rows is removed entirely.
+    const isStartRowRemoved = childIndexStart === 0
+      && docStoreGetSegmentText(compDataStart).length === 0
+      && getIsEntryRemovableAfterSelection(store, docId, rowEntryList, entryStart, indexStart, indexEnd);
+    const isEndRowRemoved = childIndexEnd === childIdListEnd.length - 1
+      && docStoreGetSegmentText(compDataEnd).length === 0
+      && getIsEntryRemovableAfterSelection(store, docId, rowEntryList, entryEnd, indexStart, indexEnd);
+    const focusFallback = isStartRowRemoved && isEndRowRemoved
+      ? pickFocusNearEntry(store, docId, entryStart.listIdParent, entryStart.entryId)
+      : undefined;
     return store.runDocEdit(docId, 'rowSelectionDelete', () => {
-      store.replaceCompData(docId, compDataStart);
-      store.replaceCompData(docId, compDataEnd);
+      if (!isStartRowRemoved) {
+        store.replaceCompData(docId, compDataStart);
+        store.replaceCompData(docId, createRowComp(entryStart.rowId, [
+          ...childIdListStart.slice(0, childIndexStart),
+          compDataStart.compId,
+        ], rowDataStart));
+      }
+      if (!isEndRowRemoved) {
+        store.replaceCompData(docId, compDataEnd);
+        store.replaceCompData(docId, createRowComp(entryEnd.rowId, [
+          compDataEnd.compId,
+          ...childIdListEnd.slice(childIndexEnd + 1),
+        ], rowDataEnd));
+      }
       compIdListDelete.forEach((compIdDelete) => {
         store.removeCompSubtree(docId, compIdDelete);
       });
-      store.replaceCompData(docId, createRowComp(entryStart.rowId, [
-        ...childIdListStart.slice(0, childIndexStart),
-        compDataStart.compId,
-      ], rowDataStart));
-      store.replaceCompData(docId, createRowComp(entryEnd.rowId, [
-        compDataEnd.compId,
-        ...childIdListEnd.slice(childIndexEnd + 1),
-      ], rowDataEnd));
-      const entryIdListRemoved = rowEntryList
-        .slice(indexStart + 1, indexEnd)
-        .map((entryInfo) => entryInfo.entryId);
-      if (entryIdListRemoved.length > 0) {
-        const resultRemoveRows = removeDirectRowEntries(store, docId, compId, entryIdListRemoved);
-        if (resultRemoveRows.code !== 0) return resultRemoveRows;
+      const resultRemoveMiddle = removeEntryListGrouped(store, docId, entryRemoveListMiddle);
+      if (resultRemoveMiddle.code !== 0) return resultRemoveMiddle;
+      if (isStartRowRemoved) {
+        const resultRemoveStart = removeRowWithEntry(store, docId, entryStart);
+        if (resultRemoveStart.code !== 0) return resultRemoveStart;
+      }
+      if (isEndRowRemoved) {
+        const resultRemoveEnd = removeRowWithEntry(store, docId, entryEnd);
+        if (resultRemoveEnd.code !== 0) return resultRemoveEnd;
       }
       store.clearSelectionState(docId);
-      store.applyFocusAfterEdit(docId, {
-        compId: compDataStart.compId,
-        point: { offset: Number(pointStart?.offset || 0) },
-      }, 'rowSelectionDeleteAttempt');
+      const focusNext = !isStartRowRemoved
+        ? { compId: compDataStart.compId, point: { offset: Number(pointStart?.offset || 0) } }
+        : !isEndRowRemoved
+          ? { compId: compDataEnd.compId, point: { offset: 0 } }
+          : focusFallback;
+      if (focusNext) {
+        store.applyFocusAfterEdit(docId, focusNext, 'rowSelectionDeleteAttempt');
+      }
       return { code: 0, message: 'Row selection deleted keeping rows separate.' };
     });
+  }
+
+  // Merging removes the end row: its remaining text joins the start row. Rows
+  // nested below the end row would lose their parent row, so reject.
+  if (getEntrySubtreeRowIds(store, docId, entryEnd.entryId || entryEnd.rowId).length > 1) {
+    return { code: -1, message: 'Delete rejected: rows below the selection end would lose their parent row.' };
+  }
+  if (!entryEnd.entryId || !entryEnd.listIdParent) {
+    return { code: -1, message: 'Selection end row cannot be removed.' };
   }
 
   const compDataListEdge = await createMergedSelectionEdgeList({
@@ -610,15 +666,15 @@ async function eventListRowSelectionDeleteAttempt({
     compIdListDelete.forEach((compIdDelete) => {
       store.removeCompSubtree(docId, compIdDelete);
     });
+    // Detach the end row's segments first: the trimmed edge segment lives on
+    // in the merged start row and must not be removed with the end row.
+    store.replaceCompData(docId, createRowComp(entryEnd.rowId, [], rowDataEnd));
     store.replaceCompData(docId, createRowComp(entryStart.rowId, childIdListMerged, rowDataStart));
 
-    const entryIdListRemoved = rowEntryList
-      .slice(indexStart + 1, indexEnd + 1)
-      .map((entryInfo) => entryInfo.entryId);
-    if (entryIdListRemoved.length > 0) {
-      const resultRemoveRows = removeDirectRowEntries(store, docId, compId, entryIdListRemoved);
-      if (resultRemoveRows.code !== 0) return resultRemoveRows;
-    }
+    const resultRemoveMiddle = removeEntryListGrouped(store, docId, entryRemoveListMiddle);
+    if (resultRemoveMiddle.code !== 0) return resultRemoveMiddle;
+    const resultRemoveEnd = removeRowWithEntry(store, docId, entryEnd);
+    if (resultRemoveEnd.code !== 0) return resultRemoveEnd;
     store.clearSelectionState(docId);
     store.applyFocusAfterEdit(docId, {
       compId: compDataListEdge[0]?.compId || compDataStart.compId,
@@ -896,13 +952,14 @@ async function createMergedSelectionEdgeList({
   return editMerge?.compListNext.length ? editMerge.compListNext : [compDataStart, compDataEnd];
 }
 
+// Every segment that the selection deletes in full must accept the delete
+// through its selfDeleteQuery, before any mutation happens. One rejection
+// rejects the whole cross-row delete.
 async function validateSelectedChildrenForDelete({
   store,
   docId,
   compId,
-  rowEntryList,
-  indexStart,
-  indexEnd,
+  rowIdListMiddle,
   childIdListStart,
   childIdListEnd,
   childIndexStart,
@@ -911,9 +968,7 @@ async function validateSelectedChildrenForDelete({
   store: DocStore;
   docId: string;
   compId: string;
-  rowEntryList: Array<{ rowId: string; entryId: string }>;
-  indexStart: number;
-  indexEnd: number;
+  rowIdListMiddle: string[];
   childIdListStart: string[];
   childIdListEnd: string[];
   childIndexStart: number;
@@ -921,8 +976,8 @@ async function validateSelectedChildrenForDelete({
 }) {
   const compIdListDelete = [
     ...childIdListStart.slice(childIndexStart + 1),
-    ...rowEntryList.slice(indexStart + 1, indexEnd).flatMap((entryInfo) => {
-      const rowData = store.getCompDataById(docId, entryInfo.rowId);
+    ...rowIdListMiddle.flatMap((rowId) => {
+      const rowData = store.getCompDataById(docId, rowId);
       return getChildIdList(rowData);
     }),
     ...childIdListEnd.slice(0, childIndexEnd),
@@ -939,10 +994,129 @@ async function validateSelectedChildrenForDelete({
   return { code: 0, message: 'Selected children are deletable.', data: { compIdListDelete } };
 }
 
+// Plan the removal of the rows strictly inside the selection. Every such row
+// is deleted in full, so its whole entry subtree must also lie inside the
+// selection middle; otherwise a surviving row nested below it would lose its
+// parent and the delete is rejected. Entries nested inside an already chosen
+// entry are covered by it and skipped.
+function createMiddleEntryRemovePlan(
+  store: DocStore,
+  docId: string,
+  rowEntryList: RowOrderEntry[],
+  indexStart: number,
+  indexEnd: number,
+) {
+  const indexByRowId = new Map(rowEntryList.map((rowEntry, index) => [rowEntry.rowId, index]));
+  const rowIdSetCovered = new Set<string>();
+  const entryRemoveList: Array<{ entryId: string; listIdParent: string }> = [];
+  for (let index = indexStart + 1; index < indexEnd; index += 1) {
+    const rowEntry = rowEntryList[index];
+    if (rowIdSetCovered.has(rowEntry.rowId)) continue;
+    if (!rowEntry.entryId || !rowEntry.listIdParent) {
+      return { code: -1, message: 'Delete rejected: a fully selected row cannot be removed.', data: null as any };
+    }
+    const rowIdListSubtree = getEntrySubtreeRowIds(store, docId, rowEntry.entryId);
+    const isSubtreeInsideMiddle = rowIdListSubtree.every((rowId) => {
+      const indexRow = indexByRowId.get(rowId);
+      return indexRow !== undefined && indexRow > indexStart && indexRow < indexEnd;
+    });
+    if (!isSubtreeInsideMiddle) {
+      return {
+        code: -1,
+        message: 'Delete rejected: rows below a fully selected row would lose their parent row.',
+        data: null as any,
+      };
+    }
+    rowIdListSubtree.forEach((rowId) => rowIdSetCovered.add(rowId));
+    entryRemoveList.push({ entryId: rowEntry.entryId, listIdParent: rowEntry.listIdParent });
+  }
+  return {
+    code: 0,
+    message: 'Middle rows are removable.',
+    data: { entryRemoveList, rowIdListMiddle: [...rowIdSetCovered] },
+  };
+}
+
+// The rows a selection edge entry owns: the row itself for a plain row entry,
+// or the main row plus all descendant rows for a List entry.
+function getEntrySubtreeRowIds(store: DocStore, docId: string, entryId: string) {
+  if (isCompName(store, docId, entryId, 'Row')) {
+    return [entryId];
+  }
+  return collectRowIdsInList(store, docId, entryId);
+}
+
+// An emptied selection edge row may be removed entirely only when its whole
+// entry subtree lies inside the selection (no surviving nested row needs it
+// as parent) and removing it keeps the document valid.
+function getIsEntryRemovableAfterSelection(
+  store: DocStore,
+  docId: string,
+  rowEntryList: RowOrderEntry[],
+  rowEntry: RowOrderEntry,
+  indexStart: number,
+  indexEnd: number,
+) {
+  if (!rowEntry.entryId || !rowEntry.listIdParent) return false;
+  if (getIsProtectedRootFirstMainRowForDelete(store, docId, {
+    listIdParent: rowEntry.listIdParent,
+    entryId: rowEntry.entryId,
+    rowId: rowEntry.rowId,
+  })) {
+    return false;
+  }
+  const indexByRowId = new Map(rowEntryList.map((rowEntryCurrent, index) => [rowEntryCurrent.rowId, index]));
+  return getEntrySubtreeRowIds(store, docId, rowEntry.entryId).every((rowId) => {
+    const indexRow = indexByRowId.get(rowId);
+    return indexRow !== undefined && indexRow >= indexStart && indexRow <= indexEnd;
+  });
+}
+
+function removeEntryListGrouped(
+  store: DocStore,
+  docId: string,
+  entryRemoveList: Array<{ entryId: string; listIdParent: string }>,
+) {
+  const entryIdListByListId = new Map<string, string[]>();
+  for (const entryRemove of entryRemoveList) {
+    const entryIdList = entryIdListByListId.get(entryRemove.listIdParent) || [];
+    entryIdList.push(entryRemove.entryId);
+    entryIdListByListId.set(entryRemove.listIdParent, entryIdList);
+  }
+  for (const [listIdParent, entryIdList] of entryIdListByListId) {
+    const listData = store.getCompDataById(docId, listIdParent);
+    if (!listData || String(listData.compName || '') !== 'List') {
+      return { code: -1, message: 'Parent list of removed entry not found.' };
+    }
+    const entryIdSetRemoved = new Set(entryIdList);
+    store.replaceCompData(docId, {
+      ...listData,
+      childIdList: getChildIdList(listData).filter((childId) => !entryIdSetRemoved.has(childId)),
+    });
+    entryIdList.forEach((entryId) => {
+      store.removeCompSubtree(docId, entryId);
+    });
+  }
+  return { code: 0, message: 'Selected entries removed.' };
+}
+
+// Remove one selection edge row together with its entry. The caller detaches
+// any segment that must survive (a merged edge segment) before this runs;
+// everything still attached under the entry is removed with it.
+function removeRowWithEntry(store: DocStore, docId: string, rowEntry: RowOrderEntry) {
+  if (!rowEntry.entryId || !rowEntry.listIdParent) {
+    return { code: -1, message: 'Row entry cannot be removed.' };
+  }
+  return removeEntryListGrouped(store, docId, [{
+    entryId: rowEntry.entryId,
+    listIdParent: rowEntry.listIdParent,
+  }]);
+}
+
 function normalizeRowSelectionRange(
   store: DocStore,
   docId: string,
-  rowEntryList: Array<{ rowId: string; entryId: string }>,
+  rowEntryList: RowOrderEntry[],
   pointA: any,
   pointB: any,
 ) {
@@ -972,20 +1146,40 @@ function normalizeRowSelectionRange(
   };
 }
 
-function collectDirectRowEntries(store: DocStore, docId: string, listId: string) {
+// Every row in the list subtree in document order, with the entry that holds
+// it in its parent list: a plain row entry is the row itself; a main row's
+// entry is its List. The main row of listId itself belongs to the parent of
+// listId and cannot be removed at this level; it carries empty entry fields.
+function collectRowEntriesInOrderDeep(store: DocStore, docId: string, listId: string) {
+  const entryList: RowOrderEntry[] = [];
   const listData = store.getCompDataById(docId, listId);
-  if (!listData || String(listData.compName || '') !== 'List') return [];
-  const entryList: Array<{ rowId: string; entryId: string }> = [];
+  if (!listData || String(listData.compName || '') !== 'List') return entryList;
   const mainCompId = String(listData.mainCompId || '');
   if (isCompName(store, docId, mainCompId, 'Row')) {
-    entryList.push({ rowId: mainCompId, entryId: mainCompId });
+    entryList.push({ rowId: mainCompId, entryId: '', listIdParent: '' });
   }
-  for (const childId of getChildIdList(listData)) {
-    if (isCompName(store, docId, childId, 'Row')) {
-      entryList.push({ rowId: childId, entryId: childId });
-    }
-  }
+  collectRowEntriesFromListChildren(store, docId, listId, entryList);
   return entryList;
+}
+
+function collectRowEntriesFromListChildren(
+  store: DocStore,
+  docId: string,
+  listId: string,
+  entryList: RowOrderEntry[],
+) {
+  for (const childId of getChildIdList(store.getCompDataById(docId, listId))) {
+    if (isCompName(store, docId, childId, 'Row')) {
+      entryList.push({ rowId: childId, entryId: childId, listIdParent: listId });
+      continue;
+    }
+    if (!isCompName(store, docId, childId, 'List')) continue;
+    const mainCompId = String(store.getCompDataById(docId, childId)?.mainCompId || '');
+    if (isCompName(store, docId, mainCompId, 'Row')) {
+      entryList.push({ rowId: mainCompId, entryId: childId, listIdParent: listId });
+    }
+    collectRowEntriesFromListChildren(store, docId, childId, entryList);
+  }
 }
 
 function getRowIdByChildId(

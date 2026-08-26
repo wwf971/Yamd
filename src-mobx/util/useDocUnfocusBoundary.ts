@@ -22,6 +22,7 @@ export function useDocUnfocusBoundary({
 }: DocUnfocusBoundaryOptions) {
   const isMouseDownInsideFocusAreaRef = React.useRef(false);
   const isMouseDownInsideTriggerAreaRef = React.useRef(false);
+  const isMouseDownOnDocControlRef = React.useRef(false);
 
   React.useEffect(() => {
     if (!store || !docId || !isEnabled) return undefined;
@@ -35,6 +36,16 @@ export function useDocUnfocusBoundary({
     const isTargetInsideTriggerArea = (target: EventTarget | null) => {
       if (!triggerAreaRef) return true;
       return isTargetInsideRef(target, triggerAreaRef);
+    };
+
+    // An element marked with data-mobx-doc-control is a control that acts on
+    // the current document focus/selection (for example a style toolbar
+    // button). A mouse press or release on such a control must not count as
+    // a click outside the document, otherwise the boundary would clear the
+    // very selection the control is about to act on.
+    const isTargetOnDocControl = (target: EventTarget | null) => {
+      const targetEl = target instanceof Element ? target : null;
+      return Boolean(targetEl && targetEl.closest('[data-mobx-doc-control]'));
     };
 
     const isDocFocusInsideArea = () => {
@@ -92,6 +103,7 @@ export function useDocUnfocusBoundary({
     const handleMouseDown = (event: MouseEvent) => {
       isMouseDownInsideFocusAreaRef.current = isTargetInsideRef(event.target, focusAreaRef);
       isMouseDownInsideTriggerAreaRef.current = isTargetInsideTriggerArea(event.target);
+      isMouseDownOnDocControlRef.current = isTargetOnDocControl(event.target);
     };
 
     const handleMouseUp = (event: MouseEvent) => {
@@ -102,11 +114,14 @@ export function useDocUnfocusBoundary({
         && !isMouseUpInsideFocusArea
         && isMouseDownInsideTriggerAreaRef.current
         && isMouseUpInsideTriggerArea
+        && !isMouseDownOnDocControlRef.current
+        && !isTargetOnDocControl(event.target)
       ) {
         applyBoundaryFocusChange();
       }
       isMouseDownInsideFocusAreaRef.current = false;
       isMouseDownInsideTriggerAreaRef.current = false;
+      isMouseDownOnDocControlRef.current = false;
     };
 
     document.addEventListener('mousedown', handleMouseDown, true);

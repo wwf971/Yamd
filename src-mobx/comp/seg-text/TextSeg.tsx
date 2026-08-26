@@ -2,6 +2,8 @@ import React from 'react';
 import { observer } from 'mobx-react-lite';
 import { useDocStoreContext } from '../../DocStoreContext';
 import { compIdCreateRandom } from '../../docStoreCompData';
+import { segStyleNormalize, segStyleToCssProps } from '../../docStoreSegStyle';
+import { registerSegTrait } from '../../docStoreSegTrait';
 import type { CompEvent, SelectionTrackPoint } from '../../docStoreTypes';
 import {
   applyCaretByDirection,
@@ -28,9 +30,17 @@ import {
   focusStoreFocusedSegIfKeyEventIsStale,
   useTextSegKeyDown,
 } from './TextSeg.keyboard';
-import { startSelectionDragFromTextSeg } from './TextSeg.mouse';
+import {
+  startSelectionDragAcrossEditableBoundary,
+  startSelectionDragFromTextSeg,
+} from './TextSeg.mouse';
 import './TextSeg.history';
 import './TextSeg.css';
+
+// TextSeg stores text style entries under data.style, so the centralized
+// set-style-on-selection logic may split, restyle, and merge these segments.
+// See doc-mobx/comp_text_style.md.
+registerSegTrait('TextSeg', { isTextStyleSupported: true });
 
 type TextSegProps = {
   data?: {
@@ -38,6 +48,7 @@ type TextSegProps = {
     sourceId?: string;
     targetId?: string;
     text?: string;
+    style?: Record<string, any>;
   };
   config?: {
     isActive?: boolean;
@@ -59,6 +70,8 @@ const TextSeg = observer(React.forwardRef<any, TextSegProps>(({ data = {}, confi
   const sourceId = String(compId || dataComp.sourceId || 'text-seg');
   const targetId = String(dataComp.targetId || contextDocStore?.docId || '');
   const text = String(dataComp.text || '');
+  // Default interpretation of the style entry: inline css on the segment root.
+  const cssPropsStyleSeg = segStyleToCssProps(segStyleNormalize(dataComp.style));
   const isActive = configComp.isActive === true;
   const isDebug = configComp.isDebug === true;
   const isEditable = configComp.isEditable === true;
@@ -521,6 +534,7 @@ const TextSeg = observer(React.forwardRef<any, TextSegProps>(({ data = {}, confi
       contentEditable={isDomCaretMode}
       suppressContentEditableWarning
       className={className}
+      style={cssPropsStyleSeg}
       data-mobx-comp-id={compId}
       data-mobx-comp-name="TextSeg"
       data-mobx-seg-id={compId}
@@ -563,6 +577,19 @@ const TextSeg = observer(React.forwardRef<any, TextSegProps>(({ data = {}, confi
           event.preventDefault();
           cleanupSelectionDragRef.current?.();
           cleanupSelectionDragRef.current = startSelectionDragFromTextSeg(
+            event.currentTarget,
+            event.clientX,
+            event.clientY,
+            () => {
+              cleanupSelectionDragRef.current = null;
+            },
+          );
+        } else {
+          // A native drag from plain text cannot enter a contentEditable
+          // segment (a text block). Monitor the drag and take over with a
+          // programmatic range only when it crosses such a boundary.
+          cleanupSelectionDragRef.current?.();
+          cleanupSelectionDragRef.current = startSelectionDragAcrossEditableBoundary(
             event.currentTarget,
             event.clientX,
             event.clientY,

@@ -25,6 +25,10 @@ import {
   docStoreGetSegmentTextFieldName,
   docStoreSetSegmentText,
 } from './docStoreSegment';
+import {
+  docStoreGetCompNameCopyFenced,
+  docStoreIsSegCopyFenced,
+} from './docStoreSegTrait';
 
 type OutlineEntryInfo = {
   entryId: string;
@@ -39,8 +43,21 @@ type RowClipboardInfo = {
 };
 
 type PasteListItem = {
+  kind: 'text' | 'block';
   text: string;
   childList: PasteListItem[];
+};
+
+type PasteChunk =
+  | { kind: 'line'; text: string }
+  | { kind: 'fence'; text: string; indentMetric: number };
+
+type PasteParseResult = {
+  // 'list': markdown list items, pasted as child entries of the caret row.
+  // 'chunk': plain lines mixed with fenced blocks, pasted by splitting the
+  //          caret row into sibling rows.
+  mode: 'list' | 'chunk';
+  itemList: PasteListItem[];
 };
 
 type PasteCompBuildResult = {
@@ -185,7 +202,7 @@ export async function docStoreGetSelectionMarkdownText(store: DocStore, docId: s
   for (const rowInfo of rowInfoListSelected) {
     const textRow = await getRowClipboardText(store, docId, rowInfo, selectionRange.pointStart, selectionRange.pointEnd);
     const depthRelative = Math.max(0, rowInfo.depth - depthBase);
-    lineList.push(`${ConfigIndentTextWhenCopyAsMarkdown.repeat(depthRelative)}- ${textRow}`);
+    lineList.push(...formatRowClipboardLines(docRecord, rowInfo, textRow, depthRelative));
   }
   return lineList.join('\n');
 }
@@ -208,9 +225,43 @@ export function docStoreGetSelectionMarkdownTextSync(store: DocStore, docId: str
   for (const rowInfo of rowInfoListSelected) {
     const textRow = getRowClipboardTextSync(store, docId, rowInfo, selectionRange.pointStart, selectionRange.pointEnd);
     const depthRelative = Math.max(0, rowInfo.depth - depthBase);
-    lineList.push(`${ConfigIndentTextWhenCopyAsMarkdown.repeat(depthRelative)}- ${textRow}`);
+    lineList.push(...formatRowClipboardLines(docRecord, rowInfo, textRow, depthRelative));
   }
   return lineList.join('\n');
+}
+
+// A row whose single segment declares isCopyAsFencedBlock serializes as an
+// empty list item followed by the block lines, each indented one extra list
+// level and wrapped in ``` fences:
+//
+//   - text row
+//     -
+//       ```
+//       block line one
+//       block line two
+//       ```
+//
+// Markdown renderers treat the fenced lines as a code block belonging to the
+// empty list item, and paste in this document rebuilds a block row from it.
+function formatRowClipboardLines(
+  docRecord: DocRecord,
+  rowInfo: RowClipboardInfo,
+  textRow: string,
+  depthRelative: number,
+) {
+  const indentRow = ConfigIndentTextWhenCopyAsMarkdown.repeat(depthRelative);
+  const segDataFirst = docRecord.compDataById[rowInfo.segIdList[0] || ''];
+  const isRowFenced = rowInfo.segIdList.length === 1 && docStoreIsSegCopyFenced(segDataFirst);
+  if (!isRowFenced) {
+    return [`${indentRow}- ${textRow}`];
+  }
+  const indentBlock = `${indentRow}${ConfigIndentTextWhenCopyAsMarkdown}`;
+  return [
+    `${indentRow}-`,
+    `${indentBlock}\`\`\``,
+    ...textRow.split('\n').map((textLine) => `${indentBlock}${textLine}`),
+    `${indentBlock}\`\`\``,
+  ];
 }
 
 export function docStorePasteText(
@@ -242,8 +293,8 @@ export function docStorePasteText(
 
   const textCurrent = docStoreGetSegmentText(segData);
   const offsetPaste = Math.min(textCurrent.length, Math.max(0, Number(pointRaw?.offset || 0)));
-  const itemListPaste = parsePasteListText(String(textPasteRaw ?? ''));
-  if (!itemListPaste) {
+  const parseResult = parsePasteContent(String(textPasteRaw ?? ''));
+  if (!parseResult) {
     return pastePlainTextAtSeg(store, docId, segIdSafe, String(textPasteRaw ?? ''), offsetPaste);
   }
 
@@ -254,34 +305,66 @@ export function docStorePasteText(
 
   const textLeft = textCurrent.slice(0, offsetPaste);
   const textRight = textCurrent.slice(offsetPaste);
-  const buildResult = createPasteCompBuildResult(docRecord, itemListPaste, segData, rowData);
+  if (parseResult.mode === 'chunk') {
+    return pasteChunkItemsSplittingRow(
+      store,
+      docId,
+      entryInfo,
+      segData,
+      rowData,
+      parseResult.itemList,
+      textLeft,
+      textRight,
+    );
+  }
+
+  const buildResult = createPasteCompBuildResult(docRecord, parseResult.itemList, segData, rowData);
   if (buildResult.entryIdList.length === 0 || !buildResult.segIdLast) {
     return pastePlainTextAtSeg(store, docId, segIdSafe, String(textPasteRaw ?? ''), offsetPaste);
   }
 
-  const segDataLast = buildResult.compDataList.find((compData) => compData.compId === buildResult.segIdLast);
-  if (segDataLast) {
-    docStoreSetSegmentText(segDataLast, `${docStoreGetSegmentText(segDataLast)}${textRight}`);
-  }
-
-  const focusNext = {
+  let compDataListPaste = buildResult.compDataList;
+  let entryIdListPaste = buildResult.entryIdList;
+  let focusNext: CompFocusTarget = {
     compId: buildResult.segIdLast,
     point: { offset: buildResult.textLast.length },
   };
+  const segDataLast = compDataListPaste.find((compData) => compData.compId === buildResult.segIdLast);
+  if (segDataLast && !docStoreIsSegCopyFenced(segDataLast)) {
+    docStoreSetSegmentText(segDataLast, `${docStoreGetSegmentText(segDataLast)}${textRight}`);
+  } else if (segDataLast && textRight.length > 0) {
+    // A fenced block never absorbs the right part of the split segment; the
+    // right part becomes one extra text row after the pasted entries.
+    const compIdSetReserved = new Set(compDataListPaste.map((compData) => compData.compId));
+    const segIdRight = docStoreCreateCompId(docRecord, 'seg', compIdSetReserved);
+    const rowIdRight = docStoreCreateCompId(docRecord, 'row', compIdSetReserved);
+    compDataListPaste = [
+      ...compDataListPaste,
+      docStoreCloneSegmentWithText(segData, segIdRight, textRight),
+      createRowComp(rowIdRight, [segIdRight], rowData),
+    ];
+    entryIdListPaste = [...entryIdListPaste, rowIdRight];
+    focusNext = { compId: segIdRight, point: { offset: 0 } };
+  }
+
   const isRowEmptySingleSeg = childIdListRow.length === 1 && textCurrent.length === 0;
   if (isRowEmptySingleSeg) {
-    return replaceEntryWithPasteEntries(store, docId, entryInfo, buildResult, focusNext);
+    return replaceEntryWithPasteEntries(store, docId, entryInfo, {
+      ...buildResult,
+      compDataList: compDataListPaste,
+      entryIdList: entryIdListPaste,
+    }, focusNext);
   }
 
   const contextEdit = docStoreGetActiveEdit(store, docId);
   editUpdateCompData(contextEdit, segIdSafe, {
     [docStoreGetSegmentTextFieldName(segData)]: textLeft,
   });
-  addCompDataListToRecord(contextEdit, buildResult.compDataList);
+  addCompDataListToRecord(contextEdit, compDataListPaste);
   const entryData = docRecord.compDataById[entryInfo.entryId];
   if (String(entryData?.compName || '') === 'List') {
     editSetChildIdList(contextEdit, entryInfo.entryId, [
-      ...buildResult.entryIdList,
+      ...entryIdListPaste,
       ...getChildIdList(entryData),
     ]);
   } else if (String(entryData?.compName || '') === 'Row') {
@@ -290,7 +373,7 @@ export function docStorePasteText(
       compId: listIdWrapped,
       compName: 'List',
       mainCompId: rowIdSafe,
-      childIdList: [...buildResult.entryIdList],
+      childIdList: [...entryIdListPaste],
       data: {},
       config: {},
     });
@@ -431,32 +514,158 @@ function getCompClipboardTextFallback(compData: CompData, offsetStartRaw: number
   return text.slice(Math.min(offsetStart, offsetEnd), Math.max(offsetStart, offsetEnd));
 }
 
-function parsePasteListText(textRaw: string): PasteListItem[] | null {
-  const lineInfoList = String(textRaw || '')
-    .split(/\r\n|\n|\r/)
-    .filter((lineRaw) => lineRaw.trim().length > 0)
-    .map((lineRaw) => {
-      const match = /^([ \t]*)([-*+])(?:[ \t]+(.*)|[ \t]*)$/.exec(lineRaw);
-      if (!match) return null;
-      return {
-        indentMetric: getIndentMetric(match[1]),
-        text: String(match[3] || '').trim(),
-      };
-    });
-  if (lineInfoList.length === 0 || lineInfoList.some((lineInfo) => !lineInfo)) {
+const REGEX_PASTE_LIST_ITEM = /^([ \t]*)([-*+])(?:[ \t]+(.*)|[ \t]*)$/;
+
+// Recognize the paste text structure:
+// - no fence pair: markdown list text ('list' mode), or null for plain text
+// - fenced blocks between markdown list items: 'list' mode with block items
+// - fenced blocks between plain lines: 'chunk' mode, a flat item sequence
+// - fenced blocks between mixed plain and list lines: not recognized (null)
+function parsePasteContent(textRaw: string): PasteParseResult | null {
+  const chunkList = parseFenceChunkList(textRaw);
+  if (!chunkList) {
+    const itemList = parsePasteListText(textRaw);
+    return itemList ? { mode: 'list', itemList } : null;
+  }
+  const lineListPlain = chunkList
+    .filter((chunk) => chunk.kind === 'line')
+    .map((chunk) => chunk.text)
+    .filter((lineRaw) => lineRaw.trim().length > 0);
+  const countLineListItem = lineListPlain.filter((lineRaw) => REGEX_PASTE_LIST_ITEM.test(lineRaw)).length;
+  if (countLineListItem === 0) {
+    const itemList: PasteListItem[] = [];
+    for (const chunk of chunkList) {
+      if (chunk.kind === 'fence') {
+        itemList.push({ kind: 'block', text: chunk.text, childList: [] });
+      } else if (chunk.text.trim().length > 0) {
+        itemList.push({ kind: 'text', text: chunk.text.trim(), childList: [] });
+      }
+    }
+    return itemList.length > 0 ? { mode: 'chunk', itemList } : null;
+  }
+  if (countLineListItem < lineListPlain.length) {
     return null;
   }
+  const itemList = parsePasteListItemsFromChunks(chunkList);
+  return itemList ? { mode: 'list', itemList } : null;
+}
 
-  const lineInfoListSafe = lineInfoList as Array<{ indentMetric: number; text: string }>;
-  const indentMetricBase = lineInfoListSafe[0].indentMetric;
+// Split the paste text into plain lines and fenced blocks. A fence opens at a
+// line whose content starts with ``` and closes at a line that is exactly ```.
+// The opening line's indentation is stripped from each content line. Returns
+// null when there is no complete fence pair.
+function parseFenceChunkList(textRaw: string): PasteChunk[] | null {
+  const lineList = String(textRaw || '').split(/\r\n|\n|\r/);
+  const chunkList: PasteChunk[] = [];
+  let isAnyFence = false;
+  let index = 0;
+  while (index < lineList.length) {
+    const lineCurrent = lineList[index];
+    const matchFenceOpen = /^([ \t]*)```/.exec(lineCurrent);
+    if (!matchFenceOpen) {
+      chunkList.push({ kind: 'line', text: lineCurrent });
+      index += 1;
+      continue;
+    }
+    const indentOpen = matchFenceOpen[1];
+    let indexClose = -1;
+    for (let indexSearch = index + 1; indexSearch < lineList.length; indexSearch += 1) {
+      if (lineList[indexSearch].trim() === '```') {
+        indexClose = indexSearch;
+        break;
+      }
+    }
+    if (indexClose === -1) {
+      return null;
+    }
+    const textFence = lineList.slice(index + 1, indexClose)
+      .map((lineContent) => (lineContent.startsWith(indentOpen) ? lineContent.slice(indentOpen.length) : lineContent))
+      .join('\n');
+    chunkList.push({ kind: 'fence', text: textFence, indentMetric: getIndentMetric(indentOpen) });
+    isAnyFence = true;
+    index = indexClose + 1;
+  }
+  return isAnyFence ? chunkList : null;
+}
+
+function parsePasteListText(textRaw: string): PasteListItem[] | null {
+  const chunkList: PasteChunk[] = String(textRaw || '')
+    .split(/\r\n|\n|\r/)
+    .map((lineRaw) => ({ kind: 'line', text: lineRaw }));
+  const lineListPlain = chunkList
+    .map((chunk) => chunk.text)
+    .filter((lineRaw) => lineRaw.trim().length > 0);
+  if (lineListPlain.length === 0 || !lineListPlain.every((lineRaw) => REGEX_PASTE_LIST_ITEM.test(lineRaw))) {
+    return null;
+  }
+  return parsePasteListItemsFromChunks(chunkList);
+}
+
+// Build the nested item tree from list-item lines and fenced blocks.
+// Fence placement rules:
+// - a fence indented deeper than an empty list item right above it turns that
+//   item into one block item (the serialized form of one block row)
+// - a fence indented deeper than a non-empty list item above it becomes a
+//   block child item of that list item
+// - any other fence becomes a sibling block item of the last item
+function parsePasteListItemsFromChunks(chunkList: PasteChunk[]): PasteListItem[] | null {
+  type PasteParseEntry = { kind: 'item' | 'fence'; indentMetric: number; text: string };
+  const entryList: PasteParseEntry[] = [];
+  for (const chunk of chunkList) {
+    if (chunk.kind === 'fence') {
+      entryList.push({ kind: 'fence', indentMetric: chunk.indentMetric, text: chunk.text });
+      continue;
+    }
+    if (chunk.text.trim().length === 0) continue;
+    const match = REGEX_PASTE_LIST_ITEM.exec(chunk.text);
+    if (!match) return null;
+    entryList.push({
+      kind: 'item',
+      indentMetric: getIndentMetric(match[1]),
+      text: String(match[3] || '').trim(),
+    });
+  }
+  const entryItemFirst = entryList.find((entry) => entry.kind === 'item');
+  if (!entryItemFirst) return null;
+  const indentMetricBase = entryItemFirst.indentMetric;
+
   const itemListRoot: PasteListItem[] = [];
   const itemStack: PasteListItem[] = [];
   const indentMetricStack = [0];
-  for (const lineInfo of lineInfoListSafe) {
-    const indentMetric = Math.max(0, lineInfo.indentMetric - indentMetricBase);
+  let depthItemLast = -1;
+  let indentMetricItemLast = -1;
+  for (const entry of entryList) {
+    const indentMetric = Math.max(0, entry.indentMetric - indentMetricBase);
+    if (entry.kind === 'fence') {
+      const itemLast = depthItemLast >= 0 ? itemStack[depthItemLast] : null;
+      if (itemLast && indentMetric > indentMetricItemLast) {
+        if (itemLast.kind === 'text' && itemLast.text === '' && itemLast.childList.length === 0) {
+          itemLast.kind = 'block';
+          itemLast.text = entry.text;
+        } else {
+          itemLast.childList.push({ kind: 'block', text: entry.text, childList: [] });
+        }
+        continue;
+      }
+      const itemBlock: PasteListItem = { kind: 'block', text: entry.text, childList: [] };
+      const depthBlock = Math.max(0, depthItemLast);
+      if (depthBlock === 0 || !itemStack[depthBlock - 1]) {
+        itemListRoot.push(itemBlock);
+        itemStack[0] = itemBlock;
+        itemStack.length = 1;
+        depthItemLast = 0;
+      } else {
+        itemStack[depthBlock - 1].childList.push(itemBlock);
+        itemStack[depthBlock] = itemBlock;
+        itemStack.length = depthBlock + 1;
+        depthItemLast = depthBlock;
+      }
+      continue;
+    }
+
     let depth = 0;
-    const indentMetricLast = indentMetricStack[indentMetricStack.length - 1];
-    if (indentMetric > indentMetricLast) {
+    const indentMetricStackLast = indentMetricStack[indentMetricStack.length - 1];
+    if (indentMetric > indentMetricStackLast) {
       depth = indentMetricStack.length;
       indentMetricStack.push(indentMetric);
     } else {
@@ -472,7 +681,8 @@ function parsePasteListText(textRaw: string): PasteListItem[] | null {
     }
 
     const itemNext: PasteListItem = {
-      text: lineInfo.text,
+      kind: 'text',
+      text: entry.text,
       childList: [],
     };
     if (depth === 0) {
@@ -484,6 +694,8 @@ function parsePasteListText(textRaw: string): PasteListItem[] | null {
     }
     itemStack[depth] = itemNext;
     itemStack.length = depth + 1;
+    depthItemLast = depth;
+    indentMetricItemLast = indentMetric;
   }
   return itemListRoot;
 }
@@ -562,7 +774,9 @@ function createPasteEntryCompData(
   const segId = docStoreCreateCompId(docRecord, 'seg', compIdSetReserved);
   const rowId = docStoreCreateCompId(docRecord, 'row', compIdSetReserved);
   const textItem = String(item.text || '');
-  const segDataNext = docStoreCloneSegmentWithText(segDataTemplate, segId, textItem);
+  const segDataNext = item.kind === 'block'
+    ? createFencedBlockSegCompData(segId, textItem, segDataTemplate)
+    : docStoreCloneSegmentWithText(segDataTemplate, segId, textItem);
   const rowDataNext = createRowComp(rowId, [segId], rowDataTemplate);
   const compDataList: CompData[] = [segDataNext, rowDataNext];
   let entryId = rowId;
@@ -589,6 +803,158 @@ function createPasteEntryCompData(
     segIdLast,
     textLast,
   };
+}
+
+// Build the segment CompData for one pasted fenced block. The compName comes
+// from the fenced-copy trait registry; when no component registered it, the
+// block degrades to a plain text segment with newlines flattened.
+function createFencedBlockSegCompData(
+  segId: string,
+  text: string,
+  segDataTemplate: CompData,
+): CompData {
+  const compNameBlock = docStoreGetCompNameCopyFenced();
+  if (!compNameBlock) {
+    return docStoreCloneSegmentWithText(segDataTemplate, segId, text.replace(/\n+/g, ' '));
+  }
+  return {
+    compId: segId,
+    compName: compNameBlock,
+    childIdList: [],
+    data: { sourceId: segId, text },
+    config: { isEditable: segDataTemplate?.config?.isEditable === true },
+  };
+}
+
+// Paste a flat sequence of text items and fenced block items ('chunk' mode).
+// A block is row-exclusive, so the caret row splits like a row split: the
+// left part keeps the caret segment, the items become sibling rows after it,
+// and the right part (plus the caret row's child entries) ends in a last row.
+// The first and last text items join the split segment halves:
+//
+//   - bb|b            paste "111\n```\nblock\n```\n222"
+//     - cc
+//
+//   - bb111
+//   - block row
+//   - 222b
+//     - cc
+function pasteChunkItemsSplittingRow(
+  store: DocStore,
+  docId: string,
+  entryInfo: OutlineEntryInfo,
+  segData: CompData,
+  rowData: CompData,
+  itemList: PasteListItem[],
+  textLeft: string,
+  textRight: string,
+) {
+  const docRecord = store.ensureDoc(docId);
+  if (itemList.length === 0) {
+    return { code: -1, message: 'Paste content is empty.' };
+  }
+  const entryData = docRecord.compDataById[entryInfo.entryId];
+  const isEntryList = String(entryData?.compName || '') === 'List';
+  const listDataParent = docRecord.compDataById[entryInfo.parentListId];
+  if (String(listDataParent?.compName || '') !== 'List') {
+    return { code: -1, message: 'Parent list not found.' };
+  }
+  const childIdListParent = getChildIdList(listDataParent);
+  const entryIndex = childIdListParent.indexOf(entryInfo.entryId);
+  if (entryIndex < 0) {
+    return { code: -1, message: 'Entry not found in parent list.' };
+  }
+
+  const itemFirst = itemList[0];
+  const isFirstItemText = itemFirst.kind === 'text';
+  const textSegLeft = `${textLeft}${isFirstItemText ? itemFirst.text : ''}`;
+  const itemListRemain = isFirstItemText ? itemList.slice(1) : itemList;
+  const itemLast = itemListRemain[itemListRemain.length - 1] || null;
+  const isLastItemText = itemLast !== null && itemLast.kind === 'text';
+  const textItemLast = isLastItemText ? itemLast.text : '';
+  const itemListMiddle = isLastItemText ? itemListRemain.slice(0, -1) : itemListRemain;
+
+  const childIdListRow = getChildIdList(rowData);
+  const childIndexSeg = childIdListRow.indexOf(segData.compId);
+  const childIdListRowAfter = childIdListRow.slice(childIndexSeg + 1);
+  const isRowLastNeeded = isLastItemText
+    || textRight.length > 0
+    || childIdListRowAfter.length > 0
+    || isEntryList;
+
+  const contextEdit = docStoreGetActiveEdit(store, docId);
+  const compIdSetReserved = new Set<string>();
+  const compDataListNew: CompData[] = [];
+  const entryIdListMiddle: string[] = [];
+  let segIdMiddleLast = '';
+  let textMiddleLast = '';
+  for (const item of itemListMiddle) {
+    const segId = docStoreCreateCompId(docRecord, 'seg', compIdSetReserved);
+    const rowIdNew = docStoreCreateCompId(docRecord, 'row', compIdSetReserved);
+    const segDataNext = item.kind === 'block'
+      ? createFencedBlockSegCompData(segId, item.text, segData)
+      : docStoreCloneSegmentWithText(segData, segId, item.text);
+    compDataListNew.push(segDataNext, createRowComp(rowIdNew, [segId], rowData));
+    entryIdListMiddle.push(rowIdNew);
+    segIdMiddleLast = segId;
+    textMiddleLast = docStoreGetSegmentText(segDataNext);
+  }
+
+  let segIdLastRow = '';
+  let rowIdLastRow = '';
+  if (isRowLastNeeded) {
+    segIdLastRow = docStoreCreateCompId(docRecord, 'seg', compIdSetReserved);
+    rowIdLastRow = docStoreCreateCompId(docRecord, 'row', compIdSetReserved);
+    compDataListNew.push(
+      docStoreCloneSegmentWithText(segData, segIdLastRow, `${textItemLast}${textRight}`),
+      createRowComp(rowIdLastRow, [segIdLastRow, ...childIdListRowAfter], rowData),
+    );
+  }
+
+  addCompDataListToRecord(contextEdit, compDataListNew);
+  editUpdateCompData(contextEdit, segData.compId, {
+    [docStoreGetSegmentTextFieldName(segData)]: textSegLeft,
+  });
+  if (childIdListRowAfter.length > 0) {
+    editSetChildIdList(contextEdit, rowData.compId, childIdListRow.slice(0, childIndexSeg + 1));
+  }
+
+  if (isEntryList) {
+    // The caret row leaves its List entry and becomes a direct row entry
+    // before it. The List keeps the child entries and gets the last row as
+    // its new main row, so the children stay below the pasted content.
+    if (!rowIdLastRow) {
+      return { code: -1, message: 'Last row missing for list entry split.' };
+    }
+    editPutCompData(contextEdit, {
+      ...entryData,
+      childIdList: getChildIdList(entryData),
+      mainCompId: rowIdLastRow,
+    });
+    editSetChildIdList(contextEdit, entryInfo.parentListId, [
+      ...childIdListParent.slice(0, entryIndex),
+      rowData.compId,
+      ...entryIdListMiddle,
+      entryInfo.entryId,
+      ...childIdListParent.slice(entryIndex + 1),
+    ]);
+  } else {
+    editSetChildIdList(contextEdit, entryInfo.parentListId, [
+      ...childIdListParent.slice(0, entryIndex + 1),
+      ...entryIdListMiddle,
+      ...(rowIdLastRow ? [rowIdLastRow] : []),
+      ...childIdListParent.slice(entryIndex + 1),
+    ]);
+  }
+
+  const focusNext: CompFocusTarget = isLastItemText
+    ? { compId: segIdLastRow, point: { offset: textItemLast.length } }
+    : segIdMiddleLast
+      ? { compId: segIdMiddleLast, point: { offset: textMiddleLast.length } }
+      : { compId: segData.compId, point: { offset: textSegLeft.length } };
+  store.clearSelectionState(docId);
+  store.applyFocusAfterEdit(docId, focusNext, 'childPasteAttempt');
+  return { code: 0, message: 'Text with fenced blocks pasted.' };
 }
 
 function replaceEntryWithPasteEntries(

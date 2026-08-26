@@ -11,6 +11,7 @@ import { DocStore } from '../docStore';
 import { selectionStateReadFromDom } from '../event/eventLogicRow';
 import { useDocUnfocusBoundary } from '../util/useDocUnfocusBoundary';
 import EventTester from './EventTester';
+import StyleTester from './StyleTester';
 import { DocCompRenderProvider } from './DocCompRenderContext';
 import TEST_TEXT_BASIC_YAML_RAW from './test-text-basic.yaml?raw';
 import TEST_ROW_YAML_RAW from './test-row.yaml?raw';
@@ -22,11 +23,13 @@ import TEST_LIST_RENDER_DEBUG_YAML_RAW from './test-list-render-debug.yaml?raw';
 import TEST_FOCUS_FEATURE_YAML_RAW from './test-focus-feature.yaml?raw';
 import TEST_HISTORY_YAML_RAW from './test-history.yaml?raw';
 import TEST_TEXT_BLOCK_SEG_YAML_RAW from './test-text-block-seg.yaml?raw';
+import TEST_TEXT_STYLE_YAML_RAW from './test-text-style.yaml?raw';
 import './testMobx.css';
 
 const compByNameForTest = {
   ...compByNameDefault,
   EventTester,
+  StyleTester,
 };
 
 const TestItemDoc = observer(function TestItemDoc({ yamlRaw, isHistoryVisible = false }) {
@@ -123,6 +126,13 @@ const TestItemDoc = observer(function TestItemDoc({ yamlRaw, isHistoryVisible = 
     };
 
     const handleSelectionChange = () => {
+      // A structure edit restored the selection state and its DOM restore has
+      // not run yet. The DOM selection in between is a transient artifact of
+      // the edit's DOM mutations, not user intent; reading it would clear the
+      // restored selection state.
+      if (storeDocTest.isSelectionRestorePending(docId)) {
+        return;
+      }
       if (isApplyingSelectionFromStoreRef.current) {
         isApplyingSelectionFromStoreRef.current = false;
         return;
@@ -310,9 +320,13 @@ const TestItemDoc = observer(function TestItemDoc({ yamlRaw, isHistoryVisible = 
     getCompDataById: (compId) => storeDocTest.getCompDataById(docId, String(compId || '')),
   }), [docId, handleCompEvent, handleDataChange, setCompRef, storeDocTest]);
 
+  // translate="no" + notranslate: page translators (Google Translate)
+  // rewrite text nodes with replaced text inside wrapper elements. That makes
+  // the DOM text differ from the document data, breaking selection offset
+  // mapping and React reconciliation of the segment DOM.
   if (docTemplate.validationError) {
     return (
-      <div className="mobx-test-page" ref={rootElRef} data-mobx-doc-id={docId}>
+      <div className="mobx-test-page notranslate" translate="no" ref={rootElRef} data-mobx-doc-id={docId}>
         <div className="mobx-test-shell">
           <div className="mobx-test-note">{docTemplate.validationError}</div>
         </div>
@@ -321,7 +335,7 @@ const TestItemDoc = observer(function TestItemDoc({ yamlRaw, isHistoryVisible = 
   }
 
   return (
-    <div className="mobx-test-page" ref={rootElRef} data-mobx-doc-id={docId}>
+    <div className="mobx-test-page notranslate" translate="no" ref={rootElRef} data-mobx-doc-id={docId}>
       <div className="mobx-test-shell">
         <div className="mobx-doc-meta-row">
           <div className="mobx-doc-meta-item">Doc: {docId}</div>
@@ -545,6 +559,7 @@ const TestListRenderDebugYaml = () => <TestItemDoc yamlRaw={TEST_LIST_RENDER_DEB
 const TestFocusFeatureYaml = () => <TestItemDoc yamlRaw={TEST_FOCUS_FEATURE_YAML_RAW} />;
 const TestHistoryYaml = () => <TestItemDoc yamlRaw={TEST_HISTORY_YAML_RAW} isHistoryVisible />;
 const TestTextBlockSegYaml = () => <TestItemDoc yamlRaw={TEST_TEXT_BLOCK_SEG_YAML_RAW} />;
+const TestTextStyleYaml = () => <TestItemDoc yamlRaw={TEST_TEXT_STYLE_YAML_RAW} />;
 
 export const mobxYamlTestItems = [
   {
@@ -610,6 +625,12 @@ export const mobxYamlTestItems = [
     label: 'TextBlockSeg.tsx',
     description: 'Row-exclusive multi-line text block segment with style config.',
     Comp: TestTextBlockSegYaml,
+  },
+  {
+    key: 'mobx-text-style',
+    label: 'Text style',
+    description: 'Toolbar sets bold/italic/underline/deleteline/colors/font on the selection; segments split and merge by style.',
+    Comp: TestTextStyleYaml,
   },
   {
     key: 'mobx-edit-history',

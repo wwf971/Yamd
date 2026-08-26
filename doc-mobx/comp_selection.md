@@ -84,6 +84,10 @@ Current code locations:
 
 Structure edits such as indent and outdent may preserve an active range by restoring the previous selection track after render.
 
+The rendered document area must carry `translate="no"` and the `notranslate` class (see `DocViewer` and the test shell root). Page translators such as Google Translate rewrite the text nodes with replaced text inside wrapper elements; the DOM text then no longer matches the document data, which breaks selection offset mapping and React reconciliation of the segment DOM.
+
+The store-to-DOM restore is deferred until the components created by the edit have rendered, and it retries over a few frames when the target elements are not mounted yet. While a restore is pending (`DocStore.isSelectionRestorePending`), the `selectionchange` tracking ignores DOM selection changes: between the edit and the restore, the browser fires `selectionchange` for the edit's own DOM mutations (removed or rewritten selected nodes), and reading that transient state would clear the just-restored selection track. The pending window ends in the same synchronous step that applies the restored DOM selection, so the restore's own `selectionchange` and later user selections are tracked normally.
+
 ## Cross-Component Range
 
 Cross-component DOM selection is tracked with two endpoints:

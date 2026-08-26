@@ -29,6 +29,7 @@ It should not own row-level navigation, list-level navigation, or cross-componen
 ```ts
 data: {
   text: string;
+  style?: SegTextStyle;
   sourceId?: string;
   targetId?: string;
 }
@@ -47,6 +48,7 @@ config: {
 Rules:
 
 - `data.text` is the rendered text.
+- `data.style` is the one text style of the whole segment, rendered as inline css. `TextSeg` registers the `isTextStyleSupported` trait; segments with different styles refuse to merge (`selfMergeQuery`). See `./comp_text_style.md`.
 - `config.isEditable` enables direct text editing.
 - `config.isDebug` enables debug visual style.
 - debug flags should not be placed in `data`.

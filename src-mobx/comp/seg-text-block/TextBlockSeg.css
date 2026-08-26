@@ -1,3 +1,36 @@
+.mobx-text-block-seg-wrap {
+  position: relative;
+  display: block;
+  width: 100%;
+}
+
+/* Reserve the top-right corner for the copy button so long first lines do
+   not run under it. */
+.mobx-text-block-copy-btn {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  border: none;
+  border-radius: 2px;
+  background: transparent;
+  color: #6b7280;
+  opacity: 0.6;
+  cursor: pointer;
+}
+
+.mobx-text-block-copy-btn:hover {
+  opacity: 1;
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.mobx-text-block-copy-btn:active {
+  background: rgba(0, 0, 0, 0.12);
+}
+
 .mobx-text-block-seg {
   position: relative;
   display: block;

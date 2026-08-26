@@ -24,6 +24,44 @@ Selection kinds:
 
 `TextSeg` is only one segment implementation. Row and list logic should not assume text-specific internals beyond the query contracts.
 
+### Cross-row delete details
+
+The List that contains both selection endpoints in its subtree handles the delete; a List where one endpoint is outside bubbles the event to its parent. Rows are walked in document order across nesting depths, so the endpoints may sit at different depths.
+
+All checks run as queries before one edit transaction, so a rejection leaves the document untouched — no rollback is needed. The delete behaves as if each part were deleted on its own, and one rejected part rejects the whole delete:
+
+- the start row keeps its text before the selection
+- rows fully inside the selection are removed together with their entries; every fully deleted segment must accept `selfDeleteQuery`
+- the end row keeps its text after the selection and normally merges into the start row
+
+Rejections keep the structure valid. A fully selected row whose entry still contains surviving rows cannot be removed, and merging removes the end row, so an end row with child rows below it is rejected the same way:
+
+```text
+- a|aa
+  - b|bb
+    - ccc
+```
+
+This delete is rejected: merging `bb` into `a` removes the `bbb` row, and `ccc` would lose its parent row.
+
+When an edge row holds a row-exclusive segment (a text block), the two edge rows are not merged. Each keeps its own trimmed edge, so nested rows below the end row survive and nothing is rejected for structure:
+
+```text
+- a|aa
+  - {text\n-block\n-con|tent}
+```
+
+deletes to:
+
+```text
+- a
+  - {tent}
+```
+
+An exclusive-edge row trimmed to empty whose entry has no surviving rows below it is removed entirely instead of remaining as an empty row.
+
+Edge merging also respects segment style: when the two trimmed edge segments carry different text styles, the merge query is rejected and the edges stay side by side as two segments (see `comp_text_style.md`).
+
 ## Range Copy
 
 Range copy should produce markdown unordered list text.
@@ -45,6 +83,19 @@ Formatting:
 ```
 
 Indent text comes from `src-mobx/config.ts`. The current markdown indent unit is two spaces per list level.
+
+A row whose single segment declares the `isCopyAsFencedBlock` trait (a text block row) serializes as an empty list item followed by fenced lines, indented one extra list level:
+
+```md
+- first row text
+  -
+    ```
+    block line one
+    block line two
+    ```
+```
+
+Pasting this form back rebuilds the block row; see `./comp_text_block_seg.md` for the paste rules.
 
 The synchronous copy path reads current component data so the native copy event can be filled immediately. The async path asks components through `selfClipboardTextQuery`, so future segment types can decide their own clipboard text.
 

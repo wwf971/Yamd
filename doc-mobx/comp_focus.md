@@ -43,6 +43,8 @@ There is no separate logical selection concept. We have logical focus, physical 
 
 Components that embed a document-like child area can use the same rule with a smaller focus boundary. For example, `EventTester` treats its rendered child components as the focus area and its control panel as outside that area. Clicking controls with both mouse press and release outside the child area runs `docUnfocus`; dragging from the child area to outside does not.
 
+A control that acts on the current document selection or focus (for example a style toolbar button) marks itself or a container with `data-mobx-doc-control`. The unfocus boundary skips a press or release on such a control, so the selection the control is about to act on survives the click. The control still has to `preventDefault` its own `mousedown` so the browser does not move focus and collapse the DOM selection.
+
 ## Data Shape In Store
 
 All states below are per document under `docById[docId]`.

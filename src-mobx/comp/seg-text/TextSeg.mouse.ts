@@ -1,15 +1,70 @@
 import { getCaretOffsetByPoint } from '../../util/caretUtils';
 import { getDomPointAtOffset } from './TextSeg.dom';
 
+// Start a monitored selection drag that takes over immediately: every mouse
+// move builds the DOM range programmatically. Used by the dom caret mode of
+// TextSeg, where the caller prevents the mousedown default first (the browser
+// would otherwise confine the native drag to the contentEditable host).
 export function startSelectionDragFromTextSeg(
   segElAnchor: HTMLElement,
   clientXStart: number,
   clientYStart: number,
   onEnd: () => void,
 ) {
+  return startSelectionDragMonitored(segElAnchor, clientXStart, clientYStart, onEnd, () => true);
+}
+
+// Start a monitored selection drag that leaves native selection alone while
+// the pointer stays where the browser can handle it, and takes over with a
+// programmatic range once the drag crosses an editing-host boundary, e.g.
+// from a plain segment into a contentEditable segment (a text block). Native
+// drags cannot form that selection, the browser stops them at the
+// editing-host border. Plain-to-plain drags never take over.
+//
+// The takeover only wins when the drag starts in plain text. A native drag
+// that starts inside a contentEditable host stays confined to the host and
+// overrides programmatic ranges for the rest of the gesture, so such a drag
+// must be prevented at mousedown and run fully programmatic from the start
+// (startSelectionDragFromTextSeg), as the DOM caret mode of TextSeg and the
+// editable TextBlockSeg do.
+export function startSelectionDragAcrossEditableBoundary(
+  segElAnchor: HTMLElement,
+  clientXStart: number,
+  clientYStart: number,
+  onEnd: () => void,
+) {
+  const isAnchorEditingHost = isEditingHostElement(segElAnchor);
+  return startSelectionDragMonitored(
+    segElAnchor,
+    clientXStart,
+    clientYStart,
+    onEnd,
+    (segElTarget) => {
+      if (!segElTarget || segElTarget === segElAnchor) return false;
+      return isAnchorEditingHost || isEditingHostElement(segElTarget);
+    },
+  );
+}
+
+function isEditingHostElement(segEl: HTMLElement) {
+  return segEl.getAttribute('contenteditable') === 'true';
+}
+
+// The shared drag monitor. checkTakeoverNeeded is asked once per mouse move
+// with the segment element under the pointer; the first true switches the
+// drag to programmatic ranges for the rest of the gesture (mixing native and
+// programmatic updates within one drag would fight over the anchor).
+function startSelectionDragMonitored(
+  segElAnchor: HTMLElement,
+  clientXStart: number,
+  clientYStart: number,
+  onEnd: () => void,
+  checkTakeoverNeeded: (segElTarget: HTMLElement | null) => boolean,
+) {
   const rootEl = segElAnchor.closest<HTMLElement>('[data-mobx-doc-id]') || document.body;
   const offsetAnchor = getCaretOffsetByPoint(segElAnchor, clientXStart, clientYStart);
   let isDraggingSelection = false;
+  let isTakenOver = false;
   let isEnded = false;
 
   const cleanup = () => {
@@ -29,6 +84,11 @@ export function startSelectionDragFromTextSeg(
       const distance = Math.abs(event.clientX - clientXStart) + Math.abs(event.clientY - clientYStart);
       if (distance <= 3) return;
       isDraggingSelection = true;
+    }
+    if (!isTakenOver) {
+      const segElTarget = getSegmentElementByClientPoint(rootEl, event.clientX, event.clientY);
+      if (!checkTakeoverNeeded(segElTarget)) return;
+      isTakenOver = true;
     }
     event.preventDefault();
     applySelectionFromTextSegDrag(rootEl, segElAnchor, offsetAnchor, event.clientX, event.clientY);

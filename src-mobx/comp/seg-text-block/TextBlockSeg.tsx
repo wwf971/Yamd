@@ -1,5 +1,6 @@
 import React from 'react';
 import { observer } from 'mobx-react-lite';
+import { CopyIcon } from '@wwf971/react-comp-misc';
 import { useDocStoreContext } from '../../DocStoreContext';
 import { compIdCreateRandom } from '../../docStoreCompData';
 import { registerSegTrait } from '../../docStoreSegTrait';
@@ -8,10 +9,15 @@ import {
   applyCaretByDirection,
   applyCaretByOffset,
   getCaretOffset,
+  getCaretOffsetByPoint,
 } from '../../util/caretUtils';
 import { useDocDragInteraction } from '../../util/useDocDragInteraction';
 import { applyRangeSelectionByOffset, calcTextSegBulletPosition } from '../seg-text/TextSeg.dom';
 import { focusStoreFocusedSegIfKeyEventIsStale } from '../seg-text/TextSeg.keyboard';
+import {
+  startSelectionDragAcrossEditableBoundary,
+  startSelectionDragFromTextSeg,
+} from '../seg-text/TextSeg.mouse';
 import {
   getCaretOffsetClamped,
   getSelectionOffsetRange,
@@ -28,7 +34,9 @@ import './TextBlockSeg.css';
 
 // TextBlockSeg is a row-exclusive segment: doc-level structure logic keeps it
 // as the only segment of its Row. See doc-mobx/comp_seg_exclusive.md.
-registerSegTrait('TextBlockSeg', { isRowExclusive: true });
+// Its clipboard text serializes as an indented fenced block, and pasted
+// fenced blocks deserialize into TextBlockSeg rows.
+registerSegTrait('TextBlockSeg', { isRowExclusive: true, isCopyAsFencedBlock: true });
 
 type TextBlockSegProps = {
   data?: {
@@ -82,6 +90,7 @@ const TextBlockSeg = observer(React.forwardRef<any, TextBlockSegProps>(({ data =
     ? contextDocStore.store.getCompBulletPosState(contextDocStore.docId, compId)
     : null;
   const rootRef = React.useRef<HTMLDivElement | null>(null);
+  const cleanupSelectionDragRef = React.useRef<(() => void) | null>(null);
   const offsetPendingRestoreRef = React.useRef<number | null>(null);
   const isComposingRef = React.useRef(false);
   const counterBulletMeasureReq = Number(bulletPositionState?.counterBulletMeasureReq || 0);
@@ -262,11 +271,23 @@ const TextBlockSeg = observer(React.forwardRef<any, TextBlockSegProps>(({ data =
     if (focusStoreFocusedSegIfKeyEventIsStale(contextDocStore, compId)) {
       return;
     }
-    // Paste stays inside the block and keeps newlines, like a code block.
     const textPaste = String(event.clipboardData?.getData('text/plain') || '').replace(/\r\n|\r/g, '\n');
     if (!textPaste) return;
+    // A paste that matches the directly preceding cut at this exact caret
+    // restores the pre-cut document instead of inserting the markdown text.
+    if (contextDocStore && compId) {
+      const offsetCaret = getCaretOffsetClamped(rootRef.current, text.length);
+      const resultRestore = contextDocStore.store.tryRestoreCutByPaste(
+        contextDocStore.docId,
+        compId,
+        textPaste,
+        { offset: offsetCaret },
+      );
+      if (resultRestore) return;
+    }
+    // Otherwise paste stays inside the block and keeps newlines, like a code block.
     insertTextAtSelection(textPaste);
-  }, [compId, contextDocStore, insertTextAtSelection, isEditable]);
+  }, [compId, contextDocStore, insertTextAtSelection, isEditable, text.length]);
 
   const measureBulletPosition = React.useCallback(() => {
     if (!contextDocStore || !compId || !isBulletMeasureEnabled) return;
@@ -290,6 +311,11 @@ const TextBlockSeg = observer(React.forwardRef<any, TextBlockSegProps>(({ data =
       contextDocStore.store.unregisterCompElement(contextDocStore.docId, compId, rootEl);
     };
   }, [contextDocStore, compId]);
+
+  React.useEffect(() => () => {
+    cleanupSelectionDragRef.current?.();
+    cleanupSelectionDragRef.current = null;
+  }, []);
 
   React.useLayoutEffect(() => {
     if (counterBulletMeasureReq <= 0) return;
@@ -412,68 +438,135 @@ const TextBlockSeg = observer(React.forwardRef<any, TextBlockSegProps>(({ data =
     },
   }), [applyFocusToDom, compId, configComp, contextDocStore, dataComp, emitEvent, updateKeyboardSelectionState]);
 
+  const handleCopyFullContent = React.useCallback(() => {
+    void navigator.clipboard?.writeText(text).catch(() => undefined);
+  }, [text]);
+
   return (
-    <div
-      ref={rootRef}
-      tabIndex={0}
-      contentEditable={isEditable}
-      suppressContentEditableWarning
-      className={className}
-      style={styleBlock}
-      data-mobx-comp-id={compId}
-      data-mobx-comp-name="TextBlockSeg"
-      data-mobx-seg-id={compId}
-      data-mobx-drag-item-id={dragItemId}
-      onPointerDownCapture={handlePointerDownCapture}
-      onFocus={() => {
-        if (!contextDocStore || !compId) return;
-        contextDocStore.store.updateElActiveState(contextDocStore.docId, compId);
-        updateFocusState('focus');
-      }}
-      onInput={handleInput}
-      onCompositionStart={() => {
-        isComposingRef.current = true;
-      }}
-      onCompositionEnd={(event) => {
-        isComposingRef.current = false;
-        syncTextFromDom(event.currentTarget);
-      }}
-      onMouseDown={(event) => {
-        if (!event.shiftKey) return;
-        event.preventDefault();
-        event.stopPropagation();
-      }}
-      onBlur={() => {
-        syncTextFromDom(rootRef.current);
-      }}
-      onClick={(event) => {
-        if (event.shiftKey) {
-          event.preventDefault();
-          event.stopPropagation();
-          if (contextDocStore?.store.consumeFocusClickSuppressed(contextDocStore.docId)) {
+    <div className="mobx-text-block-seg-wrap">
+      <div
+        ref={rootRef}
+        tabIndex={0}
+        contentEditable={isEditable}
+        suppressContentEditableWarning
+        className={className}
+        style={styleBlock}
+        data-mobx-comp-id={compId}
+        data-mobx-comp-name="TextBlockSeg"
+        data-mobx-seg-id={compId}
+        data-mobx-drag-item-id={dragItemId}
+        onPointerDownCapture={handlePointerDownCapture}
+        onFocus={() => {
+          if (!contextDocStore || !compId) return;
+          contextDocStore.store.updateElActiveState(contextDocStore.docId, compId);
+          updateFocusState('focus');
+        }}
+        onInput={handleInput}
+        onCompositionStart={() => {
+          isComposingRef.current = true;
+        }}
+        onCompositionEnd={(event) => {
+          isComposingRef.current = false;
+          syncTextFromDom(event.currentTarget);
+        }}
+        onMouseDown={(event) => {
+          if (event.shiftKey) {
+            event.preventDefault();
+            event.stopPropagation();
             return;
           }
-          contextDocStore?.store.focusExpandToParent(contextDocStore.docId, compId, 'shiftClickExpand');
-          return;
-        }
-        // The native click already placed the caret; sync the focus state.
-        const offset = getCaretOffsetClamped(rootRef.current, text.length);
-        updateFocusState('clickSingle', offset);
-        emitEvent('clickSingle', {
-          offset,
-          mousePos: {
-            clientX: event.clientX,
-            clientY: event.clientY,
-          },
-        });
-      }}
-      onKeyDown={handleKeyDown}
-      onPaste={handlePaste}
-    >
-      {/* One plain text child only: the browser owns contentEditable children.
-          The trailing phantom newline makes a real trailing newline in data
-          render as a visible empty last line. */}
-      {`${text}\n`}
+          cleanupSelectionDragRef.current?.();
+          if (isEditable && event.detail === 1) {
+            // A native selection drag that starts inside this contentEditable
+            // host is confined to the host, and the confinement cannot be
+            // undone once the drag is running. Prevent the native gesture,
+            // place the caret from the pointer position, and build the whole
+            // drag selection programmatically, like the DOM caret mode of
+            // TextSeg. Double and triple clicks keep native behavior: their
+            // word/line selection lives inside the block anyway.
+            event.preventDefault();
+            const rootEl = event.currentTarget;
+            const offsetCaret = Math.min(
+              text.length,
+              Math.max(0, getCaretOffsetByPoint(rootEl, event.clientX, event.clientY)),
+            );
+            applyCaretByOffset(rootEl, offsetCaret);
+            rootEl.focus();
+            cleanupSelectionDragRef.current = startSelectionDragFromTextSeg(
+              rootEl,
+              event.clientX,
+              event.clientY,
+              () => {
+                cleanupSelectionDragRef.current = null;
+              },
+            );
+            return;
+          }
+          // Non-editable block or multi-click gesture: a native drag from a
+          // non-editable block cannot enter a contentEditable segment. Monitor
+          // the drag and take over with a programmatic range only when it
+          // crosses such a boundary.
+          cleanupSelectionDragRef.current = startSelectionDragAcrossEditableBoundary(
+            event.currentTarget,
+            event.clientX,
+            event.clientY,
+            () => {
+              cleanupSelectionDragRef.current = null;
+            },
+          );
+        }}
+        onBlur={() => {
+          syncTextFromDom(rootRef.current);
+        }}
+        onClick={(event) => {
+          if (event.shiftKey) {
+            event.preventDefault();
+            event.stopPropagation();
+            if (contextDocStore?.store.consumeFocusClickSuppressed(contextDocStore.docId)) {
+              return;
+            }
+            contextDocStore?.store.focusExpandToParent(contextDocStore.docId, compId, 'shiftClickExpand');
+            return;
+          }
+          // The caret was already placed at mousedown (programmatically for
+          // the editable block, natively otherwise); sync the focus state.
+          const offset = getCaretOffsetClamped(rootRef.current, text.length);
+          updateFocusState('clickSingle', offset);
+          emitEvent('clickSingle', {
+            offset,
+            mousePos: {
+              clientX: event.clientX,
+              clientY: event.clientY,
+            },
+          });
+        }}
+        onKeyDown={handleKeyDown}
+        onPaste={handlePaste}
+      >
+        {/* One plain text child only: the browser owns contentEditable children.
+            The trailing phantom newline makes a real trailing newline in data
+            render as a visible empty last line. */}
+        {`${text}\n`}
+      </div>
+      {/* The copy button lives outside the contentEditable element, so it never
+          joins the text flow or the selection. */}
+      <button
+        type="button"
+        className="mobx-text-block-copy-btn"
+        title="Copy block content"
+        onMouseDown={(event) => {
+          // Keep the caret and any selection untouched by the button press.
+          event.preventDefault();
+          event.stopPropagation();
+        }}
+        onClick={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          handleCopyFullContent();
+        }}
+      >
+        <CopyIcon size={12} />
+      </button>
     </div>
   );
 }));

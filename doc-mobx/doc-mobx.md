@@ -49,6 +49,8 @@ For row-exclusive segments (a segment that must be the only segment of its Row),
 
 For `TextSeg`, see `./comp_text_seg.md`.
 
+For text segment style (bold, italic, colors, font) and the set-style-on-selection action, see `./comp_text_style.md`.
+
 For `TextBlockSeg`, see `./comp_text_block_seg.md`.
 
 For `TextBasic`, see `./comp_text_basic.md`.

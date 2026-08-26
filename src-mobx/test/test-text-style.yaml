@@ -1,0 +1,134 @@
+docName: test-text-style
+dataDocInitial: {}
+configDocInitial:
+  isEditable: true
+compIdRoot: doc-viewer-text-style
+compById:
+  doc-viewer-text-style:
+    compName: DocViewer
+    childIdList:
+      - style-tester-main
+    data: {}
+    config:
+      maxHeight: 260
+  style-tester-main:
+    compName: StyleTester
+    childIdList:
+      - list-style-root
+    data: {}
+    config: {}
+  list-style-root:
+    compName: List
+    childIdList:
+      - row-style-plain
+      - row-style-styled
+      - row-style-block
+      - list-style-entry
+    data:
+      bulletType: circle
+    config:
+      isRoot: true
+  row-style-plain:
+    compName: Row
+    childIdList:
+      - seg-style-plain-1
+      - seg-style-plain-2
+    data: {}
+    config: {}
+  seg-style-plain-1:
+    compName: TextSeg
+    childIdList: []
+    data:
+      text: 'aaabbbccc select bbb and toggle bold to split this segment. '
+    config:
+      isEditable: true
+  seg-style-plain-2:
+    compName: TextSeg
+    childIdList: []
+    data:
+      text: second plain segment in the same row for cross-segment selection.
+    config:
+      isEditable: true
+  row-style-styled:
+    compName: Row
+    childIdList:
+      - seg-style-bold
+      - seg-style-plain-mid
+      - seg-style-colored
+    data: {}
+    config: {}
+  seg-style-bold:
+    compName: TextSeg
+    childIdList: []
+    data:
+      text: 'bold segment. '
+      style:
+        isBold: true
+    config:
+      isEditable: true
+  seg-style-plain-mid:
+    compName: TextSeg
+    childIdList: []
+    data:
+      text: 'plain between styled segments. '
+    config:
+      isEditable: true
+  seg-style-colored:
+    compName: TextSeg
+    childIdList: []
+    data:
+      text: italic segment with text color and alpha background.
+      style:
+        isItalic: true
+        colorText: '#DC2626FF'
+        colorBackground: '#FEF3C780'
+    config:
+      isEditable: true
+  list-style-entry:
+    compName: List
+    mainCompId: row-style-main
+    childIdList:
+      - row-style-child
+    data: {}
+    config: {}
+  row-style-main:
+    compName: Row
+    childIdList:
+      - seg-style-main
+    data: {}
+    config: {}
+  seg-style-main:
+    compName: TextSeg
+    childIdList: []
+    data:
+      text: 'main row: start a selection here and drag into the child row below. '
+    config:
+      isEditable: true
+  row-style-child:
+    compName: Row
+    childIdList:
+      - seg-style-child
+    data: {}
+    config: {}
+  seg-style-child:
+    compName: TextSeg
+    childIdList: []
+    data:
+      text: 'child row: a cross-row selection styles both rows without merging them.'
+    config:
+      isEditable: true
+  row-style-block:
+    compName: Row
+    childIdList:
+      - seg-style-block
+    data: {}
+    config: {}
+  seg-style-block:
+    compName: TextBlockSeg
+    childIdList: []
+    data:
+      text: |-
+        text block segment without style support.
+        style actions skip this segment even when it is inside the selection.
+    config:
+      isEditable: true

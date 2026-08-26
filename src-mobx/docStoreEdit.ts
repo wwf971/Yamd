@@ -620,15 +620,24 @@ function restoreSelectionStateAfterStructureEdit(
 }
 
 function restoreDomSelectionAfterRender(store: DocStore, docId: string, selectionStateNext: SelectionState) {
-  const restoreSelection = () => {
-    const pointAnchor = selectionStateNext.pointAnchor;
-    const pointFocus = selectionStateNext.pointFocus;
-    if (!pointAnchor?.segId || !pointFocus?.segId) return;
+  const pointAnchor = selectionStateNext.pointAnchor;
+  const pointFocus = selectionStateNext.pointFocus;
+  if (!pointAnchor?.segId || !pointFocus?.segId) return;
 
+  // Between the structure edit and this deferred DOM restore, the browser
+  // fires selectionchange for the DOM mutations of the edit (removed or
+  // rewritten selected nodes). Marking the restore as pending keeps the
+  // selection tracking from reading that transient DOM state and clearing
+  // the restored selection state. The restore retries over a few frames
+  // because segments created by the edit mount with the next render.
+  store.beginSelectionRestore(docId);
+  let countAttemptLeft = 10;
+
+  const applySelectionToDom = () => {
     const pointDomAnchor = getDomPointBySelectionPoint(store, docId, pointAnchor);
     const pointDomFocus = getDomPointBySelectionPoint(store, docId, pointFocus);
     const selection = typeof window !== 'undefined' ? window.getSelection?.() : null;
-    if (!pointDomAnchor || !pointDomFocus || !selection) return;
+    if (!pointDomAnchor || !pointDomFocus || !selection) return false;
 
     const segElFocus = store.getCompElement(docId, pointFocus.segId)
       || (typeof document !== 'undefined'
@@ -660,12 +669,32 @@ function restoreDomSelectionAfterRender(store: DocStore, docId: string, selectio
       pointAnchor: { ...pointAnchor },
       pointFocus: { ...pointFocus },
     });
+    return true;
   };
-  if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
-    window.requestAnimationFrame(restoreSelection);
-    return;
-  }
-  setTimeout(restoreSelection, 0);
+
+  const attemptRestore = () => {
+    let isApplied = false;
+    try {
+      isApplied = applySelectionToDom();
+    } catch {
+      isApplied = false;
+    }
+    if (!isApplied && countAttemptLeft > 0) {
+      countAttemptLeft -= 1;
+      scheduleAttempt();
+      return;
+    }
+    store.endSelectionRestore(docId);
+  };
+
+  const scheduleAttempt = () => {
+    if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+      window.requestAnimationFrame(attemptRestore);
+      return;
+    }
+    setTimeout(attemptRestore, 0);
+  };
+  scheduleAttempt();
 }
 
 function getDomPointBySelectionPoint(store: DocStore, docId: string, point: SelectionTrackPoint) {

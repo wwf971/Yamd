@@ -27,6 +27,10 @@ import {
   docStoreReplaceCompData,
 } from './docStoreEdit';
 import { docStoreCreateCompId, idCreateRandom } from './docStoreCompData';
+import {
+  docStoreGetStyleOfSelection,
+  docStoreSetStyleOnSelection,
+} from './docStoreEditStyle';
 import { docStoreRunEdit } from './docStoreEditTransaction';
 import {
   createDocHistoryState,
@@ -166,12 +170,30 @@ export class DocStore {
 
   stateCutByDocId: Record<string, DocCutState> = {};
 
+  // Counts scheduled store-to-DOM selection restores per doc. While a restore
+  // is pending, selection tracking must not treat the transient DOM selection
+  // as user intent. See doc-mobx/comp_selection.md.
+  counterSelectionRestoreByDocId: Record<string, number> = {};
+
   constructor() {
     makeAutoObservable(this, {
       compElementByDocId: false,
       editTransactionByDocId: false,
       stateCutByDocId: false,
+      counterSelectionRestoreByDocId: false,
     }, { autoBind: true });
+  }
+
+  beginSelectionRestore(docId: string) {
+    this.counterSelectionRestoreByDocId[docId] = (this.counterSelectionRestoreByDocId[docId] || 0) + 1;
+  }
+
+  endSelectionRestore(docId: string) {
+    this.counterSelectionRestoreByDocId[docId] = Math.max(0, (this.counterSelectionRestoreByDocId[docId] || 0) - 1);
+  }
+
+  isSelectionRestorePending(docId: string) {
+    return (this.counterSelectionRestoreByDocId[docId] || 0) > 0;
   }
 
   ensureDoc(
@@ -710,6 +732,21 @@ export class DocStore {
     return docStoreCutSelection(this, docId, textClipboard);
   }
 
+  // Centralized set-style-on-selection action. See doc-mobx/comp_text_style.md.
+  // selectionOverride lets a caller act on a selection snapshot taken before a
+  // picker interaction destroyed the live DOM selection.
+  setStyleOnSelection(
+    docId: string,
+    stylePatch: Record<string, any>,
+    selectionOverride?: SelectionState | null,
+  ) {
+    return docStoreSetStyleOnSelection(this, docId, stylePatch, selectionOverride);
+  }
+
+  getStyleOfSelection(docId: string, selectionOverride?: SelectionState | null) {
+    return docStoreGetStyleOfSelection(this, docId, selectionOverride);
+  }
+
   applyCompEditResult(docId: string, parentId: string, editResult: CompEditResult, reason: string) {
     return this.runDocEdit(docId, reason, () => docStoreApplyCompEditResult(this, docId, parentId, editResult, reason));
   }
@@ -778,6 +815,15 @@ export class DocStore {
     return this.runDocEdit(docId, 'childPaste', () => (
       docStorePasteText(this, docId, rowId, segId, textPaste, point)
     ));
+  }
+
+  // Returns the restore result when the paste matches the directly preceding
+  // cut at the unchanged caret, or null when the paste should proceed
+  // normally. Segments with their own paste handling (such as a text block
+  // inserting clipboard text literally) call this first, so that a cut
+  // followed by a paste restores the exact pre-cut document.
+  tryRestoreCutByPaste(docId: string, segId: string, textPaste: string, point: any) {
+    return docStoreTryRestoreCutByPaste(this, docId, segId, textPaste, point);
   }
 
   getDocYamlRaw(docId: string) {

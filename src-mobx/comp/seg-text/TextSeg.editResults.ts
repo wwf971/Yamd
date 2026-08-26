@@ -1,3 +1,4 @@
+import { segStyleIsSame, segStyleNormalize } from '../../docStoreSegStyle';
 import type { CompData, SelectionTrackPoint } from '../../docStoreTypes';
 
 export function createSelfSplitResult({
@@ -70,6 +71,15 @@ export function createSelfMergeResult({
   }
   if (!compDataOther || String(compDataOther.compName || '') !== 'TextSeg') {
     return { code: -1, message: 'Other component is not mergeable.' };
+  }
+  // One segment carries one style. Two segments with different styles stay
+  // separate segments; the caller decides what a rejected merge means (row
+  // merge does not happen, selection delete keeps two edge segments).
+  // See doc-mobx/comp_text_style.md.
+  const styleSelf = segStyleNormalize(dataComp?.style);
+  const styleOther = segStyleNormalize(compDataOther.data?.style);
+  if (!segStyleIsSame(styleSelf, styleOther)) {
+    return { code: -1, message: 'TextSeg styles differ. Segments do not merge.' };
   }
   const compIdOther = String(compDataOther.compId || '');
   const textOther = String(compDataOther.data?.text || '');

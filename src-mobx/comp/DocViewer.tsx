@@ -47,7 +47,11 @@ const DocViewer = observer(({ data = {} }: DocViewerProps) => {
   return (
     <div
       ref={rootRef}
-      className="doc-viewer-root"
+      // Page translators rewrite the text nodes of the rendered document,
+      // desyncing DOM text from document data; the document area must not
+      // be translated.
+      className="doc-viewer-root notranslate"
+      translate="no"
       data-mobx-comp-id={compId}
       data-mobx-comp-name="DocViewer"
       onMouseDown={handleMouseDown}

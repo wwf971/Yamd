@@ -11,6 +11,15 @@ export type SegTrait = {
   // structure operations refuse to place any other segment next to it.
   // See doc-mobx/comp_seg_exclusive.md.
   isRowExclusive?: boolean;
+  // The segment's clipboard text serializes as an indented fenced block
+  // (```-wrapped lines) in the markdown copy output, and a pasted fenced
+  // block deserializes into a new segment of this compName.
+  // See doc-mobx/comp_delete_copy_cut.md.
+  isCopyAsFencedBlock?: boolean;
+  // The segment stores text style entries under data.style and renders them.
+  // The centralized set-style-on-selection logic only touches segments with
+  // this trait. See doc-mobx/comp_text_style.md.
+  isTextStyleSupported?: boolean;
 };
 
 const segTraitByCompName: Record<string, SegTrait> = {};
@@ -25,4 +34,21 @@ export function docStoreGetSegTrait(compName: string): SegTrait {
 
 export function docStoreIsSegRowExclusive(compData: CompData | null | undefined) {
   return docStoreGetSegTrait(String(compData?.compName || '')).isRowExclusive === true;
+}
+
+export function docStoreIsSegCopyFenced(compData: CompData | null | undefined) {
+  return docStoreGetSegTrait(String(compData?.compName || '')).isCopyAsFencedBlock === true;
+}
+
+export function docStoreIsSegTextStyleSupported(compData: CompData | null | undefined) {
+  return docStoreGetSegTrait(String(compData?.compName || '')).isTextStyleSupported === true;
+}
+
+// The compName that fenced paste blocks deserialize into. The registry keeps
+// doc-level paste logic free of hard-coded component names.
+export function docStoreGetCompNameCopyFenced() {
+  for (const [compName, trait] of Object.entries(segTraitByCompName)) {
+    if (trait.isCopyAsFencedBlock === true) return compName;
+  }
+  return '';
 }
