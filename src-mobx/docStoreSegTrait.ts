@@ -20,6 +20,28 @@ export type SegTrait = {
   // The centralized set-style-on-selection logic only touches segments with
   // this trait. See doc-mobx/comp_text_style.md.
   isTextStyleSupported?: boolean;
+  // Create the segment's clipboard text from its data alone, without asking
+  // the mounted component. Used by the synchronous copy path and as the
+  // fallback of the async path, for segments whose clipboard text is not the
+  // raw text field (an inline math segment serializes as $source$).
+  // offsetStart/offsetEnd are selection offsets in the segment's own logical
+  // offset space; undefined means the segment edge.
+  createClipboardText?: (
+    compData: CompData,
+    offsetStart?: number,
+    offsetEnd?: number,
+  ) => string;
+  // Recognize inline widget markup inside pasted plain text. Returns the
+  // paste text split into an ordered part list, or null when the text
+  // contains no markup of this kind. A part without compName stays plain text
+  // for the paste target segment kind; a part with compName becomes a new
+  // segment of that component with the part text as its text field.
+  parsePasteInline?: (textPaste: string) => SegPasteInlinePart[] | null;
+};
+
+export type SegPasteInlinePart = {
+  compName?: string;
+  text: string;
 };
 
 const segTraitByCompName: Record<string, SegTrait> = {};
@@ -42,6 +64,33 @@ export function docStoreIsSegCopyFenced(compData: CompData | null | undefined) {
 
 export function docStoreIsSegTextStyleSupported(compData: CompData | null | undefined) {
   return docStoreGetSegTrait(String(compData?.compName || '')).isTextStyleSupported === true;
+}
+
+// Clipboard text from the trait registry, or null when the segment's
+// component did not register createClipboardText.
+export function docStoreCreateSegClipboardTextByTrait(
+  compData: CompData | null | undefined,
+  offsetStart?: number,
+  offsetEnd?: number,
+) {
+  const trait = docStoreGetSegTrait(String(compData?.compName || ''));
+  if (typeof trait.createClipboardText !== 'function' || !compData) {
+    return null;
+  }
+  return trait.createClipboardText(compData, offsetStart, offsetEnd);
+}
+
+// Ask every registered inline paste parser to recognize the paste text. The
+// first parser that returns parts wins. Returns null when no parser matched.
+export function docStoreParsePasteInline(textPaste: string): SegPasteInlinePart[] | null {
+  for (const trait of Object.values(segTraitByCompName)) {
+    if (typeof trait.parsePasteInline !== 'function') continue;
+    const partList = trait.parsePasteInline(textPaste);
+    if (Array.isArray(partList) && partList.length > 0) {
+      return partList;
+    }
+  }
+  return null;
 }
 
 // The compName that fenced paste blocks deserialize into. The registry keeps

@@ -119,7 +119,7 @@ The whole action runs in one `runDocEdit(docId, 'styleSet', ...)` transaction: o
 Style participates in the segment merge contract. `TextSeg` answers `selfMergeQuery` and now rejects when the two segments carry different normalized styles, in addition to the existing same-`compName` check. Every merge flow routes through this single query, so the rule applies everywhere:
 
 - **Row merge** (Backspace at row start): when the end segment of the first row and the begin segment of the second row have different styles — for example one plain and one bold italic — the merge query is rejected and the row merge does not happen.
-- **In-row segment merge** (Backspace at a segment boundary inside one row): rejected the same way; the two segments stay separate.
+- **In-row segment merge** (Backspace at a segment boundary inside one row): rejected the same way; the two segments stay separate. On rejection the row moves focus into the previous segment from the right (a text segment gets its caret at the end, an atomic segment like inline math gets selected as a whole), so Backspace never dead-ends silently.
 - **Cross-segment selection delete**: after trimming the two edge segments, the edges are merged only when the merge query accepts. With different styles the delete still proceeds, but the two trimmed edges stay side by side as two segments (the same fallback used for other merge rejections; see `comp_delete_copy_cut.md`).
 
 Actions that carry style along without checking it:

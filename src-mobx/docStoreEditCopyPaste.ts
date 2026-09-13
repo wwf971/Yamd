@@ -26,8 +26,11 @@ import {
   docStoreSetSegmentText,
 } from './docStoreSegment';
 import {
+  docStoreCreateSegClipboardTextByTrait,
   docStoreGetCompNameCopyFenced,
   docStoreIsSegCopyFenced,
+  docStoreParsePasteInline,
+  type SegPasteInlinePart,
 } from './docStoreSegTrait';
 
 type OutlineEntryInfo = {
@@ -172,7 +175,18 @@ export function docStoreGetSelectionText(store: DocStore, docId: string) {
     if (rowIdLast && rowIdCurrent && rowIdCurrent !== rowIdLast) {
       textPartList.push('\n');
     }
-    const textCurrent = docStoreGetSegmentText(docRecord.compDataById[segIdCurrent]);
+    const compDataCurrent = docRecord.compDataById[segIdCurrent];
+    const textTrait = docStoreCreateSegClipboardTextByTrait(
+      compDataCurrent,
+      segIdCurrent === pointStart.segId ? Number(pointStart.offset || 0) : undefined,
+      segIdCurrent === pointEnd.segId ? Number(pointEnd.offset || 0) : undefined,
+    );
+    if (textTrait !== null) {
+      textPartList.push(textTrait);
+      rowIdLast = rowIdCurrent;
+      continue;
+    }
+    const textCurrent = docStoreGetSegmentText(compDataCurrent);
     const offsetStart = segIdCurrent === pointStart.segId ? pointStart.offset : 0;
     const offsetEnd = segIdCurrent === pointEnd.segId ? pointEnd.offset : textCurrent.length;
     textPartList.push(textCurrent.slice(
@@ -504,6 +518,10 @@ async function getCompClipboardText(
 }
 
 function getCompClipboardTextFallback(compData: CompData, offsetStartRaw: number | undefined, offsetEndRaw: number | undefined) {
+  const textTrait = docStoreCreateSegClipboardTextByTrait(compData, offsetStartRaw, offsetEndRaw);
+  if (textTrait !== null) {
+    return textTrait;
+  }
   const text = docStoreGetSegmentText(compData);
   const offsetStart = Number.isFinite(Number(offsetStartRaw))
     ? Math.min(text.length, Math.max(0, Number(offsetStartRaw)))
@@ -724,8 +742,19 @@ function pastePlainTextAtSeg(
     return { code: -1, message: 'Segment is not editable.' };
   }
   const textCurrent = docStoreGetSegmentText(segData);
-  const textInserted = String(textPasteRaw || '').replace(/[\r\n]+/g, '');
   const offsetSafe = Math.min(textCurrent.length, Math.max(0, Number(offsetPaste || 0)));
+  // Inline widget sources may span lines (a multiline math source), so the
+  // inline parse runs before newline flattening; the plain text parts flatten
+  // their newlines like a plain paste does.
+  const textNormalized = String(textPasteRaw || '').replace(/\r\n|\r/g, '\n');
+  const partListInline = docStoreParsePasteInline(textNormalized);
+  if (partListInline && partListInline.some((part) => Boolean(part.compName))) {
+    const partListFlat = partListInline.map((part) => (
+      part.compName ? part : { ...part, text: part.text.replace(/\n+/g, '') }
+    ));
+    return pasteInlinePartsAtSeg(store, docId, segData, partListFlat, offsetSafe);
+  }
+  const textInserted = textNormalized.replace(/\n+/g, '');
   const textNext = `${textCurrent.slice(0, offsetSafe)}${textInserted}${textCurrent.slice(offsetSafe)}`;
   editUpdateCompData(docStoreGetActiveEdit(store, docId), segId, {
     [docStoreGetSegmentTextFieldName(segData)]: textNext,
@@ -736,6 +765,83 @@ function pastePlainTextAtSeg(
     point: { offset: offsetSafe + textInserted.length },
   }, 'childPasteAttempt');
   return { code: 0, message: 'Plain text pasted.' };
+}
+
+// Paste plain text that an inline paste parser split into text parts and
+// inline widget parts (a text with $...$ pairs becomes text and math
+// segments). The paste target segment splits at the caret like a segment
+// split: the left half keeps the caret segment id and absorbs a leading text
+// part, the right half becomes a new segment of the same kind and absorbs a
+// trailing text part, and the parts in between become new sibling segments
+// inserted into the same row.
+function pasteInlinePartsAtSeg(
+  store: DocStore,
+  docId: string,
+  segData: CompData,
+  partListInline: SegPasteInlinePart[],
+  offsetPaste: number,
+) {
+  const docRecord = store.ensureDoc(docId);
+  const segId = String(segData.compId || '');
+  const rowId = docStoreGetOwningRowId(docRecord, segId);
+  const rowData = docRecord.compDataById[rowId];
+  if (String(rowData?.compName || '') !== 'Row') {
+    return { code: -1, message: 'Owning row not found for inline paste.' };
+  }
+  const textCurrent = docStoreGetSegmentText(segData);
+  const textBefore = textCurrent.slice(0, offsetPaste);
+  const textAfter = textCurrent.slice(offsetPaste);
+
+  const partListRemain = [...partListInline];
+  let textLeft = textBefore;
+  if (partListRemain[0] && !partListRemain[0].compName) {
+    textLeft += String(partListRemain[0].text || '');
+    partListRemain.shift();
+  }
+  let textRight = textAfter;
+  let offsetFocusRight = 0;
+  const partLast = partListRemain[partListRemain.length - 1];
+  if (partLast && !partLast.compName) {
+    textRight = String(partLast.text || '') + textAfter;
+    offsetFocusRight = String(partLast.text || '').length;
+    partListRemain.pop();
+  }
+
+  const contextEdit = docStoreGetActiveEdit(store, docId);
+  const compIdSetReserved = new Set<string>();
+  const compDataListNew: CompData[] = [];
+  const segIdListInsert: string[] = [];
+  for (const part of partListRemain) {
+    const segIdNew = docStoreCreateCompId(docRecord, 'seg', compIdSetReserved);
+    const segDataNew = part.compName
+      ? createInlinePartSegCompData(segIdNew, part, segData)
+      : docStoreCloneSegmentWithText(segData, segIdNew, String(part.text || ''));
+    compDataListNew.push(segDataNew);
+    segIdListInsert.push(segIdNew);
+  }
+  // The right half always exists, so the caret has a text position directly
+  // after the last pasted inline widget.
+  const segIdRight = docStoreCreateCompId(docRecord, 'seg', compIdSetReserved);
+  compDataListNew.push(docStoreCloneSegmentWithText(segData, segIdRight, textRight));
+  segIdListInsert.push(segIdRight);
+
+  editUpdateCompData(contextEdit, segId, {
+    [docStoreGetSegmentTextFieldName(segData)]: textLeft,
+  });
+  addCompDataListToRecord(contextEdit, compDataListNew);
+  const childIdListRow = getChildIdList(rowData);
+  const childIndexSeg = childIdListRow.indexOf(segId);
+  editSetChildIdList(contextEdit, rowId, [
+    ...childIdListRow.slice(0, childIndexSeg + 1),
+    ...segIdListInsert,
+    ...childIdListRow.slice(childIndexSeg + 1),
+  ]);
+  store.clearSelectionState(docId);
+  store.applyFocusAfterEdit(docId, {
+    compId: segIdRight,
+    point: { offset: offsetFocusRight },
+  }, 'childPasteAttempt');
+  return { code: 0, message: 'Text with inline segments pasted.' };
 }
 
 function createPasteCompBuildResult(
@@ -771,17 +877,17 @@ function createPasteEntryCompData(
   rowDataTemplate: CompData,
   compIdSetReserved: Set<string>,
 ): PasteCompBuildResult {
-  const segId = docStoreCreateCompId(docRecord, 'seg', compIdSetReserved);
   const rowId = docStoreCreateCompId(docRecord, 'row', compIdSetReserved);
   const textItem = String(item.text || '');
-  const segDataNext = item.kind === 'block'
-    ? createFencedBlockSegCompData(segId, textItem, segDataTemplate)
-    : docStoreCloneSegmentWithText(segDataTemplate, segId, textItem);
-  const rowDataNext = createRowComp(rowId, [segId], rowDataTemplate);
-  const compDataList: CompData[] = [segDataNext, rowDataNext];
+  const segDataListRow = item.kind === 'block'
+    ? [createFencedBlockSegCompData(docStoreCreateCompId(docRecord, 'seg', compIdSetReserved), textItem, segDataTemplate)]
+    : createRowSegCompDataListByText(docRecord, textItem, segDataTemplate, compIdSetReserved);
+  const segDataLastRow = segDataListRow[segDataListRow.length - 1];
+  const rowDataNext = createRowComp(rowId, segDataListRow.map((segDataRow) => segDataRow.compId), rowDataTemplate);
+  const compDataList: CompData[] = [...segDataListRow, rowDataNext];
   let entryId = rowId;
-  let segIdLast = segId;
-  let textLast = textItem;
+  let segIdLast = segDataLastRow.compId;
+  let textLast = docStoreGetSegmentText(segDataLastRow);
   if (item.childList.length > 0) {
     const childResult = createPasteCompBuildResult(docRecord, item.childList, segDataTemplate, rowDataTemplate, compIdSetReserved);
     const listId = docStoreCreateCompId(docRecord, 'list', compIdSetReserved);
@@ -794,8 +900,8 @@ function createPasteEntryCompData(
       config: {},
     });
     entryId = listId;
-    segIdLast = childResult.segIdLast || segId;
-    textLast = childResult.textLast || textItem;
+    segIdLast = childResult.segIdLast || segIdLast;
+    textLast = childResult.segIdLast ? childResult.textLast : textLast;
   }
   return {
     compDataList,
@@ -803,6 +909,52 @@ function createPasteEntryCompData(
     segIdLast,
     textLast,
   };
+}
+
+// Build the segment CompData for one inline widget part recognized by an
+// inline paste parser (e.g. a $...$ math part).
+function createInlinePartSegCompData(
+  segId: string,
+  part: SegPasteInlinePart,
+  segDataTemplate: CompData,
+): CompData {
+  return {
+    compId: segId,
+    compName: String(part.compName || ''),
+    childIdList: [],
+    data: { sourceId: segId, text: String(part.text || '') },
+    config: { isEditable: segDataTemplate?.config?.isEditable === true },
+  };
+}
+
+// Build the segment list for one pasted row text. When an inline paste parser
+// recognizes widget parts (e.g. $...$ math), the row gets one segment per
+// part; otherwise the row gets one cloned text segment. The last segment is
+// always a plain text segment, so a remainder text appended by the caller and
+// the caret always land in text.
+function createRowSegCompDataListByText(
+  docRecord: DocRecord,
+  textRow: string,
+  segDataTemplate: CompData,
+  compIdSetReserved: Set<string>,
+): CompData[] {
+  const partList = docStoreParsePasteInline(textRow);
+  if (!partList || !partList.some((part) => Boolean(part.compName))) {
+    const segId = docStoreCreateCompId(docRecord, 'seg', compIdSetReserved);
+    return [docStoreCloneSegmentWithText(segDataTemplate, segId, textRow)];
+  }
+  const compDataList: CompData[] = [];
+  for (const part of partList) {
+    const segId = docStoreCreateCompId(docRecord, 'seg', compIdSetReserved);
+    compDataList.push(part.compName
+      ? createInlinePartSegCompData(segId, part, segDataTemplate)
+      : docStoreCloneSegmentWithText(segDataTemplate, segId, String(part.text || '')));
+  }
+  if (partList[partList.length - 1].compName) {
+    const segId = docStoreCreateCompId(docRecord, 'seg', compIdSetReserved);
+    compDataList.push(docStoreCloneSegmentWithText(segDataTemplate, segId, ''));
+  }
+  return compDataList;
 }
 
 // Build the segment CompData for one pasted fenced block. The compName comes
@@ -889,15 +1041,18 @@ function pasteChunkItemsSplittingRow(
   let segIdMiddleLast = '';
   let textMiddleLast = '';
   for (const item of itemListMiddle) {
-    const segId = docStoreCreateCompId(docRecord, 'seg', compIdSetReserved);
     const rowIdNew = docStoreCreateCompId(docRecord, 'row', compIdSetReserved);
-    const segDataNext = item.kind === 'block'
-      ? createFencedBlockSegCompData(segId, item.text, segData)
-      : docStoreCloneSegmentWithText(segData, segId, item.text);
-    compDataListNew.push(segDataNext, createRowComp(rowIdNew, [segId], rowData));
+    const segDataListRow = item.kind === 'block'
+      ? [createFencedBlockSegCompData(docStoreCreateCompId(docRecord, 'seg', compIdSetReserved), item.text, segData)]
+      : createRowSegCompDataListByText(docRecord, item.text, segData, compIdSetReserved);
+    const segDataLastRow = segDataListRow[segDataListRow.length - 1];
+    compDataListNew.push(
+      ...segDataListRow,
+      createRowComp(rowIdNew, segDataListRow.map((segDataRow) => segDataRow.compId), rowData),
+    );
     entryIdListMiddle.push(rowIdNew);
-    segIdMiddleLast = segId;
-    textMiddleLast = docStoreGetSegmentText(segDataNext);
+    segIdMiddleLast = segDataLastRow.compId;
+    textMiddleLast = docStoreGetSegmentText(segDataLastRow);
   }
 
   let segIdLastRow = '';

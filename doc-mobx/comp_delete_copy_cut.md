@@ -97,7 +97,7 @@ A row whose single segment declares the `isCopyAsFencedBlock` trait (a text bloc
 
 Pasting this form back rebuilds the block row; see `./comp_text_block_seg.md` for the paste rules.
 
-The synchronous copy path reads current component data so the native copy event can be filled immediately. The async path asks components through `selfClipboardTextQuery`, so future segment types can decide their own clipboard text.
+The synchronous copy path reads current component data so the native copy event can be filled immediately. The async path asks components through `selfClipboardTextQuery`, so future segment types can decide their own clipboard text. A segment whose clipboard form differs from its raw text field can register the `createClipboardText` trait (see `docStoreSegTrait.ts`); both copy paths then use it (an inline math segment serializes as `$source$`). Symmetrically, the `parsePasteInline` trait lets a segment recognize inline markup in pasted plain text and split the paste into text and widget segments; see `src-mobx/comp/seg-math-inline/seg_math_inline.md`.
 
 ## Range Cut
 

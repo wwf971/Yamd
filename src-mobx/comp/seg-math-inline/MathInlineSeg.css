@@ -1,0 +1,81 @@
+.mobx-math-inline-seg {
+  position: relative;
+  display: inline;
+  outline: none;
+  border-radius: 2px;
+  padding: 0 1px;
+  margin-right: 2px;
+  cursor: pointer;
+}
+
+/* The rendered math (or placeholder) is atomic: DOM selection endpoints must
+   not land inside it. Whole-segment selection is shown through the shared
+   focused/selection-within classes on the root. */
+.mobx-math-inline-content {
+  user-select: none;
+  -webkit-user-select: none;
+  display: inline;
+}
+
+.mobx-math-inline-content mjx-container {
+  display: inline-block;
+  margin: 0;
+}
+
+/* Empty source renders as a light grey $$ placeholder. */
+.mobx-math-inline-placeholder {
+  color: #c2c8d0;
+  font-family: sans-serif;
+}
+
+/* Raw source shown while MathJax has not converted this formula yet. */
+.mobx-math-inline-raw {
+  color: #8a919c;
+  font-family: sans-serif;
+}
+
+.mobx-math-inline-svg-error {
+  outline: 1px dotted #dc2626;
+}
+
+/* The rendered math never shows the native selection highlight
+   (user-select: none), so a range selection covering the segment paints it
+   through this class instead. */
+.mobx-math-inline-seg.mobx-math-inline-range-selected {
+  background: #b8d4fe;
+}
+
+/* Source text tooltip. Simplistic style: one bordered box above the rendered
+   math, no arrow decoration. */
+.mobx-math-inline-tooltip {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 3px);
+  z-index: 30;
+  display: inline-block;
+  background: #ffffff;
+  border: 1px solid #c4cad2;
+  border-radius: 2px;
+  padding: 1px 4px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.14);
+  white-space: nowrap;
+  line-height: 1.4;
+}
+
+/* The source may span multiple lines (Shift+Enter inserts a line break), so
+   the editor keeps explicit newlines as line breaks and never wraps. */
+.mobx-math-inline-editor {
+  display: inline-block;
+  min-width: 8px;
+  outline: none;
+  font-family: sans-serif;
+  font-size: 13px;
+  font-style: normal;
+  font-weight: normal;
+  color: #1f2937;
+  white-space: pre;
+  text-align: left;
+  cursor: text;
+  user-select: text;
+  -webkit-user-select: text;
+}

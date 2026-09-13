@@ -24,6 +24,7 @@ import TEST_FOCUS_FEATURE_YAML_RAW from './test-focus-feature.yaml?raw';
 import TEST_HISTORY_YAML_RAW from './test-history.yaml?raw';
 import TEST_TEXT_BLOCK_SEG_YAML_RAW from './test-text-block-seg.yaml?raw';
 import TEST_TEXT_STYLE_YAML_RAW from './test-text-style.yaml?raw';
+import TEST_MATH_INLINE_YAML_RAW from './test-math-inline.yaml?raw';
 import './testMobx.css';
 
 const compByNameForTest = {
@@ -560,6 +561,7 @@ const TestFocusFeatureYaml = () => <TestItemDoc yamlRaw={TEST_FOCUS_FEATURE_YAML
 const TestHistoryYaml = () => <TestItemDoc yamlRaw={TEST_HISTORY_YAML_RAW} isHistoryVisible />;
 const TestTextBlockSegYaml = () => <TestItemDoc yamlRaw={TEST_TEXT_BLOCK_SEG_YAML_RAW} />;
 const TestTextStyleYaml = () => <TestItemDoc yamlRaw={TEST_TEXT_STYLE_YAML_RAW} />;
+const TestMathInlineYaml = () => <TestItemDoc yamlRaw={TEST_MATH_INLINE_YAML_RAW} />;
 
 export const mobxYamlTestItems = [
   {
@@ -625,6 +627,12 @@ export const mobxYamlTestItems = [
     label: 'TextBlockSeg.tsx',
     description: 'Row-exclusive multi-line text block segment with style config.',
     Comp: TestTextBlockSegYaml,
+  },
+  {
+    key: 'mobx-math-inline',
+    label: 'MathInlineSeg.tsx',
+    description: 'Inline latex math segment: svg rendering, source tooltip editing, whole-segment selection, $...$ copy/paste.',
+    Comp: TestMathInlineYaml,
   },
   {
     key: 'mobx-text-style',

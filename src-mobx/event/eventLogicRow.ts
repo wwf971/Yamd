@@ -470,7 +470,21 @@ async function eventRowChildMergePrevAttempt({
       compDataOther,
     },
   });
-  if (result.code !== 0) return result;
+  if (result.code !== 0) {
+    // The two segments cannot merge (the previous segment is an atomic widget
+    // like inline math, or the segments must stay separate). Backspace then
+    // moves focus into the previous segment from the right: an atomic segment
+    // gets selected as a whole, so the following Backspace presses delete it.
+    return store.sendEventToComp(docId, compIdPrev, {
+      type: 'focus',
+      sourceId: compId,
+      targetId: docId,
+      data: {
+        segId: compIdPrev,
+        direction: 'fromRight',
+      },
+    });
+  }
   return applyCompEditResultFromEvent(store, docId, compId, result.data, 'childMergePrevAttempt');
 }
 
@@ -853,6 +867,11 @@ function selectionPointRead(rootEl: HTMLElement, node: Node | null, offset: numb
     return null;
   }
   const elBase = node.nodeType === Node.ELEMENT_NODE ? node as Element : node.parentElement;
+  // DOM selection inside a segment's internal editor area (an inline math
+  // source tooltip) is component-internal state, not document selection.
+  if (elBase?.closest?.('[data-mobx-seg-selection-internal]')) {
+    return null;
+  }
   const segEl = elBase?.closest?.('[data-mobx-seg-id]') as HTMLElement | null;
   const compEl = elBase?.closest?.('[data-mobx-comp-id]') as HTMLElement | null;
   if (!segEl || !compEl || !rootEl.contains(segEl)) {

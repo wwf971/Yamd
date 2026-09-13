@@ -76,6 +76,8 @@ Collapsed caret updates can also update focus offset. Range updates should updat
 
 Most user selection should stay browser-owned. Store-to-DOM selection restore is only needed after operations that re-render or move selected components.
 
+A mouse press inside an existing selection would start a native drag of the selected text (ghost image) instead of a new selection. Segments that host browser selection (`TextSeg` mousedown, and the internal source editor of `MathInlineSeg`) clear the DOM selection at press time (primary button, no shift), so the press always starts a fresh selection from the press point.
+
 Current code locations:
 
 - `TestItems.jsx`: `applyRangeSelectionToDom`

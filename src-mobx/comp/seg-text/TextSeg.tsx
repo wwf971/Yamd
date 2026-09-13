@@ -563,11 +563,20 @@ const TextSeg = observer(React.forwardRef<any, TextSegProps>(({ data = {}, confi
           return;
         }
         const selection = window.getSelection();
+        const isDomSelectionRange = selection ? selection.isCollapsed !== true : false;
+        // Pressing inside an existing selection would start a native drag of
+        // the selected text (ghost image). Clearing the selection at press
+        // time suppresses that drag; the press starts a fresh selection from
+        // this point instead. The pre-press range state is still recorded so
+        // the click handler can tell a collapse-click from a plain click.
+        if (event.button === 0 && isDomSelectionRange) {
+          selection?.removeAllRanges();
+        }
         mouseDownStateRef.current = {
           clientX: event.clientX,
           clientY: event.clientY,
           isSelectionActive,
-          isDomSelectionRange: selection ? selection.isCollapsed !== true : false,
+          isDomSelectionRange,
         };
         if (isDomCaretMode) {
           // Firefox keeps selection inside one contentEditable editing host.

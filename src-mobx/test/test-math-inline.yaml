@@ -1,0 +1,180 @@
+docName: test-math-inline
+dataDocInitial: {}
+configDocInitial:
+  isEditable: true
+compIdRoot: doc-viewer-math-inline
+compById:
+  doc-viewer-math-inline:
+    compName: DocViewer
+    childIdList:
+      - event-tester-math-inline
+    data: {}
+    config:
+      maxHeight: 380
+  event-tester-math-inline:
+    compName: EventTester
+    childIdList:
+      - list-math-inline-root
+    data: {}
+    config: {}
+  list-math-inline-root:
+    compName: List
+    childIdList:
+      - row-math-intro
+      - list-math-first-entry
+      - row-math-geq
+      - row-math-empty
+      - row-math-paste
+    data:
+      bulletType: circle
+    config:
+      isRoot: true
+  row-math-intro:
+    compName: Row
+    childIdList:
+      - seg-math-intro-1
+      - seg-math-intro-math
+      - seg-math-intro-2
+    data: {}
+    config: {}
+  seg-math-intro-1:
+    compName: TextSeg
+    childIdList: []
+    data:
+      text: 'inline math such as '
+    config:
+      isEditable: true
+  seg-math-intro-math:
+    compName: MathInlineSeg
+    childIdList: []
+    data:
+      text: 'E = mc^2'
+    config:
+      isEditable: true
+  seg-math-intro-2:
+    compName: TextSeg
+    childIdList: []
+    data:
+      text: ' renders as svg; click it or arrow into it to edit the source in a tooltip.'
+    config:
+      isEditable: true
+  list-math-first-entry:
+    compName: List
+    mainCompId: row-math-first
+    childIdList:
+      - row-math-nested
+    data: {}
+    config: {}
+  row-math-first:
+    compName: Row
+    childIdList:
+      - seg-math-first-math
+      - seg-math-first-text
+    data: {}
+    config: {}
+  seg-math-first-math:
+    compName: MathInlineSeg
+    childIdList: []
+    data:
+      text: '\sum_{i=1}^{n} i = \frac{n(n+1)}{2}'
+    config:
+      isEditable: true
+  seg-math-first-text:
+    compName: TextSeg
+    childIdList: []
+    data:
+      text: ' starts this row as its first segment.'
+    config:
+      isEditable: true
+  row-math-nested:
+    compName: Row
+    childIdList:
+      - seg-math-nested-math
+      - seg-math-nested-text
+    data: {}
+    config: {}
+  seg-math-nested-math:
+    compName: MathInlineSeg
+    childIdList: []
+    data:
+      text: 'a \leqslant b \leqslant c'
+    config:
+      isEditable: true
+  seg-math-nested-text:
+    compName: TextSeg
+    childIdList: []
+    data:
+      text: ' nested row, math first, using \leqslant.'
+    config:
+      isEditable: true
+  row-math-geq:
+    compName: Row
+    childIdList:
+      - seg-math-geq-1
+      - seg-math-geq-math
+      - seg-math-geq-2
+    data: {}
+    config: {}
+  seg-math-geq-1:
+    compName: TextSeg
+    childIdList: []
+    data:
+      text: 'slanted comparison '
+    config:
+      isEditable: true
+  seg-math-geq-math:
+    compName: MathInlineSeg
+    childIdList: []
+    data:
+      text: '\boldsymbol{x} \geqslant \boldsymbol{y}'
+    config:
+      isEditable: true
+  seg-math-geq-2:
+    compName: TextSeg
+    childIdList: []
+    data:
+      text: ' needs the full MathJax build for \geqslant and \boldsymbol.'
+    config:
+      isEditable: true
+  row-math-empty:
+    compName: Row
+    childIdList:
+      - seg-math-empty-1
+      - seg-math-empty-math
+      - seg-math-empty-2
+    data: {}
+    config: {}
+  seg-math-empty-1:
+    compName: TextSeg
+    childIdList: []
+    data:
+      text: 'an empty source shows the placeholder '
+    config:
+      isEditable: true
+  seg-math-empty-math:
+    compName: MathInlineSeg
+    childIdList: []
+    data:
+      text: ''
+    config:
+      isEditable: true
+  seg-math-empty-2:
+    compName: TextSeg
+    childIdList: []
+    data:
+      text: ' and Backspace in the empty source deletes the segment.'
+    config:
+      isEditable: true
+  row-math-paste:
+    compName: Row
+    childIdList:
+      - seg-math-paste
+    data: {}
+    config: {}
+  seg-math-paste:
+    compName: TextSeg
+    childIdList: []
+    data:
+      text: 'paste test: select and copy this: before $e^{i\pi} + 1 = 0$ between $\|\boldsymbol{v}\| \leqslant 1$ after, then paste it into another text row.'
+    config:
+      isEditable: true
