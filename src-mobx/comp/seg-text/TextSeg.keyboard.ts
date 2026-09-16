@@ -83,6 +83,22 @@ export function useTextSegKeyDown({
       return;
     }
 
+    // Comp create mode: while active for this segment, the mode consumes its
+    // dropdown keys (ArrowUp/Down, Enter, Escape) and exits on mode-breaking
+    // keys before their normal handling. See doc-mobx/comp_create.md.
+    if (contextDocStore) {
+      const keyActionCompCreate = contextDocStore.store.compCreateHandleKey(
+        contextDocStore.docId,
+        compId,
+        event.key,
+        event.shiftKey || event.altKey,
+      );
+      if (keyActionCompCreate === 'consume') {
+        event.preventDefault();
+        return;
+      }
+    }
+
     const pointFocusSelection = selectionState?.pointFocus;
     const offsetFocusFromSelection = (
       isSelectionActive

@@ -34,6 +34,7 @@ import {
   startSelectionDragAcrossEditableBoundary,
   startSelectionDragFromTextSeg,
 } from './TextSeg.mouse';
+import CompCreateDropdown from '../comp-create/CompCreateDropdown';
 import './TextSeg.history';
 import './TextSeg.css';
 
@@ -87,6 +88,10 @@ const TextSeg = observer(React.forwardRef<any, TextSegProps>(({ data = {}, confi
     ? contextDocStore.store.getInteractionState(contextDocStore.docId)
     : null;
   const selectionState = interactionState?.selectionState;
+  // The comp create mode requires this segment to hold logical focus, so the
+  // interaction state is always available while the mode is active here.
+  const compCreateState = interactionState?.compCreateState;
+  const isCompCreateActive = compCreateState?.isActive === true && compCreateState.segId === compId;
   const dragItemId = compId ? `segment:${compId}` : '';
   const dragRuntimeState = contextDocStore && dragItemId
     ? contextDocStore.store.getDragItemRuntimeState(contextDocStore.docId, dragItemId)
@@ -241,6 +246,10 @@ const TextSeg = observer(React.forwardRef<any, TextSegProps>(({ data = {}, confi
     const textNext = String(rootEl.textContent || '');
     if (text.length > 0 && textNext.length === 0) {
       offsetPendingRestoreRef.current = null;
+      const stateCompCreate = contextDocStore.store.getCompCreateState(contextDocStore.docId);
+      if (stateCompCreate.isActive && stateCompCreate.segId === compId) {
+        contextDocStore.store.compCreateExit(contextDocStore.docId, 'segTextEmptied');
+      }
       emitEvent('childDeleteAttempt', {
         compIdChild: compId,
         direction: 'left',
@@ -249,8 +258,21 @@ const TextSeg = observer(React.forwardRef<any, TextSegProps>(({ data = {}, confi
       return;
     }
     if (textNext !== text) {
-      offsetPendingRestoreRef.current = getCaretOffset(rootEl);
-      contextDocStore.store.updateCompDataByPatch(contextDocStore.docId, compId, { text: textNext });
+      const offsetCaret = getCaretOffset(rootEl);
+      offsetPendingRestoreRef.current = offsetCaret;
+      // Comp create mode: typing '/' enters the mode, and further input in
+      // the mode updates its query together with the text patch. When the
+      // handler declines, the change is an ordinary text edit.
+      const isHandledByCompCreate = contextDocStore.store.compCreateHandleTextInput(
+        contextDocStore.docId,
+        compId,
+        text,
+        textNext,
+        offsetCaret,
+      );
+      if (!isHandledByCompCreate) {
+        contextDocStore.store.updateCompDataByPatch(contextDocStore.docId, compId, { text: textNext });
+      }
     }
   }, [contextDocStore, compId, emitEvent, isEditable, text]);
 
@@ -527,7 +549,7 @@ const TextSeg = observer(React.forwardRef<any, TextSegProps>(({ data = {}, confi
     },
   }), [applyFocusToDom, compId, configComp, contextDocStore, dataComp, emitEvent, updateKeyboardSelectionState]);
 
-  return (
+  const elSeg = (
     <span
       ref={rootRef}
       tabIndex={0}
@@ -693,6 +715,15 @@ const TextSeg = observer(React.forwardRef<any, TextSegProps>(({ data = {}, confi
         </>
       ) : text}
     </span>
+  );
+
+  return (
+    <>
+      {elSeg}
+      {/* The dropdown renders through a body portal, so it never becomes a
+          child of the contentEditable span above. */}
+      {isCompCreateActive ? <CompCreateDropdown /> : null}
+    </>
   );
 }));
 

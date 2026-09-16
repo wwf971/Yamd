@@ -1,6 +1,6 @@
 import React from 'react';
 import { observer } from 'mobx-react-lite';
-import { compByNameDefault, getCompByName, TextBasic } from './CompCommon';
+import { compRegistryGetComp, TextBasic } from './CompCommon';
 import { DocStoreProvider } from './DocStoreContext';
 import { DocStore, createDocStore } from './docStore';
 import type { CompEvent } from './docStoreTypes';
@@ -9,22 +9,28 @@ import './docMobx.css';
 
 export const compIdDocRoot = 'comp-doc-root';
 export const compIdTextBasicMain = 'comp-text-basic-main';
-export { compByNameDefault, getCompByName } from './CompCommon';
+export {
+  registerCompEntry,
+  compRegistryGetByName,
+  compRegistryGetById,
+  compRegistryGetByRef,
+  compRegistryGetComp,
+  compRegistrySearchByType,
+  compRegistryIsType,
+} from './CompCommon';
 
 export function renderCompByCompData({
   compData,
-  compByName = compByNameDefault,
   onEvent,
   onDataChange,
   setCompRef,
 }: {
   compData: any;
-  compByName?: Record<string, any>;
   onEvent: (event: CompEvent) => Promise<any> | any;
   onDataChange?: (dataPatch: Record<string, any>) => Promise<any> | any;
   setCompRef?: (compId: string, element: any) => void;
 }) {
-  const Comp = getCompByName(compData?.compName, compByName);
+  const Comp = compRegistryGetComp(compData?.compName);
   if (!Comp) return null;
   return (
     <Comp
@@ -46,7 +52,6 @@ export function renderCompByCompData({
 export function renderCompById({
   compId,
   compDataById,
-  compByName = compByNameDefault,
   onEvent,
   onDataChange,
   setCompRef,
@@ -54,7 +59,6 @@ export function renderCompById({
 }: {
   compId: string;
   compDataById: Record<string, any>;
-  compByName?: Record<string, any>;
   onEvent: (event: CompEvent, compData: any) => Promise<any> | any;
   onDataChange?: (dataPatch: Record<string, any>, compData: any) => Promise<any> | any;
   setCompRef?: (compId: string, element: any) => void;
@@ -64,13 +68,12 @@ export function renderCompById({
   if (!compData) {
     return null;
   }
-  const Comp = getCompByName(compData.compName, compByName);
+  const Comp = compRegistryGetComp(compData.compName);
   if (!Comp) {
     return renderUnknown ? renderUnknown(compData) : null;
   }
   return renderCompByCompData({
     compData,
-    compByName,
     setCompRef,
     onEvent: (event) => onEvent(event, compData),
     onDataChange: onDataChange ? (dataPatch) => onDataChange(dataPatch, compData) : undefined,

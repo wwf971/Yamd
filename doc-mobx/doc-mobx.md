@@ -14,6 +14,12 @@ For `List` and `Row` , see `./comp_list_row.md`.
 For document data shape, see `./doc_data.md`.
 For component data shape, see `./comp_data.md`.
 
+## Component Registry
+
+Document data references a component by `compName`; the unified component registry resolves that reference to a registered component and supports type-based queries. See `./comp_registry.md`.
+
+For creating components from the editor (typing `/` in a text segment opens a creation dropdown fed by the registry), see `./comp_create.md`.
+
 ## Event System
 
 For document-level event processing, see `./event_doc.md`.

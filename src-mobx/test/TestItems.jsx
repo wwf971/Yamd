@@ -3,8 +3,10 @@ import yaml from 'js-yaml';
 import { reaction } from 'mobx';
 import { observer } from 'mobx-react-lite';
 import {
-  compByNameDefault,
-  getCompByName,
+  registerCompEntry,
+  compRegistryGetByName,
+  compRegistryGetComp,
+  compRegistryIsType,
 } from '../CompCommon';
 import { DocStoreProvider } from '../DocStoreContext';
 import { DocStore } from '../docStore';
@@ -27,11 +29,11 @@ import TEST_TEXT_STYLE_YAML_RAW from './test-text-style.yaml?raw';
 import TEST_MATH_INLINE_YAML_RAW from './test-math-inline.yaml?raw';
 import './testMobx.css';
 
-const compByNameForTest = {
-  ...compByNameDefault,
-  EventTester,
-  StyleTester,
-};
+// Test-only components join the same unified component registry as the
+// standard components (registered by CompCommon.ts). Type 'test' marks them
+// as test-panel helpers; rendering resolves them the same way.
+registerCompEntry({ compDefId: 'yamd-test/EventTester', compName: 'EventTester', compTypeList: ['test'], Comp: EventTester });
+registerCompEntry({ compDefId: 'yamd-test/StyleTester', compName: 'StyleTester', compTypeList: ['test'], Comp: StyleTester });
 
 const TestItemDoc = observer(function TestItemDoc({ yamlRaw, isHistoryVisible = false }) {
   const docTemplate = React.useMemo(() => parseTestDocTemplate(yamlRaw), [yamlRaw]);
@@ -530,7 +532,7 @@ const TestCompById = observer(function TestCompById({
   if (!compData) {
     return null;
   }
-  const Comp = getCompByName(compData.compName, compByNameForTest);
+  const Comp = compRegistryGetComp(compData.compName);
   if (!Comp) {
     return (
       <div className="mobx-test-note">
@@ -671,7 +673,7 @@ function parseTestDocTemplate(textYaml) {
     return acc;
   }, {});
 
-  const validationError = validateDocTemplateRoot(compDataById);
+  const validationError = validateDocTemplate(compDataById);
 
   return {
     docName,
@@ -680,6 +682,7 @@ function parseTestDocTemplate(textYaml) {
     },
     configInitial: {
       isEditable: configDocInitial?.isEditable !== false,
+      isCompCreateEnabled: configDocInitial?.isCompCreateEnabled !== false,
     },
     compIdRoot,
     compDataById,
@@ -687,8 +690,31 @@ function parseTestDocTemplate(textYaml) {
   };
 }
 
-function validateDocTemplateRoot(compDataById) {
-  const compRootList = Object.values(compDataById || {}).filter((compData) => compData?.config?.isRoot === true);
+// Template validation resolves component references through the unified
+// component registry, so it stays free of hard-coded component lists.
+function validateDocTemplate(compDataById) {
+  const compDataList = Object.values(compDataById || {});
+
+  for (const compData of compDataList) {
+    if (!compRegistryGetByName(compData.compName)) {
+      return `Doc data rejected: compName is not registered in the component registry: ${compData.compName}.`;
+    }
+  }
+
+  for (const compData of compDataList) {
+    if (!compRegistryIsType(compData.compName, 'row')) continue;
+    for (const childId of compData.childIdList) {
+      const compDataChild = compDataById[childId];
+      if (!compDataChild) {
+        return `Doc data rejected: row child is missing: ${childId}.`;
+      }
+      if (!compRegistryIsType(compDataChild.compName, 'seg')) {
+        return `Doc data rejected: row child must be a seg-type component: ${compDataChild.compName}.`;
+      }
+    }
+  }
+
+  const compRootList = compDataList.filter((compData) => compData?.config?.isRoot === true);
   if (compRootList.length === 0) {
     return '';
   }
@@ -696,8 +722,8 @@ function validateDocTemplateRoot(compDataById) {
     return 'Doc data rejected: exactly one root component is allowed.';
   }
   const compRoot = compRootList[0];
-  if (compRoot.compName !== 'List') {
-    return 'Doc data rejected: root component must be a List.';
+  if (!compRegistryIsType(compRoot.compName, 'list')) {
+    return 'Doc data rejected: root component must be a list-type component.';
   }
   if (String(compRoot.mainCompId || '').trim()) {
     return 'Doc data rejected: root List must not have mainCompId.';

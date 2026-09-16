@@ -79,18 +79,22 @@ A component is a segment when its id appears directly in `Row.childIdList`. Row,
 
 ### Registration and imports
 
-The component renderer maps `CompData.compName` to a React component. Standard components, `compByNameDefault`, and `getCompByName` are exported through the stable `src-mobx/CompCommon.ts` entry point. Consumers should import from that module instead of depending on component implementation paths.
+The component renderer maps `CompData.compName` to a React component through the unified component registry; see `comp_registry.md`. Standard components are registered by the stable `src-mobx/CompCommon.ts` entry point at module load, and consumers should import components and the registry API from that module instead of depending on component implementation paths.
 
-The current test shell only extends the standard map with test-only components:
+A new component joins the same registry with one call, from application or test code:
 
 ```ts
-const compByName = {
-  ...compByNameDefault,
-  ExampleSeg,
-};
+import { registerCompEntry } from '../CompCommon';
+
+registerCompEntry({
+  compDefId: 'yamd-test/ExampleSeg',
+  compName: 'ExampleSeg',
+  compTypeList: ['seg'],
+  Comp: ExampleSeg,
+});
 ```
 
-The shell registers each mounted component with `DocStore.registerComp()`. A segment should use `forwardRef` and expose `dispatchEvent(event)` so store-to-component focus commands and edit queries can reach it.
+The shell registers each mounted component with `DocStore.registerComp()`; that is per-document event routing, unrelated to registry definition lookup. A segment should use `forwardRef` and expose `dispatchEvent(event)` so store-to-component focus commands and edit queries can reach it.
 
 ### Segment traits
 
@@ -207,7 +211,7 @@ List bullet measurement delegates through Row to a segment provider. A custom fi
 Custom segments are practical inside this repository, but the integration surface is not yet a stable external component SDK:
 
 - event names and result data are string-based instead of discriminated TypeScript unions
-- the complete registry and document shell are assembled in `src-mobx/test/TestItems.jsx`
+- the document shell is assembled in `src-mobx/test/TestItems.jsx`
 - List and Row consume `DocCompRenderContext` from the test folder
 - there is no public barrel export for MobX component-development APIs
 - compound selection and non-text clipboard adapters are not defined
@@ -216,7 +220,7 @@ Before publishing third-party segment packages, move the render context and shel
 
 ### Verification
 
-Add an in-repository segment to `compByNameForTest`, place it directly under a Row in an existing or temporary test document, and verify:
+Register an in-repository segment through `registerCompEntry` with type `seg`, place it directly under a Row in an existing or temporary test document, and verify:
 
 - click, focus commands, and arrow navigation
 - same-segment and cross-segment selection offsets

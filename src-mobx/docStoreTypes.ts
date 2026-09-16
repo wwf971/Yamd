@@ -130,6 +130,10 @@ export type TextDocData = {
 
 export type TextDocConfig = {
   isEditable: boolean;
+  // Toggles the comp create mode (typing '/' in a text segment opens the
+  // component creation dropdown). Enabled unless explicitly false.
+  // See doc-mobx/comp_create.md.
+  isCompCreateEnabled?: boolean;
 };
 
 export type CompData = {
@@ -219,11 +223,28 @@ export type CompBulletPosState = {
   messageBulletMeasure: string;
 };
 
+// Comp create mode: the fragile state entered by typing '/' in a text
+// segment, showing a dropdown of creatable components. The mode tracks the
+// '/query' text region inside one segment; it exits whenever the region, the
+// focus, or the caret stops matching. See doc-mobx/comp_create.md.
+export type CompCreateState = {
+  isActive: boolean;
+  // The text segment hosting the mode.
+  segId: string;
+  // Offset of the '/' inside the segment text.
+  offsetSlash: number;
+  // The chars typed after the slash, used to filter the component list.
+  textQuery: string;
+  // Dropdown selection index into the match list; -1 means no selection.
+  indexSelected: number;
+};
+
 export type DocInteractionState = {
   focusState: FocusState;
   elActiveState: ElActiveState;
   selectionState: SelectionState;
   dragState: DragState;
+  compCreateState: CompCreateState;
   runtimeStateByCompId: Record<string, CompRuntimeState>;
   bulletPosStateByCompId: Record<string, CompBulletPosState>;
 };

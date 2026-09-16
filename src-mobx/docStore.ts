@@ -28,6 +28,15 @@ import {
 } from './docStoreEdit';
 import { docStoreCreateCompId, idCreateRandom } from './docStoreCompData';
 import {
+  createCompCreateState,
+  docStoreCompCreateApply,
+  docStoreCompCreateExit,
+  docStoreCompCreateGetMatchList,
+  docStoreCompCreateGetState,
+  docStoreCompCreateHandleKey,
+  docStoreCompCreateHandleTextInput,
+} from './docStoreCompCreate';
+import {
   docStoreGetStyleOfSelection,
   docStoreSetStyleOnSelection,
 } from './docStoreEditStyle';
@@ -157,6 +166,7 @@ const createInteractionState = (): DocInteractionState => ({
     pointFocus: null,
   },
   dragState: createDragState(),
+  compCreateState: createCompCreateState(),
   runtimeStateByCompId: {},
   bulletPosStateByCompId: {},
 });
@@ -564,6 +574,32 @@ export class DocStore {
       this.syncRuntimeState(docId);
     }
     return { code: 0 };
+  }
+
+  // Comp create mode (slash creation in a text segment). The logic lives in
+  // docStoreCompCreate.ts; see doc-mobx/comp_create.md.
+  getCompCreateState(docId: string) {
+    return docStoreCompCreateGetState(this, docId);
+  }
+
+  compCreateGetMatchList(docId: string) {
+    return docStoreCompCreateGetMatchList(this, docId);
+  }
+
+  compCreateHandleTextInput(docId: string, segId: string, textPrev: string, textNext: string, offsetCaret: number) {
+    return docStoreCompCreateHandleTextInput(this, docId, segId, textPrev, textNext, offsetCaret);
+  }
+
+  compCreateHandleKey(docId: string, segId: string, key: string, isModifierDown: boolean) {
+    return docStoreCompCreateHandleKey(this, docId, segId, key, isModifierDown);
+  }
+
+  compCreateApply(docId: string, indexApply: number) {
+    return docStoreCompCreateApply(this, docId, indexApply);
+  }
+
+  compCreateExit(docId: string, reason = '') {
+    return docStoreCompCreateExit(this, docId, reason);
   }
 
   clearSelectionState(docId: string) {
